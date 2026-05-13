@@ -10,47 +10,10 @@ from flask import (
 import config_manager, os
 import math
 import pyproj
+import dump_manager
+import os
 
-SETTINGS_HTML_1 = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Settings</title>
-    <style>
-        body { background: #111; color: white; font-family: sans-serif; padding: 20px; }
-        .box { background: #222; padding: 15px; border-radius: 12px; max-width: 400px; margin: auto; border: 1px solid #333; }
-        input { background: #333; border: 1px solid #555; color: white; padding: 12px; width: 80%; margin-bottom: 20px; border-radius: 6px; }
-        label { color: #2ecc71; display: block; margin-bottom: 8px; font-weight: bold; }
-        .btn { background: #2ecc71; color: black; border: none; padding: 15px; width: 100%; cursor: pointer; font-weight: bold; border-radius: 6px; font-size: 16px; }
-        select,input{background:#222;border:1px solid #444;color:#fff;padding:10px;width:90%;border-radius:6px;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://w3.org' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%232ecc71' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;cursor:pointer;font-family:inherit}select:focus,input:focus{border-color:var(--neon-green)}
-    </style>
-</head>
-<body>
-    <div class="box">
-        <h2>⚙ Настройки MySection</h2>
-        <form action="/save_settings" method="POST">
-            <label>Секции (метры, через запятую):</label>
-            <input name="widths" value="{{ widths }}">
-            <label>Рисовать выключенные секции?</label>
-            <select name="draw_off">
-                <option value="true" {{ 'selected' if cfg.DRAW_OFF_SECTIONS }}>ДА (Показывать красным)</option>
-                <option value="false" {{ 'selected' if not cfg.DRAW_OFF_SECTIONS }}>НЕТ (Только чистое поле)</option>
-            </select>
-            <label>Визуальный масштаб (напр. 1.0):</label>
-            <input type="number" step="0.1" name="visual_scale" value="{{ cfg.VISUAL_SCALE }}">
-            <label>Look Ahead (сек):</label>
-            <input type="number" step="0.1" name="look_ahead" value="{{ cfg.LOOK_AHEAD }}">
-            <label>Offset Back (вынос штанги, м):</label>
-            <input type="number" step="0.1" name="offset_back" value="{{ cfg.OFFSET_BACK }}">
-            <label>UDP Порт (AgIO):</label>
-            <input type="number" name="port" value="{{ cfg.UDP_PORT }}">
-            <button type="submit" class="btn">СОХРАНИТЬ И ПРИМЕНИТЬ</button>
-        </form>
-        <br><a href="/" style="color: #666; text-decoration: none; display: block; text-align: center;">← Назад</a>
-    </div>
-</body>
-</html>
-"""
+
 def meters_to_gps(sc, mx, my):
     if mx is None or my is None:
         return None
@@ -88,16 +51,6 @@ def create_app(state, sc):
             "a": meters_to_gps(sc, state.point_a[0], state.point_a[1]) if state.point_a else None,
             "b": meters_to_gps(sc, state.point_b[0], state.point_b[1]) if state.point_b else None
         }
-        # if state.speed is None or state.hdg is None:
-        #     flow_percents = [100] * len(sc.cfg.get("SECTION_WIDTHS", [1.0]*7))
-        # else:
-        #     # Викликаємо твій робочий метод
-        #     #flow_percents = sc.get_curve_compensation(state.speed / 3.6, state.hdg)
-        #     flow_percents = sc.update(state.speed, state.hdg)
-
-        #flow_percents = [100] * len(sc.cfg.get("SECTION_WIDTHS", [1.0]*7))
-        #omega = sc.calculate_omega(state.hdg)
-        #head = sc.update(state.hdg)
         return jsonify(
             {
                 "area": state.area,
@@ -131,37 +84,6 @@ def create_app(state, sc):
         # render_template сам пойдет в папку /templates и найдет там файл
         return render_template("settings.html", cfg=cfg, widths=widths_str)
 
-    # @app.route("/save_settings", methods=["POST"])
-    # def save_settings():
-    #     cfg = config_manager.load_config()
-
-    #     # Используем .get(), чтобы сервер не падал, если поле не пришло
-    #     if "widths" in request.form:
-    #         cfg["SECTION_WIDTHS"] = [
-    #             float(x) for x in request.form["widths"].split(",")
-    #         ]
-
-    #     if "min_speed" in request.form:
-    #         cfg["MIN_SPEED"] = float(request.form["min_speed"])
-
-    #     if "visual_scale" in request.form:
-    #         cfg["VISUAL_SCALE"] = float(request.form["visual_scale"])
-
-    #     if "look_ahead" in request.form:
-    #         cfg["LOOK_AHEAD"] = float(request.form["look_ahead"])
-
-    #     if "offset_back" in request.form:
-    #         cfg["OFFSET_BACK"] = float(request.form["offset_back"])
-
-    #     if "port" in request.form:
-    #         cfg["UDP_PORT"] = int(request.form["port"])
-
-    #     # Добавляем сохранение новой настройки отрисовки
-    #     if "draw_off" in request.form:
-    #         cfg["DRAW_OFF_SECTIONS"] = request.form["draw_off"] == "true"
-
-    #     config_manager.save_config(cfg)
-    #     return redirect("/")
     @app.route("/save_settings", methods=["POST"])
     def save_settings():
         # Отримуємо JSON з тіла запиту (fetch шле саме його)
@@ -372,7 +294,81 @@ def create_app(state, sc):
 
 
     # =================================================================================
+    @app.route("/api/save_field", methods=["POST"])
+    def api_save_field():
+        """Тракторист натиснув 'Зберегти поле' та ввів назву"""
+        data = request.get_json() or {}
+        field_name = data.get("field_name", "").strip()
 
+        if not field_name:
+            return {"error": "Назва поля не може бути порожньою"}, 400
+
+        # Формуємо безпечне ім'я файлу без символів / або \
+        secure_name = "".join(c for c in field_name if c.isalnum() or c in (" ", "_", "-")).strip()
+        filename = os.path.join(dump_manager.DUMP_DIR, f"{secure_name}.json")
+
+        success = dump_manager.save_session_dump(state, sc, filename=filename)
+        if success:
+            return {"status": "success", "message": f"Поле {secure_name} збережено"}, 200
+        return {"error": "Помилка при записі файлу"}, 500
+
+    @app.route("/api/load_field", methods=["POST"])
+    def api_load_field():
+        """Тракторист вибрав старе поле зі списку"""
+        data = request.get_json() or {}
+        filename = data.get("filename", "")
+
+        target_path = os.path.join(dump_manager.DUMP_DIR, os.path.basename(filename))
+        if not os.path.exists(target_path):
+            return {"error": "Файл поля не знайдено"}, 404
+
+        success = dump_manager.load_session_dump(state, sc, filename=target_path)
+        if success:
+            # Також копіюємо його в поточну робочу сесію, щоб воно автозберігалося далі
+            dump_manager.save_session_dump(state, sc)
+            return {"status": "success"}, 200
+        return {"error": "Не вдалося завантажити поле"}, 500
+
+    #**************************************************************************************
+    @app.route("/fields")
+    def fields_page():
+        """Показує окрему сторінку файлового менеджера (наша TFormFields)"""
+        return render_template("fields.html")
+
+    @app.route("/api/files", methods=["GET"])
+    def list_files():
+        """Повертає список файлів полів у форматі JSON"""
+        import os, time
+        import dump_manager
+        files_list = []
+        if os.path.exists(dump_manager.DUMP_DIR):
+            for fname in os.listdir(dump_manager.DUMP_DIR):
+                # Пропускаємо тимчасові файли та поточну робочу сесію
+                if fname.endswith('.json') and fname != "current_session.json":
+                    fpath = os.path.join(dump_manager.DUMP_DIR, fname)
+                    stat = os.stat(fpath)
+                    files_list.append({
+                        "name": fname,
+                        "size": round(stat.st_size / 1024, 1),
+                        "date": time.strftime('%Y-%m-%d %H:%M', time.localtime(stat.st_mtime))
+                    })
+        # Сортуємо: спочатку найновіші поля
+        files_list.sort(key=lambda x: x['date'], reverse=True)
+        return jsonify(files_list)
+
+    @app.route("/api/delete_field", methods=["POST"])
+    def api_delete_field():
+        """Видалення файлу поля з диска"""
+        import os
+        import dump_manager
+        data = request.get_json() or {}
+        filename = os.path.basename(data.get("filename", ""))
+        target_path = os.path.join(dump_manager.DUMP_DIR, filename)
+        
+        if os.path.exists(target_path):
+            os.remove(target_path)
+            return {"status": "success"}, 200
+        return {"error": "Файл не знайдено"}, 404
 
 
     return app

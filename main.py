@@ -4,6 +4,7 @@ import config_manager
 import web_server
 import logging
 import pyproj
+import dump_manager
 
 
 class SharedState:
@@ -92,13 +93,20 @@ def gps_loop():
         sc.cfg = active_cfg  # Синхронізуємо конфіг в двигуні
 
         # Обробка прапорця Reset (якщо натиснуто в інтерфейсі)
+        # if state.reset_flag:
+        #     sc.reset()
+        #     state.path_history = []
+        #     state.area = 0.0
+        #     history_file = cfg.get("HISTORY_FILE", "history.json")
+        #     if os.path.exists(history_file):
+        #         os.remove(history_file)
+        #     state.reset_flag = False
         if state.reset_flag:
             sc.reset()
             state.path_history = []
             state.area = 0.0
-            history_file = cfg.get("HISTORY_FILE", "history.json")
-            if os.path.exists(history_file):
-                os.remove(history_file)
+            state.guidance_error = 0.0
+            dump_manager.clear_current_dump()  # Видаляємо тимчасовий дамп з диска
             state.reset_flag = False
 
         if not state.emu_enabled:
@@ -134,7 +142,9 @@ def gps_loop():
                 )
 
                 # Отримуємо стани секцій (компенсация на поворотах)
-                state.flow_percents = sc.curve_compensation(state.speed, state.hdg, state.rtk)
+                state.flow_percents = sc.curve_compensation(
+                    state.speed, state.hdg, state.rtk
+                )
 
                 if state.point_a and state.point_b and sc.last_x is not None:
                     ax, ay = state.point_a
@@ -181,12 +191,16 @@ def gps_loop():
                 )  # Синхронізація історії для веб-сервера
 
                 # Зберігаємо історію на диск раз на 50 точок
+                # if len(state.path_history) % 50 == 0 and len(state.path_history) > 0:
+                #     try:
+                #         with open("history.json", "w") as f:
+                #             json.dump(state.path_history[-5000:], f)
+                #     except:
+                #         pass
+                # Зберігаємо повний Snapshot системи раз на 50 GPS точок (безпечно та монолітно)
                 if len(state.path_history) % 50 == 0 and len(state.path_history) > 0:
-                    try:
-                        with open("history.json", "w") as f:
-                            json.dump(state.path_history[-5000:], f)
-                    except:
-                        pass
+                    dump_manager.save_session_dump(state, sc)
+
             else:
                 # Якщо стоїмо - всі секції вимкнені
                 state.current_states = [False] * len(active_cfg["SECTION_WIDTHS"])
@@ -199,6 +213,9 @@ if __name__ == "__main__":
     log = logging.getLogger("werkzeug")
     log.setLevel(logging.ERROR)
     # Запуск потоків
+    # Перед стартом gps_loop та веб-сервера перевіряємо, чи не впало живлення раніше
+    dump_manager.load_session_dump(state, sc)
+
     threading.Thread(target=gps_loop, daemon=True).start()
     threading.Thread(target=emulator_logic, daemon=True).start()
 
