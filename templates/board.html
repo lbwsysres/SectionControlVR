@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>MySection Pro Terminal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+    <!-- НИЗ: Управление секциями -->
+    <div class="bottom-controls">
+        <div id="sections-container">
+            <div id="manual_ctrl" class="mode-grid"></div>
+        </div>
+    </div>
+    <!-- Панель паралельного водіння (Навігатор) -->
+    <div class="guidance-container single-line">
+        <div class="lightbar-section">
+            <div id="lb_text">SET A-B LINE</div>
+            <div class="lightbar">
+                <div class="lb-center"></div>
+                <div id="lb_pointer"></div>
+            </div>
+        </div>
+
+        <!-- Кнопка виклику меню -->
+        <button class="tool-btn" onclick="abToggleMenu()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f1c40f" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+        </button>
+
+        <!-- ГОЛОВНИЙ КОНТЕЙНЕР МЕНЮ -->
+        <div id="ab-quick-menu" class="ab-menu-container" style="display:none;">
+
+            <!-- Гілка 1: Основні кнопки (ID тепер тут) -->
+            <div id="ab-main-grid" class="ab-menu-grid"
+                style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <button id="btn_set_a" class="ab-btn-item" onclick="setPoint('a')">A</button>
+                <button id="btn_set_b" class="ab-btn-item" onclick="setPoint('b')">B</button>
+                <button class="ab-btn-item ab-btn-danger" onclick="abResetHandler()">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
+                <button class="ab-btn-item ab-btn-warning" onclick="toggleAbEdit()">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Гілка 2: Панель ручного зсуву -->
+            <div id="ab-edit-panel" style="display:none; flex-direction: column; gap: 12px;">
+                <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                    <button class="ab-btn-item"
+                        style="flex: 1; height: 65px; background: #34495e; font-size: 18px; min-width: 65px;"
+                        onclick="nudgeAB(-0.05)">-5</button>
+                    <input type="number" id="ab_off_val" placeholder="0.00"
+                        style="flex: 1.5; height: 65px; background: #111; color: #2ecc71; border: 1px solid #444; border-radius: 12px; text-align: center; font-size: 20px; min-width: 0;">
+                    <button class="ab-btn-item"
+                        style="flex: 1; height: 65px; background: #34495e; font-size: 18px; min-width: 65px;"
+                        onclick="nudgeAB(0.05)">+5</button>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="ab-btn-item"
+                        style="flex: 1; height: 75px; background: #2ecc71; color: #000; font-size: 22px;"
+                        onclick="saveAbManual()">OK</button>
+                    <button class="ab-btn-item" style="width: 75px; height: 75px; background: #444;"
+                        onclick="toggleAbEdit()">↩</button>
+                </div>
+                <!-- РАЗДЕЛИТЕЛЬ -->
+                <hr style="border: 0; border-top: 1px solid #444; margin: 5px 0;">
+                <div style="display: flex; gap: 5px; margin-bottom: 10px; width: 100%;">
+                    <button type="button" class="ab-tab-btn active" id="tab-T" onclick="switchAbTab('T')">T</button>
+                    <button type="button" class="ab-tab-btn" id="tab-A" onclick="switchAbTab('A')">A</button>
+                    <button type="button" class="ab-tab-btn" id="tab-B" onclick="switchAbTab('B')">B</button>
+                </div>
+                <!-- БЛОК КООРДИНАТ: ОДНА ПОД ДРУГОЙ -->
+                <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+
+                    <!-- Поля ввода на всю ширину -->
+                    <input type="number" id="manual_lat" placeholder="Широта (Lat)"
+                        style="width: 100%; height: 45px; background: #111; color: #3498db; border: 1px solid #444; border-radius: 10px; text-align: center; font-size: 20px; box-sizing: border-box;">
+
+                    <input type="number" id="manual_lon" placeholder="Долгота (Lon)"
+                        style="width: 100%; height: 45px; background: #111; color: #3498db; border: 1px solid #444; border-radius: 10px; text-align: center; font-size: 20px; box-sizing: border-box;">
+
+                    <!-- Кнопки в один ряд внизу -->
+                    <!--div style="display: flex; gap: 10px; width: 100%;">
+                        <button class="ab-btn-item"
+                            style="flex: 1; height: 65px; background: #3498db; color: white; font-size: 28px; line-height: 1.1;"
+                            onclick="recordManualCoords('a')">
+                            A
+                        </button>
+                        <button class="ab-btn-item"
+                            style="flex: 1; height: 65px; background: #3498db; color: white; font-size: 28px; line-height: 1.1;"
+                            onclick="recordManualCoords('b')">
+                            B
+                        </button>
+                    </div -->
+                    <div style="display: flex; gap: 10px; width: 100%; margin-top: 10px;">
+                        <!-- Кнопка ЗАПИСАТЬ А -->
+                        <button class="ab-btn-item"
+                            style="flex: 1; height: 65px; background: #3498db; color: white; border: none; border-radius: 15px;"
+                            onclick="recordManualCoords('a')">
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+                                <!-- Иконка дискеты -->
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                    <polyline points="7 3 7 8 15 8"></polyline>
+                                </svg>
+                                <span style="font-size: 24px; font-weight: bold;">A</span>
+                            </div>
+                        </button>
+
+                        <!-- Кнопка ЗАПИСАТЬ В -->
+                        <button class="ab-btn-item"
+                            style="flex: 1; height: 65px; background: #3498db; color: white; border: none; border-radius: 15px;"
+                            onclick="recordManualCoords('b')">
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                    <polyline points="7 3 7 8 15 8"></polyline>
+                                </svg>
+                                <span style="font-size: 24px; font-weight: bold;">B</span>
+                            </div>
+                        </button>
+                    </div>
+
+
+
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- "Эмулятор GPS" -->
+    <!--div id="emulator">
+        <div class="label-min">Руль: <span id="hdg_val">0</span>°</div>
+        <div class="emu-row">
+            <button class="btn-small" onclick="resetSteer()">0</button>
+            <input type="range" id="emu_hdg" min="-180" max="180" step="0.1" value="0" oninput="updateEmuUI()">
+        </div>
+        <div class="label-min" style="margin-top:10px;">Скорость: <span id="spd_val">0</span> км/ч</div>
+        <div class="emu-row">
+            <button class="btn-small" onclick="toggleEmu()" id="emu_status_btn"
+                style="background:#444; min-width: 40px; height: 30px; border:none; color:white; border-radius:4px; cursor:pointer;">
+                STOP
+            </button>
+            <input type="range" id="emu_spd" min="0" max="25" step="0.5" value="0" oninput="updateEmuUI()">
+        </div>
+    </div -->
+    <div id="emulator" style="background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; border: 1px solid #444;">
+        <!-- Кермо: тепер це кут коліс -->
+        <div class="label-min">Колеса: <span id="hdg_val" style="color: #f1c40f; font-weight: bold;">0</span>°</div>
+        <div class="emu-row" style="display: flex; align-items: center; gap: 10px;">
+            <button class="btn-small" onclick="resetSteer()"
+                style="width: 50px; height: 40px; background: #555; border: none; border-radius: 5px; color: white;">0</button>
+            <!-- Діапазон -30...30 (реальний кут повороту коліс трактора) -->
+            <input type="range" id="emu_hdg" min="-30" max="30" step="1" value="0" oninput="updateEmuUI()"
+                style="flex-grow: 1; height: 40px;">
+        </div>
+
+        <!-- Швидкість -->
+        <div class="label-min" style="margin-top:15px;">Скорость: <span id="spd_val"
+                style="color: #2ecc71; font-weight: bold;">0</span> км/ч</div>
+        <div class="emu-row" style="display: flex; align-items: center; gap: 10px;">
+            <button class="btn-small" onclick="toggleEmu()" id="emu_status_btn"
+                style="background:#e74c3c; width: 60px; height: 40px; border:none; color:white; border-radius:5px; font-weight: bold;">
+                OFF
+            </button>
+            <input type="range" id="emu_spd" min="0" max="20" step="0.5" value="0" oninput="updateEmuUI()"
+                style="flex-grow: 1; height: 40px;">
+        </div>
+    </div>
+
+
+    <!-- Компас -->
+    <svg id="compass" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="45" fill="rgba(0,0,0,0.5)" stroke="#444" stroke-width="2" />
+        <text x="50" y="20" fill="white" font-size="12" text-anchor="middle">N</text>
+        <path d="M50 25 L60 75 L50 65 L40 75 Z" fill="#e74c3c" id="needle" />
+    </svg>
+
+    <!-- ВЕРХНИЙ ЛЕВЫЙ УГОЛ: Инфо-панель -->
+    <div class="top-left-panel">
+        <div class="panel-main-row">
+            <!-- Левая часть: Площадь -->
+            <div class="area-block">
+                <span id="area">0.0000</span> <small>ha</small>
+            </div>
+
+            <!-- Правая часть: Скорость и GPS друг под другом -->
+            <div class="right-info">
+                <div class="stat-item speed">
+                    <span id="spd">0.0</span> <small>km/h</small>
+                </div>
+                <div class="stat-item gps">
+                    <div id="rtk_dot" class="dot"></div>
+                    <span id="rtk_val">SINGLE</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ПРАВО (Под компасом): Панель инструментов -->
+    <div class="zoom-panel">
+        <!-- button class="tool-btn" onclick="zoom *= 1.3">➕</button -->
+        <button class="tool-btn" onclick="zoom *= 1.3"> <!-- Z + -->
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                stroke-linecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+        </button>
+        <!-- button class="tool-btn" onclick="zoom *= 0.7">➖</button -->
+        <button class="tool-btn" onclick="zoom /= 1.3"> <!-- Z - -->
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                stroke-linecap="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+        </button>
+
+        <button id="mBtn" class="master-btn master-off" onclick="toggleMaster()" title="Головний вимикач">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                <line x1="12" y1="2" x2="12" y2="12"></line>
+            </svg>
+        </button>
+    </div>
+
+    <!-- ЛЕВО Панель инструментов -->
+    <div class="left-panel">
+        <button class="tool-btn" onclick="resetAll()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+        </button>
+        <button class="tool-btn" onclick="location.href='/settings'">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                </path>
+            </svg>
+        </button>
+        <button class="tool-btn" onclick="location.href='/export_kml'">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3498db" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+        </button>
+
+
+    </div>
+
+    <canvas id="bgCanvas"></canvas>
+    <canvas id="fgCanvas"></canvas>
+
+    <!-- div id="map-container" style="position: relative; width: 100%; height: 100vh; overflow: hidden;" -->
+    <!-- Шар для історії (малюємо рідко або частинами) -->
+    <!-- canvas id="historyCanvas" style="position: absolute; top: 0; left: 0; z-index: 1;"></canvas -->
+    <!-- Шар для трактора, сітки та лінії AB (малюємо 5 разів на сек) -->
+    <!-- canvas id="uiCanvas" style="position: absolute; top: 0; left: 0; z-index: 2;"></canvas -->
+    <!-- /div -->
+
+    <script>
+        const modesOrder = ["AUTO", "ON", "OFF"];
+        const bgCanvas = document.getElementById('bgCanvas'), bgCtx = bgCanvas.getContext('2d');
+        const fgCanvas = document.getElementById('fgCanvas'), fgCtx = fgCanvas.getContext('2d');
+        let zoom = 15; const cfg = {{ cfg| tojson }};
+        let localPathHistory = [];
+        let lastReceivedIndex = 0;
+        let failedAttempts = 0;
+        const MAX_FAILED_ATTEMPTS = 10; // 10 попыток по 200мс = 2 секунды тишины
+        // Глобальная переменная только для текущих координат [lat, lon]
+        let lastTractorPos = [0, 0];
+        let lastPointAPos = null; // Будемо зберігати [lat, lon] для А
+        let lastPointBPos = null; // Будемо зберігати [lat, lon] для В
+
+        function resize() { bgCanvas.width = fgCanvas.width = window.innerWidth; bgCanvas.height = fgCanvas.height = window.innerHeight; }
+        window.onresize = resize; resize();
+        window.addEventListener('wheel', (e) => { zoom *= (e.deltaY < 0 ? 1.1 : 0.9); }, { passive: true });
+
+        let emuActive = false;
+        function toggleEmu() {
+            emuActive = !emuActive;
+            const btn = document.getElementById('emu_status');
+            btn.innerText = emuActive ? "RUN" : "STOP";
+            btn.style.background = emuActive ? "#2ecc71" : "#444";
+        }
+
+        let emuEnabled = false;
+
+        function updateEmuUI() {
+            // Оновлюємо цифри на екрані миттєво
+            document.getElementById('hdg_val').innerText = document.getElementById('emu_hdg').value;
+            const val = document.getElementById('emu_hdg').value;
+            document.getElementById('hdg_val').innerText = val;
+
+            document.getElementById('spd_val').innerText = document.getElementById('emu_spd').value;
+            sendEmuData(); // Відправляємо на сервер
+
+            // const h = document.getElementById('emu_hdg').value;
+            // const s = document.getElementById('emu_spd').value;
+
+            // document.getElementById('hdg_val').innerText = h;
+            // document.getElementById('spd_val').innerText = s;
+
+            // // Відправка на сервер
+            // fetch(`/set_emu?hdg=${h}&speed=${s}`);
+        }
+
+        function toggleEmu() {
+            emuEnabled = !emuEnabled;
+            const btn = document.getElementById('emu_status_btn');
+            btn.innerText = emuEnabled ? "RUN" : "STOP";
+            btn.style.background = emuEnabled ? "#2ecc71" : "#444";
+            sendEmuData();
+        }
+
+        function sendEmuData() {
+            const data = {
+                enabled: emuEnabled,
+                hdg: document.getElementById('emu_hdg').value,
+                spd: document.getElementById('emu_spd').value
+            };
+            fetch('/emu_control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }).catch(err => console.error("Emu error:", err));
+        }
+
+        function toggleMaster() {
+            const btn = document.getElementById('mBtn');
+            const turnOn = btn.innerText.includes('OFF');
+            fetch('/set_master/' + (turnOn ? 1 : 0)).then(() => location.reload());
+            //fetch('/set_master/' + (turnOn ? 1 : 0));
+        }
+
+
+        function setSectionMode(idx, mode) {
+            console.log(`Setting section ${idx} to mode ${mode}`);
+            fetch(`/set_mode/${idx}/${mode}`).then(() => {
+                // Находим ВСЕ кнопки в этой колонке и убираем активный класс
+                const allBtns = document.querySelectorAll(`.mode-btn-${idx}`);
+                allBtns.forEach(btn => btn.classList.remove('active'));
+
+                // Находим конкретную нажатую кнопку по атрибуту
+                const targetBtn = document.querySelector(`.mode-btn-${idx}[data-mode="${mode}"]`);
+                if (targetBtn) {
+                    targetBtn.classList.add('active');
+                }
+            });
+        }
+
+
+        function toggleSectionMode(idx) {
+            // Находим кнопку, чтобы узнать её текущий режим
+            const btn = document.querySelector(`.mode-btn-${idx}.active`);
+            if (!btn) return;
+
+            const currentMode = btn.getAttribute('data-mode');
+            const currentIndex = modesOrder.indexOf(currentMode);
+            // Берем следующий режим (с возвратом в начало через %)
+            const nextMode = modesOrder[(currentIndex + 1) % modesOrder.length];
+
+            console.log(`Switching section ${idx} to ${nextMode}`);
+            fetch(`/set_mode/${idx}/${nextMode}`);
+            // Цвет обновится сам через 200мс из setInterval
+        }
+
+        function buildManual() {
+            const container = document.getElementById('manual_ctrl');
+            if (!container) return;
+            let h = "";
+            cfg.SECTION_WIDTHS.forEach((_, i) => {
+                h += `
+            <div class="section-column">
+                <div id="lamp_${i}" class="lamp-indicator"></div>
+                <!-- div class="section-label">S${i + 1}</div -->
+                <div id="rate_${i}" class="section-label">0</div>
+                <button id="btn_sec_${i}" class="mode-btn mode-btn-${i} active" data-mode="AUTO" onclick="toggleSectionMode(${i})">AUTO</button>
+            </div>`;
+            });
+            container.innerHTML = h;
+        }
+
+
+        buildManual();
+        // *************************************************************************************** //
+        // 1: Налаштування прихованого шару (FrameBuffer)
+        const fieldCanvas = document.createElement('canvas');
+        const fCtx = fieldCanvas.getContext('2d');
+        fieldCanvas.width = 10000;  // 10000 пікселів = приблизно 1-2 км поля
+        fieldCanvas.height = 10000;
+
+        const fCenterX = fieldCanvas.width / 2;
+        const fCenterY = fieldCanvas.height / 2;
+
+        // Точка відліку (щоб перетворити GPS у метри один раз)
+        let refLat = null;
+        let refLon = null;
+        let lastPointFromPreviousFetch = null; // Зберігає останню точку для з'єднання пакетів
+        let _timeRead = 0;
+
+        // 2: Функція розрахунку координат
+        function getGlobalCoords(lat, lon, heading, sectionIdx, isRightSide = false) {
+            if (refLat === null) { refLat = lat; refLon = lon; }
+
+            const totalW = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
+            const backDist = (cfg.OFFSET_BACK || 0);
+
+            // Розрахунок відступу секції від центру трактора
+            let sideOff = -totalW / 2;
+            for (let j = 0; j < sectionIdx; j++) sideOff += cfg.SECTION_WIDTHS[j];
+            if (isRightSide) sideOff += cfg.SECTION_WIDTHS[sectionIdx];
+
+            const rad = heading * Math.PI / 180;
+            // Математика повороту штанги
+            const mx = (sideOff * Math.cos(rad)) - (backDist * Math.sin(rad));
+            const my = (-sideOff * Math.sin(rad)) - (backDist * Math.cos(rad));
+
+            // Перевід GPS у метри (відносно точки refLat/refLon)
+            const gx = (lon - refLon) * 111320 * Math.cos(refLat * Math.PI / 180);
+            const gy = (lat - refLat) * 111320;
+
+            // return {
+            //     x: (gx + mx) * zoom + fCenterX,
+            //     y: -(gy + my) * zoom + fCenterY
+            // };
+            return {
+                x: (gx + mx) * 10 + fCenterX, // фіксований масштаб 10 пікс/метр
+                y: -(gy + my) * 10 + fCenterY
+            };
+        }
+
+        //3: Функція малювання НОВИХ полігонів
+        function updateFieldMap(newPoints) {
+            if (!newPoints || newPoints.length === 0) return;
+
+            // Створюємо масив: хвіст + нові точки
+            const pointsToProcess = lastPointFromPreviousFetch
+                ? [lastPointFromPreviousFetch, ...newPoints]
+                : newPoints;
+
+            pointsToProcess.forEach((pt, idx) => {
+                if (idx === 0) return;
+                const prev = pointsToProcess[idx - 1];
+
+                // Дистанція між точками (твій код без змін)
+                const dist = Math.sqrt(Math.pow((pt[0] - prev[0]) * 111320, 2) + Math.pow((pt[1] - prev[1]) * 111320, 2));
+                if (dist > 3) return;
+
+                pt[3].forEach((isActive, i) => {
+                    if (!isActive && cfg.DRAW_OFF_SECTIONS === false) return;
+
+                    fCtx.fillStyle = isActive ? "rgba(46, 204, 113, 0.7)" : "rgba(231, 76, 60, 0.5)";
+                    //fCtx.fillStyle = isActive ? "rgba(46, 204, 113, 1.0)" : "rgba(231, 76, 60, 1.0)";
+
+                    // Виклик координат (твій код без змін)
+                    const cL = getGlobalCoords(pt[0], pt[1], pt[2], i, false);
+                    const cR = getGlobalCoords(pt[0], pt[1], pt[2], i, true);
+                    const pL = getGlobalCoords(prev[0], prev[1], prev[2], i, false);
+                    const pR = getGlobalCoords(prev[0], prev[1], prev[2], i, true);
+
+                    fCtx.beginPath();
+                    fCtx.moveTo(cL.x, cL.y);
+                    fCtx.lineTo(cR.x, cR.y);
+                    fCtx.lineTo(pR.x, pR.y);
+                    fCtx.lineTo(pL.x, pL.y);
+                    fCtx.fill();
+                });
+            });
+
+            // ОНОВЛЕННЯ: Запам'ятовуємо останню точку для наступного виклику fetch
+            lastPointFromPreviousFetch = newPoints[newPoints.length - 1];
+        }
+
+        // 4: Головна функція Draw
+        function draw(data) {
+            const now = performance.now();
+            const delta = now - (window.lastTime || now);
+            window.lastTime = now;
+            const fps = delta > 0 ? (1000 / delta).toFixed(0) : 60;
+            const start = performance.now();
+
+            const cx = bgCanvas.width / 2;
+            const cy = bgCanvas.height / 2;
+            const vScale = cfg.VISUAL_SCALE || 1.0;
+            const totalW = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
+
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            fgCtx.clearRect(0, 0, fgCanvas.width, fgCanvas.height);
+            // *************************************************************************************** //
+            // 1. СЕТКА (фоновая)
+            bgCtx.strokeStyle = "rgba(255,255,255,0.03)";
+            let gridStep = 10 * zoom; // init zoom = 15
+            for (let x = (cx % gridStep); x < bgCanvas.width; x += gridStep) {
+                bgCtx.beginPath(); bgCtx.moveTo(x, 0); bgCtx.lineTo(x, bgCanvas.height); bgCtx.stroke();
+            }
+            for (let y = (cy % gridStep); y < bgCanvas.height; y += gridStep) {
+                bgCtx.beginPath(); bgCtx.moveTo(0, y); bgCtx.lineTo(bgCanvas.width, y); bgCtx.stroke();
+            }
+            // *************************************************************************************** //
+            // Отрисовка пути
+            bgCtx.save();
+            bgCtx.translate(bgCanvas.width / 2, bgCanvas.height / 2);
+            bgCtx.rotate(-data.hdg * Math.PI / 180);
+            // Поточне положення трактора в метрах
+            const tx_m = (data.pos[1] - refLon) * 111320 * Math.cos(refLat * Math.PI / 180);
+            const ty_m = -(data.pos[0] - refLat) * 111320;
+            const scaleFactor = zoom / 10; // Розраховуємо коефіцієнт масштабування відносно нашого буфера (де було 10 пікс/метр)
+            bgCtx.scale(scaleFactor, scaleFactor); // Використовуємо transform для масштабування всієї картинки буфера
+            bgCtx.drawImage(fieldCanvas, -(tx_m * 10 + fCenterX), -(ty_m * 10 + fCenterY)); // Тепер малюємо буфер Оскільки ми вже зробили scale, координати tx_m/ty_m теж масштабуються автоматично
+
+            // Вместо: bgCtx.drawImage(fieldCanvas, -(tx_m * 10 + fCenterX), -(ty_m * 10 + fCenterY));
+            // Можно передать 9 параметров, чтобы вырезать нужный кусок:
+            /*const viewW = bgCanvas.width / scaleFactor; // сколько метров/пикселей видно
+            const viewH = bgCanvas.height / scaleFactor;
+            bgCtx.drawImage(
+                fieldCanvas,
+                tx_m * 10 + fCenterX - viewW / 2, ty_m * 10 + fCenterY - viewH / 2, // Откуда вырезаем (Source)
+                viewW, viewH,                                                  // Сколько вырезаем
+                -viewW / 2, -viewH / 2,                                            // Куда ставим на экран (Destination)
+                viewW, viewH                                                   // Размер на экране
+            );*/
+            // *************************************************************************************** //
+            // Линия A B
+
+            if (data.ab_line && data.ab_line.a && data.ab_line.b && data.ux && data.uy) {
+                const [ax, ay] = data.ab_line.a;
+                const [bx, by] = data.ab_line.b;
+                const tx = data.ux; // Поточний X трактора в метрах
+                const ty = data.uy; // Поточний Y трактора в метрах
+
+                // 2. ГЕОМЕТРІЯ
+                const dx = bx - ax;
+                const dy = by - ay;
+                const angleAB = Math.atan2(dy, dx);
+                const fullWidth = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
+
+                //bgCtx.save();
+                // Використовуємо дуже довгі лінії (на 2км)
+                const length = 2000;
+
+                // 3. МАЛЮЄМО 20 ПАРАЛЕЛЬНИХ ЛІНІЙ
+                for (let i = -10; i <= 10; i++) {
+                    const offset = i * fullWidth;
+
+                    // Розрахунок зміщення для паралельної лінії
+                    const offsetX = ax + offset * Math.sin(angleAB);
+                    const offsetY = ay - offset * Math.cos(angleAB);
+
+                    // Переклад у координати екрана відносно трактора
+                    const screenX = (offsetX - tx) * zoom;
+                    const screenY = -(offsetY - ty) * zoom;
+
+                    bgCtx.beginPath();
+                    bgCtx.lineWidth = (i === 0) ? 30 / zoom : 10 / zoom; // Центральна лінія товстіша
+                    bgCtx.strokeStyle = (i === 0) ? "rgba(255, 255, 255, 0.8)" : "rgba(100, 200, 255, 0.8)";
+
+                    // Малюємо лінію
+                    bgCtx.moveTo(
+                        screenX - Math.cos(angleAB) * length * zoom,
+                        screenY + Math.sin(angleAB) * length * zoom
+                    );
+                    bgCtx.lineTo(
+                        screenX + Math.cos(angleAB) * length * zoom,
+                        screenY - Math.sin(angleAB) * length * zoom
+                    );
+                    bgCtx.stroke();
+                }
+                bgCtx.restore();
+            }
+
+            /*if (data.ab_line && data.ab_line.a && data.ab_line.b) {
+                drawABLinesToBuffer(data);
+            }*/
+
+
+            bgCtx.restore();
+
+            // *************************************************************************************** //
+            // 3. ТРАКТОР И ВИРТУАЛЬНАЯ ШТАНГА (на переднем плане)
+            fgCtx.save();
+            fgCtx.translate(cx, cy);
+            const bDist = (cfg.OFFSET_BACK || 0) * zoom * vScale;
+            let sX = -(totalW / 2) * zoom * vScale;
+            data.states.forEach((active, i) => {
+                const sw = cfg.SECTION_WIDTHS[i] * zoom * vScale;
+                // Рамка секции
+                fgCtx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+                fgCtx.strokeRect(sX, bDist, sw, 8);
+
+                if (active) {
+                    fgCtx.fillStyle = "rgba(46, 204, 113, 0.9)";
+                    fgCtx.fillRect(sX, bDist, sw, 8);
+                }
+                sX += sw;
+            });
+            // Рисуем треугольник трактора
+            fgCtx.globalAlpha = data.master ? 1.0 : 0.4;
+            fgCtx.fillStyle = "#f1c40f";
+            fgCtx.beginPath();
+            fgCtx.moveTo(0, -25); fgCtx.lineTo(12, 5); fgCtx.lineTo(-12, 5);
+            fgCtx.closePath(); fgCtx.fill();
+            fgCtx.strokeStyle = "white"; fgCtx.lineWidth = 2; fgCtx.stroke();
+            fgCtx.restore();
+            // *************************************************************************************** //
+            // Млнитор системы
+            bgCtx.save(); // Сохраняем состояние (чтобы не сбить трансформации)
+            bgCtx.setTransform(1, 0, 0, 1, 0, 0); // Сбрасываем translate/rotate, чтобы рисовать в экранных координатах
+
+            bgCtx.fillStyle = "white"; // Цвет текста
+            bgCtx.font = "14px monospace"; // Моноширинный шрифт лучше для цифр
+            bgCtx.textAlign = "right";     // Выравнивание по правому краю
+
+            const padding = 20;            // Отступ от края
+            const lineHeight = 20;         // Высота строки
+            const x = bgCanvas.width - padding;
+            const y = bgCanvas.height - padding;
+            const end = performance.now();
+
+            bgCtx.fillText(`Read: ${_timeRead.toFixed(3)} ms`, x, y - lineHeight);
+            bgCtx.fillText(`Draw: ${(end - start).toFixed(3)} ms`, x, y - lineHeight * 2);
+            //bgCtx.fillText(`FPS: ${fps}`, x, y - lineHeight * 3);
+
+            bgCtx.restore(); // Возвращаем состояние
+            //console.log(`Time: ${(end - start).toFixed(3)} ms`);
+        }
+
+        // *************************************************************************************** //
+        // Эмулятор сброс угла поворота
+        function resetSteer() {
+            // const slider = document.getElementById('emu_hdg');
+            // slider.value = 0;
+            // updateEmuUI();
+            document.getElementById('emu_hdg').value = 0;
+            updateEmuUI();
+        }
+        // *************************************************************************************** //
+
+        setInterval(() => {
+            fetch(`/map_data?last=${lastReceivedIndex}`)
+                .then(r => {
+                    if (!r.ok) throw new Error("Server Error");
+                    return r.json();
+                })
+                .then(d => {
+                    // --- СВЯЗЬ ЕСТЬ ---
+                    if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+                        hideModal(); // Скрываем окно, если оно было открыто
+                    }
+                    failedAttempts = 0;
+
+                    // *************************************************************************************** //
+                    // Обновляем площадь и скорость
+                    document.getElementById('area').innerText = d.area.toFixed(4);
+                    document.getElementById('spd').innerText = d.speed.toFixed(1);
+
+                    // *************************************************************************************** //
+                    // GPS Статус
+                    const dot = document.getElementById('rtk_dot');
+                    const val = document.getElementById('rtk_val');
+                    if (d.rtk >= 4) { dot.style.background = '#2ecc71'; val.innerText = 'FIX'; }
+                    else if (d.rtk >= 2) { dot.style.background = '#f1c40f'; val.innerText = 'FLOAT'; }
+                    else { dot.style.background = '#e74c3c'; val.innerText = 'SINGLE'; }
+
+                    // *************************************************************************************** //
+                    // Кнопка MASTER ON/OFF
+                    const mBtn = document.getElementById('mBtn');
+                    if (d.master) {
+                        mBtn.classList.remove('master-off');
+                        mBtn.classList.add('master-on');
+                    } else {
+                        mBtn.classList.remove('master-on');
+                        mBtn.classList.add('master-off');
+                    }
+
+                    if (d.modes) {
+                        d.modes.forEach((mode, i) => {
+                            const btn = document.getElementById(`btn_sec_${i}`);
+                            if (btn) {
+                                btn.setAttribute('data-mode', mode); // Меняем атрибут для CSS
+                                btn.innerText = mode; // Меняем текст на кнопке
+                            }
+                        });
+                    }
+                    // *************************************************************************************** //
+                    // ОБНОВЛЯЕМ ЛАМПОЧКИ-ИНДИКАТОРЫ (из d.states)
+                    if (d.states) {
+                        d.states.forEach((isOn, i) => {
+                            const lamp = document.getElementById(`lamp_${i}`);
+                            if (lamp) {
+                                // Если isOn == true, ставим класс lamp-on (зеленый), иначе lamp-off (красный)
+                                lamp.className = isOn ? 'lamp-indicator lamp-on' : 'lamp-indicator lamp-off';
+                            }
+                        });
+                    }
+                    // *************************************************************************************** //
+                    // Индикатор отклонения от линии A B
+                    if (d.ab_line && d.ab_line.a && d.ab_line.b) {
+                        const pointer = document.getElementById('lb_pointer');
+                        const txt = document.getElementById('lb_text');
+                        let pos = 150 + (d.ab_line.error * 200); // Розрахунок позиції (Центр 150px + відхилення * коефіцієнт чутливості // Коефіцієнт 200 означає, що 0.5 метра відхилення = 100 пікселів зсуву)
+                        pos = Math.max(15, Math.min(285, pos)); // Обмежуємо шкалою
+                        pointer.style.left = pos + 'px';
+                        const absErr = Math.abs(d.ab_line.error); // Динамічний колір залежно від точності
+                        let color = "#2ecc71"; // Зелений (ОК)
+                        if (absErr > 0.15) color = "#f1c40f"; // Жовтий (Увага)
+                        if (absErr > 0.40) color = "#e74c3c"; // Червоний (Погано)
+                        pointer.style.background = color;
+                        pointer.style.boxShadow = `0 0 15px ${color}`;
+                        txt.style.color = color;
+                        const side = d.ab_line.error > 0 ? "R " : "L "; // Форматуємо текст: "L 0.15 m" або "R 0.05 m"
+                        txt.innerText = side + absErr.toFixed(2) + " m";
+                    } else {
+                        // Якщо лінії не встановлені - ховаємо текст або пишемо "AB NOT SET"
+                        document.getElementById('lb_text').innerText = "SET A-B LINE";
+                        document.getElementById('lb_text').style.color = "#555";
+                    }
+                    // *************************************************************************************** //
+                    // ОБРОБКА НОВИХ ТОЧОК
+                    if (d.new_points && d.new_points.length > 0) {
+                        // localPathHistory.push(...d.new_points); // Локальная история ? нужна или нет ?
+
+                        const start = performance.now();
+                        updateFieldMap(d.new_points);
+                        const end = performance.now();
+                        _timeRead = end - start;
+                        //console.log(`Time: ${(end - start).toFixed(3)} ms`);
+
+                        lastReceivedIndex = d.total_count;
+                    }
+                    draw(d);
+                    //draw(d, localPathHistory);
+                    if (d.pos && d.pos.length >= 2) {
+                        lastTractorPos = [d.pos[0], d.pos[1]];
+                    }
+
+                    if (d.hdg !== undefined) {
+                        const needle = document.getElementById('needle');
+                        if (needle) {
+                            // Обертаємо стрілку на кут курсу
+                            needle.style.transform = `rotate(${d.hdg}deg)`;
+                        }
+                    }
+                    // 2. Координати точок А та В у градусах (якщо сервер їх прислав)
+                    if (d.ab_gps) {
+                        lastPointAPos = d.ab_gps.a; // [lat, lon]
+                        lastPointBPos = d.ab_gps.b; // [lat, lon]
+                    }
+                    // Всередині .then(data => { ... })
+                    if (d.flow && d.flow.length > 0) {
+                        d.flow.forEach((val, i) => {
+                            const rateEl = document.getElementById(`rate_${i}`);
+                            if (rateEl) {
+                                // Виводимо значення
+                                rateEl.innerText = val + "%";
+
+                                // Додамо кольорову індикацію для наочності
+                                if (val > 105) {
+                                    rateEl.style.color = "#3498db"; // Синій (прискорення)
+                                } else if (val < 95) {
+                                    rateEl.style.color = "#f39c12"; // Помаранчевий (уповільнення)
+                                } else {
+                                    rateEl.style.color = "#2ecc71"; // Зелений (норма)
+                                }
+                            }
+                        });
+                    }
+
+                })
+                .catch(err => {
+                    // --- ОШИБКА СВЯЗИ ---
+                    failedAttempts++;
+
+                    if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+                        const sec = (failedAttempts * 0.2).toFixed(1); // Время отсутствия связи
+                        showModal(`Связь потеряна: ${sec} сек.`);
+
+                        // Пищим один раз при достижении порога
+                        if (failedAttempts === MAX_FAILED_ATTEMPTS) {
+                            //playAlarmSound();
+                        }
+                    }
+                    console.error("Connection lost:", err);
+                });
+        }, 200);
+
+        // Вспомогательные функции (если еще не добавил)
+        function showModal(text) {
+            const modal = document.getElementById('connectionModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                modal.querySelector('p').innerText = text;
+            }
+        }
+
+        function hideModal() {
+            const modal = document.getElementById('connectionModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+
+
+
+        // *************************************************************************************** //
+        // Скидання площі та історії
+        // function resetAll() {
+        //     if (confirm("Очистить обработанную площадь и историю?")) {
+        //         fetch('/reset_area')
+        //             .then(response => {
+        //                 if (response.ok) {
+        //                     // он пришлет пустую историю сам.
+        //                     localPathHistory = [];
+        //                     // 2. Скидаємо індекс, щоб наступний запит знову почався з 0
+        //                     lastReceivedIndex = 0;
+        //                     console.log("Поле очищено локально та на сервері");
+        //                     setTimeout(() => {
+        //                         location.reload();
+        //                     }, 500);
+        //                 } else {
+        //                     alert("Ошибка сервера при сбросе");
+        //                 }
+        //             })
+        //             .catch(err => console.error("Ошибка сети:", err));
+        //     }
+        // }
+
+        function resetAll() {
+            askUser(
+                "ВНИМАНИЕ!<br>Очистить карту ?",
+                "danger",
+                "ОЧИСТИТЬ",
+                () => {
+                    fetch('/reset_area')
+                        //.then(r => r.json())
+                        .then(r => {
+                            if (!r.ok) throw new Error("Сервер повернув помилку"); // Якщо статус не 200
+                            return r.json();
+                        })
+                        .then(data => {
+                            if (data.status === "ok") {
+                                location.reload(); // Перезавантажуємо, щоб побачити чисте поле
+                                localPathHistory = []; // он пришлет пустую историю сам.
+                                lastReceivedIndex = 0; // 2. Скидаємо індекс, щоб наступний запит знову почався з 0
+                                console.log("Поле очищено локально та на сервері");
+                                setTimeout(() => {
+                                    location.reload();
+                                }, 500);
+                            }
+                        })
+                        .catch(err => {
+                            // ОСЬ ТУТ: сервер не відповів, або мережа недоступна
+                            console.error("Ошибка сети:", err);
+                            askUser("СЕРВЕР НЕ ОТВЕЧАЕТ<br>Проверьте связь с контроллером. ", "danger", "ПРИНЯТЬ", () => { });
+                        });
+
+                }
+            );
+        }
+        // *************************************************************************************** //
+        // Відкриття налаштувань
+        function openSettings() {
+            // Якщо у тебе є модальне вікно або інша сторінка
+            // Наприклад, показуємо прихований div:
+            const panel = document.getElementById('settings_panel');
+            if (panel) {
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            } else {
+                alert("Налаштування будуть доступні в наступному оновленні");
+            }
+        }
+
+        // *************************************************************************************** //
+        // Перемикач Master Switch (без reload!)
+        function toggleMaster() {
+            const btn = document.getElementById('mBtn');
+            // Якщо кнопка має клас master-on, значить зараз включено, і треба ВИМКНУТИ (0)
+            const isNowOn = btn.classList.contains('master-on');
+            const newState = isNowOn ? 0 : 1;
+
+            console.log("Відправляю команду Master:", newState);
+
+            fetch('/set_master/' + newState)
+                .then(response => {
+                    if (!response.ok) console.error("Помилка сервера");
+                });
+        }
+        // *************************************************************************************** //
+        // 
+        function askUser(text, theme, confirmText, onConfirm) {
+            const modal = document.getElementById('customModal');
+            const modalText = document.getElementById('modalText');
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            const cancelBtn = document.getElementById('modalCancelBtn');
+
+            //modalText.innerText = text;
+            modalText.innerHTML = text;
+            confirmBtn.innerText = confirmText;
+            confirmBtn.style.background = (theme === 'danger') ? '#c0392b' : '#2ecc71';
+
+            modal.style.display = 'flex';
+
+            confirmBtn.onclick = () => {
+                onConfirm();
+                modal.style.display = 'none';
+            };
+            cancelBtn.onclick = () => {
+                modal.style.display = 'none';
+            };
+        }
+        // *************************************************************************************** //
+
+        function abToggleMenu() {
+            // 1. Ищем само окно меню
+            const menu = document.getElementById('ab-quick-menu');
+            // 2. Ищем сетку с кнопками A и B внутри него
+            const mainGrid = document.getElementById('ab-main-grid');
+            // 3. Ищем панель с цифрами внутри него
+            const editPanel = document.getElementById('ab-edit-panel');
+
+            if (!menu) {
+                console.error("Ошибка: Не найден элемент 'ab-quick-menu'");
+                return;
+            }
+            const isHidden = menu.style.display === 'none' || menu.style.display === '';
+            // Переключаем видимость главного окна
+            menu.style.display = isHidden ? 'block' : 'none';
+            // Если мы открываем меню, всегда показываем сначала кнопки A и B
+            if (isHidden) {
+                if (mainGrid) mainGrid.style.display = 'grid';
+                if (editPanel) editPanel.style.display = 'none';
+            }
+        }
+
+        function toggleAbEdit() {
+            const grid = document.getElementById('ab-main-grid');
+            const panel = document.getElementById('ab-edit-panel');
+
+            // Переключаем видимость
+            const isOpening = grid.style.display !== 'none';
+            grid.style.display = isOpening ? 'none' : 'grid';
+            panel.style.display = isOpening ? 'flex' : 'none';
+            console.log("TEST 0");
+
+            // Если мы ОТКРЫВАЕМ панель редактирования — заполняем координаты
+            if (isOpening) {
+                // Эта функция сама проверит координаты, заполнит инпуты и подсветит кнопку "T"
+                switchAbTab('T');
+                // Сбрасываем только поле сдвига (Nudge) в ноль
+                const nudgeInput = document.getElementById('ab_off_val');
+                if (nudgeInput) nudgeInput.value = "0.00";
+            }
+        }
+
+        function setPoint(label) {
+            fetch('/set_point/' + label).then(r => {
+                if (r.ok) {
+                    const btn = document.getElementById('btn_set_' + label);
+                    if (btn) btn.style.color = '#2ecc71';
+                    if (label === 'b') setTimeout(abToggleMenu, 1000);
+                }
+            });
+        }
+        function nudgeAB(val) {
+            const input = document.getElementById('ab_off_val');
+            let current = parseFloat(input.value) || 0;
+
+            // Обновляем цифру в окошке для наглядности
+            input.value = (current + val).toFixed(2);
+            console.log(val);
+            // САМОЕ ВАЖНОЕ: запрос к серверу
+            fetch(`/set_point/nudge?value=${val}`)
+                .then(r => {
+                    if (!r.ok) console.error("Ошибка сервера при смещении");
+                })
+                .catch(err => console.error("Ошибка сети:", err));
+        }
+
+        function saveAbManual() {
+            const input = document.getElementById('ab_off_val');
+            const val = parseFloat(input.value);
+
+            // Если человек что-то ВПИСАЛ руками (и это не 0), тогда отправляем.
+            // Но кнопки +5/-5 уже сами всё отправили, поэтому тут нужно быть аккуратным.
+            // Проще всего оставить ручной ввод только для контроля, а кнопки для дела.
+
+            input.value = "";
+            toggleAbEdit();
+            abToggleMenu();
+        }
+
+        // Обработчик удаления линии (через твою модалку askUser)
+        function abResetHandler() {
+            askUser(
+                "Удалить линию А-В?",
+                "danger",
+                "УДАЛИТЬ",
+                () => {
+                    // Отправляем 'reset' в твой существующий роут /set_point/
+                    fetch('/set_point/reset').then(r => {
+                        if (r.ok) {
+                            // 1. Сбрасываем цвет кнопок в меню обратно в белый
+                            const btnA = document.getElementById('btn_set_a');
+                            const btnB = document.getElementById('btn_set_b');
+                            if (btnA) btnA.style.color = 'white';
+                            if (btnB) btnB.style.color = 'white';
+
+                            // 2. Закрываем быстрое меню
+                            abToggleMenu();
+
+                            console.log("Линия АВ успешно удалена на сервере");
+                        }
+                    }).catch(err => {
+                        askUser("ОШИБКА СВЯЗИ", "danger", "ПРИНЯТЬ", null);
+                    });
+                }
+            );
+        }
+        function recordManualCoords(label) {
+            const lat = document.getElementById('manual_lat').value;
+            const lon = document.getElementById('manual_lon').value;
+
+            if (!lat || !lon) {
+                askUser("Введите Lat и Lon!", "danger", "ОК", null);
+                return;
+            }
+
+            // Отправляем координаты и метку точки (a или b)
+            fetch(`/set_point/manual_coords?lat=${lat}&lon=${lon}&label=${label}`)
+                .then(r => {
+                    if (r.ok) {
+                        console.log(`Точка ${label.toUpperCase()} установлена вручную`);
+
+                        // Подсвечиваем соответствующую кнопку в главном меню
+                        const btn = document.getElementById('btn_set_' + label);
+                        if (btn) btn.style.color = '#2ecc71';
+
+                        // Очищаем поля (опционально)
+                        // document.getElementById('manual_lat').value = "";
+                        // document.getElementById('manual_lon').value = "";
+
+                        // Если это была точка B, можно закрыть меню, так как линия готова
+                        if (label === 'b') abToggleMenu();
+                    }
+                });
+        }
+        function switchAbTab(type) {
+            // Візуал кнопок (підсвітка активної)
+            document.querySelectorAll('.ab-tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + type).classList.add('active');
+
+            let targetPos = null;
+
+            if (type === 'T') targetPos = lastTractorPos;
+            if (type === 'A') targetPos = lastPointAPos;
+            if (type === 'B') targetPos = lastPointBPos;
+
+            const latInput = document.getElementById('manual_lat');
+            const lonInput = document.getElementById('manual_lon');
+
+            if (targetPos) {
+                latInput.value = targetPos[0].toFixed(8);
+                lonInput.value = targetPos[1].toFixed(8);
+            } else {
+                // Якщо точки ще немає, очищаємо поля
+                latInput.value = "";
+                lonInput.value = "";
+            }
+        }
+
+
+
+
+    </script>
+    <!-- Контейнер быстрого меню AB -->
+    <!--div id="ab-quick-menu" class="ab-menu-container" style="display:none;">
+        <div class="ab-menu-grid">
+            <button class="ab-btn-item" onclick="setPoint('a')">A</button>
+            <button class="ab-btn-item" onclick="setPoint('b')">B</button>
+            <button class="ab-btn-item ab-btn-danger" onclick="abResetHandler()">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+            </button>
+            <button class="ab-btn-item ab-btn-warning" onclick="location.href='/settings'">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+            </button>
+        </div>
+        <button class="ab-btn-close" onclick="abToggleMenu()">ЗАКРЫТЬ</button>
+    </div -->
+
+
+    <div id="connectionModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-icon">⚠️</div>
+            <h2>Связь потеряна</h2>
+            <p>Нет ответа от контроллера трактора. Проверьте сеть.</p>
+            <button onclick="hideModal()" class="modal-btn">ПОНЯТНО</button>
+        </div>
+    </div>
+    <!-- Модальне вікно для головного екрана -->
+    <div id="customModal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; justify-content:center; align-items:center;">
+        <div
+            style="background:#1e1e1e; width:80%; max-width:500px; padding:35px; border-radius:20px; border-top:8px solid #c0392b; text-align:center; box-shadow: 0 10px 50px rgba(0,0,0,0.8);">
+            <h3 id="modalText" style="margin: 0 0 35px 0; font-size: 26px; color: white; font-weight: bold;">Текст...
+            </h3>
+            <div style="display: flex; gap: 20px; justify-content:center;">
+                <button type="button" id="modalCancelBtn" class="btn-step"
+                    style="flex:1; height:90px; background:#444; color:white; border-radius:15px; font-size:22px; border:none; font-weight:bold;">ОТМЕНА</button>
+                <button type="button" id="modalConfirmBtn" class="btn-step"
+                    style="flex:1; height:90px; background:#c0392b; color:white; border-radius:15px; font-size:22px; border:none; font-weight:bold;">СБРОСИТЬ</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

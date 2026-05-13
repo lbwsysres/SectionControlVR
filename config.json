@@ -1,0 +1,38 @@
+{
+    "UDP_PORT": 9999,
+    "SECTION_WIDTHS": [
+        0.9999999999999992,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+    ],
+    "DRAW_OFF_SECTIONS": false,
+    "LOOK_AHEAD": 0.4,
+    "MIN_SPEED": 1.5,
+    "VISUAL_SCALE": 1.0,
+    "OFFSET_BACK": 1.0,
+    "MASTER_SW": true,
+    "SECTION_MODES": [
+        "AUTO",
+        "AUTO",
+        "AUTO",
+        "AUTO",
+        "AUTO",
+        "AUTO"
+    ],
+    "SAVE_FILE": "coverage.wkt",
+    "HISTORY_FILE": "history.json",
+    "LOOK_AHEAD_TIME": 0.4,
+    "MIN_LOOK_AHEAD_DIST": 0.5,
+    "AUTO_SECTION_BUFFER": -0.04,
+    "AUTO_SECTION_MIN_OVERLAP": 0.3,
+    "CURVE_COMP_MIN_RTK": 4,
+    "CURVE_COMP_LIMITS": [
+        50,
+        150
+    ],
+    "CURVE_COMP_THRESHOLD": 0.1,
+    "CURVE_COMP_SMOOTH": 0.3
+}
