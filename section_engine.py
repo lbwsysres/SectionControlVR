@@ -551,7 +551,7 @@ class SectionControl:
             with open(save_file, "w") as f:
                 f.write(wkt.dumps(simplified, rounding_precision=3))
         except Exception as e:
-            print(f"Помилка примусового збереження WKT: {e}")
+            print(f"Force save error WKT: {e}")
 
     def get_p(self, tx, ty, th, lo):
         # Стандартная навигационная математика (0 - Север)

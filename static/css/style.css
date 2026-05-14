@@ -20,11 +20,11 @@ body {
     top: 10px;
     left: 10px;
     background: var(--panel-bg);
-    padding: 15px;
+    padding: 5px;
     border: 1px solid #333;
     border-radius: 12px;
     z-index: 100;
-    width: 260px;
+    width: 200px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 

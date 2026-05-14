@@ -33,7 +33,7 @@ def save_session_dump(state, sc, filename=None):
         os.replace(temp_file, target_file)
         return True
     except Exception as e:
-        print(f"[DumpManager] Критична помилка запису дампу: {e}")
+        print(f"[DumpManager] Critical error writing dump: {e}")
         return False
 
 def load_session_dump(state, sc, filename=None):
@@ -58,10 +58,10 @@ def load_session_dump(state, sc, filename=None):
         # Синхронізуємо двигун обчислення секцій
         sc.path_history = state.path_history
         
-        print(f"[DumpManager] Стан успішно відновлено з файлу: {os.path.basename(target_file)}")
+        print(f"[DumpManager] State successfully restored from file: {os.path.basename(target_file)}")
         return True
     except Exception as e:
-        print(f"[DumpManager] Не вдалося прочитати дамп: {e}")
+        print(f"[DumpManager] Could not read dump: {e}")
         return False
 
 def clear_current_dump():

@@ -1,0 +1,81 @@
+/* static/css/emulator.css */
+.emu-panel {
+    background: rgba(0, 0, 0, 0.9);
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #444;
+    width: 200px;
+    font-family: sans-serif;
+    color: white;
+}
+
+.emu-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0px;
+}
+
+.emu-val-hdg { color: #f1c40f; font-weight: bold; }
+.emu-val-spd { color: #2ecc71; font-weight: bold; }
+
+.emu-btn-status {
+    background: #e74c3c;
+    width: 100%;
+    height: 40px;
+    border: none;
+    color: white;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.emu-joy-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 180px;
+}
+
+.emu-joy-zone {
+    position: relative;
+    width: 150px;
+    height: 150px;
+    background: #222;
+    border: 3px solid #444;
+    border-radius: 10px;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    touch-action: none;
+}
+
+.emu-axis-v {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: rgba(255,255,255,0.1);
+}
+
+.emu-axis-h {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    background: rgba(255,255,255,0.1);
+}
+
+.emu-joy-stick {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    background: radial-gradient(circle, #555, #333);
+    border: 2px solid #2ecc71;
+    border-radius: 8px;
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}

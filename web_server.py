@@ -14,19 +14,41 @@ import dump_manager
 import os
 
 
+# def meters_to_gps(sc, mx, my):
+#     if mx is None or my is None:
+#         return None
+#     try:
+#         # Используем трансформер из переданного объекта sc
+#         lon, lat = sc.transformer_to_m.transform(
+#             mx, my, 
+#             direction=pyproj.enums.TransformDirection.INVERSE
+#         )
+#         return [lat, lon]
+#     except Exception as e:
+#         print(f"DEBUG: Error convert meters_to_gps : {e}")
+#         return None
 def meters_to_gps(sc, mx, my):
     if mx is None or my is None:
         return None
+        
+    # ЗАХИСТ: Якщо об'єкт проекції ще не ініціалізований (після завантаження дампу),
+    # ми не викликаємо .transform(), щоб сервер на SBC не падав.
+    if sc is None or getattr(sc, 'transformer_to_m', None) is None:
+        # Можна залишити лог для відладки, щоб бачити, коли це відбувається
+        # print("DEBUG: meters_to_gps - трансформер ще не створено (чекаємо GPS референс)")
+        return None
+
     try:
-        # Используем трансформер из переданного объекта sc
+        # Тепер викликати метод абсолютно безпечно
         lon, lat = sc.transformer_to_m.transform(
             mx, my, 
             direction=pyproj.enums.TransformDirection.INVERSE
         )
         return [lat, lon]
     except Exception as e:
-        print(f"DEBUG: Ошибка конвертации: {e}")
+        print(f"DEBUG: Error convert meters_to_gps : {e}")
         return None
+
 
 def create_app(state, sc):
     app = Flask(__name__)
@@ -84,61 +106,114 @@ def create_app(state, sc):
         # render_template сам пойдет в папку /templates и найдет там файл
         return render_template("settings.html", cfg=cfg, widths=widths_str)
 
+    # @app.route("/save_settings", methods=["POST"])
+    # def save_settings():
+    #     # Отримуємо JSON з тіла запиту (fetch шле саме його)
+    #     data = request.get_json()
+    #     if not data:
+    #         return {"error": "No data received"}, 400
+
+    #     # Завантажуємо поточний конфіг
+    #     cfg = config_manager.load_config()
+
+    #     # Оновлюємо значення, використовуючи ключі з JS
+    #     if "SECTION_WIDTHS" in data:
+    #         cfg["SECTION_WIDTHS"] = [float(x) for x in data["SECTION_WIDTHS"]]
+
+    #     if "AUTO_SECTION_MIN_OVERLAP" in data:
+    #         cfg["AUTO_SECTION_MIN_OVERLAP"] = float(data["AUTO_SECTION_MIN_OVERLAP"])
+
+    #     if "LOOK_AHEAD_TIME" in data:
+    #         cfg["LOOK_AHEAD"] = float(data["LOOK_AHEAD_TIME"])
+
+    #     if "AUTO_SECTION_BUFFER" in data:
+    #         cfg["AUTO_SECTION_BUFFER"] = float(data["AUTO_SECTION_BUFFER"])
+
+    #     if "CURVE_COMP_SMOOTH" in data:
+    #         cfg["CURVE_COMP_SMOOTH"] = float(data["CURVE_COMP_SMOOTH"])
+
+    #     if "CURVE_COMP_MIN_RTK" in data:
+    #         cfg["CURVE_COMP_MIN_RTK"] = int(data["CURVE_COMP_MIN_RTK"])
+
+    #     if "DRAW_OFF_SECTIONS" in data:
+    #         cfg["DRAW_OFF_SECTIONS"] = bool(data["DRAW_OFF_SECTIONS"])
+
+    #     if "VISUAL_SCALE" in data:
+    #         cfg["VISUAL_SCALE"] = float(data["VISUAL_SCALE"])
+
+    #     if "OFFSET_BACK" in data:
+    #         cfg["OFFSET_BACK"] = float(data["OFFSET_BACK"])
+
+    #     if "UDP_PORT" in data:
+    #         cfg["UDP_PORT"] = int(data["UDP_PORT"])
+    #     if "MIN_SPEED" in data:
+    #         cfg["MIN_SPEED"] = float(data["MIN_SPEED"])
+        
+    #     if "MIN_LOOK_AHEAD_DIST" in data:
+    #         cfg["MIN_LOOK_AHEAD_DIST"] = float(data["MIN_LOOK_AHEAD_DIST"])
+        
+    #     # Збираємо ліміти назад у список [min, max]
+    #     if "CURVE_LIMIT_LOW" in data and "CURVE_LIMIT_HIGH" in data:
+    #         cfg["CURVE_COMP_LIMITS"] = [
+    #             int(data["CURVE_LIMIT_LOW"]), 
+    #             int(data["CURVE_LIMIT_HIGH"])
+    #         ]
+
+
+    #     # Зберігаємо оновлений об'єкт через менеджер
+    #     config_manager.save_config(cfg)
+
+    #     # Повертаємо успішний статус для JS (response.ok буде true)
+    #     return {"status": "success"}, 200
+
     @app.route("/save_settings", methods=["POST"])
     def save_settings():
-        # Отримуємо JSON з тіла запиту (fetch шле саме його)
+        # Отримуємо JSON з тіла запиту сторінки налаштувань
         data = request.get_json()
         if not data:
             return {"error": "No data received"}, 400
 
-        # Завантажуємо поточний конфіг
+        # 1. Завантажуємо актуальний конфіг із нашого оперативнішого RAM-кешу
         cfg = config_manager.load_config()
 
-        # Оновлюємо значення, використовуючи ключі з JS
-        if "SECTION_WIDTHS" in data:
-            cfg["SECTION_WIDTHS"] = [float(x) for x in data["SECTION_WIDTHS"]]
+        # 2. Словник автоматичного мапінгу та приведення типів (JS Ключ -> Бекенд Ключ)
+        key_mapping = {
+            "SECTION_WIDTHS": ("SECTION_WIDTHS", lambda v: [float(x) for x in v]),
+            "AUTO_SECTION_MIN_OVERLAP": ("AUTO_SECTION_MIN_OVERLAP", float),
+            "LOOK_AHEAD_TIME": ("LOOK_AHEAD", float),  # Фронтенд шле LOOK_AHEAD_TIME, бекенд пише в LOOK_AHEAD
+            "AUTO_SECTION_BUFFER": ("AUTO_SECTION_BUFFER", float),
+            "CURVE_COMP_SMOOTH": ("CURVE_COMP_SMOOTH", float),
+            "CURVE_COMP_MIN_RTK": ("CURVE_COMP_MIN_RTK", int),
+            "DRAW_OFF_SECTIONS": ("DRAW_OFF_SECTIONS", bool),
+            "VISUAL_SCALE": ("VISUAL_SCALE", float),
+            "OFFSET_BACK": ("OFFSET_BACK", float),
+            "UDP_PORT": ("UDP_PORT", int),
+            "MIN_SPEED": ("MIN_SPEED", float),
+            "MIN_LOOK_AHEAD_DIST": ("MIN_LOOK_AHEAD_DIST", float),
+            "CURVE_COMP_LIMITS": ("CURVE_COMP_LIMITS", lambda v: [int(x) for x in v]),
+            
+            # --- ПАРАМЕТРИ ПОРТІВ ТА ЗАЛІЗА (GPS) ---
+            "GPS_ENABLE": ("GPS_ENABLE", bool),
+            "GPS_PORT": ("GPS_PORT", lambda v: str(v).strip()),
+            "GPS_PORT_SPEED": ("GPS_PORT_SPEED", int),
+            "GPS_TIME_RECONNECT": ("GPS_TIME_RECONNECT", int),
+            
+            # --- ПАРАМЕТРИ ПОРТІВ ТА ЗАЛІЗА (ПЛАТА КЛАПАНІВ) ---
+            "CONTROL_BOARD_ENABLE": ("CONTROL_BOARD_ENABLE", bool),
+            "CONTROL_BOARD_PORT": ("CONTROL_BOARD_PORT", lambda v: str(v).strip()),
+            "CONTROL_BOARD_PORT_SPEED": ("CONTROL_BOARD_PORT_SPEED", int),
+            "CONTROL_BOARD_TIME_RECONNECT": ("CONTROL_BOARD_TIME_RECONNECT", int),
+        }
 
-        if "AUTO_SECTION_MIN_OVERLAP" in data:
-            cfg["AUTO_SECTION_MIN_OVERLAP"] = float(data["AUTO_SECTION_MIN_OVERLAP"])
+        # 3. Елегантний динамічний цикл замість 20 штук операторів "if"
+        for js_key, (cfg_key, type_converter) in key_mapping.items():
+            if js_key in data and data[js_key] is not None:
+                try:
+                    cfg[cfg_key] = type_converter(data[js_key])
+                except (ValueError, TypeError) as e:
+                    print(f"[Web_Server] Помилка обробки параметра {js_key}: {e}")
 
-        if "LOOK_AHEAD_TIME" in data:
-            cfg["LOOK_AHEAD"] = float(data["LOOK_AHEAD_TIME"])
-
-        if "AUTO_SECTION_BUFFER" in data:
-            cfg["AUTO_SECTION_BUFFER"] = float(data["AUTO_SECTION_BUFFER"])
-
-        if "CURVE_COMP_SMOOTH" in data:
-            cfg["CURVE_COMP_SMOOTH"] = float(data["CURVE_COMP_SMOOTH"])
-
-        if "CURVE_COMP_MIN_RTK" in data:
-            cfg["CURVE_COMP_MIN_RTK"] = int(data["CURVE_COMP_MIN_RTK"])
-
-        if "DRAW_OFF_SECTIONS" in data:
-            cfg["DRAW_OFF_SECTIONS"] = bool(data["DRAW_OFF_SECTIONS"])
-
-        if "VISUAL_SCALE" in data:
-            cfg["VISUAL_SCALE"] = float(data["VISUAL_SCALE"])
-
-        if "OFFSET_BACK" in data:
-            cfg["OFFSET_BACK"] = float(data["OFFSET_BACK"])
-
-        if "UDP_PORT" in data:
-            cfg["UDP_PORT"] = int(data["UDP_PORT"])
-        if "MIN_SPEED" in data:
-            cfg["MIN_SPEED"] = float(data["MIN_SPEED"])
-        
-        if "MIN_LOOK_AHEAD_DIST" in data:
-            cfg["MIN_LOOK_AHEAD_DIST"] = float(data["MIN_LOOK_AHEAD_DIST"])
-        
-        # Збираємо ліміти назад у список [min, max]
-        if "CURVE_LIMIT_LOW" in data and "CURVE_LIMIT_HIGH" in data:
-            cfg["CURVE_COMP_LIMITS"] = [
-                int(data["CURVE_LIMIT_LOW"]), 
-                int(data["CURVE_LIMIT_HIGH"])
-            ]
-
-
-        # Зберігаємо оновлений об'єкт через менеджер
+        # 4. Зберігаємо оновлений об'єкт через менеджер (пише на диск + синхронізує RAM-кеш)
         config_manager.save_config(cfg)
 
         # Повертаємо успішний статус для JS (response.ok буде true)

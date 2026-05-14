@@ -1,0 +1,60 @@
+import json, os
+
+CONFIG_FILE = "config.json"
+
+
+def load_config():
+    default = {
+        "UDP_PORT": 9999,
+        "SECTION_WIDTHS": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        "DRAW_OFF_SECTIONS": False,
+        "LOOK_AHEAD": 0.1,
+        "MIN_SPEED": 1.0,
+        "VISUAL_SCALE": 1.0,
+        "OFFSET_BACK": 0.0,
+        "MASTER_SW": True,
+        "SECTION_MODES": ["AUTO", "AUTO", "AUTO", "AUTO", "AUTO"],
+        "SAVE_FILE": "coverage.wkt",
+        "HISTORY_FILE": "history.json",
+        # --- НОВІ ПАРАМЕТРИ ---
+        "LOOK_AHEAD_TIME": 0.6,  # Час випередження (сек)
+        "MIN_LOOK_AHEAD_DIST": 0.5,  # Мінімальний винос (м)
+        "AUTO_SECTION_BUFFER": -0.05,  # Внутрішній відступ (м)
+        "AUTO_SECTION_MIN_OVERLAP": 0.3,  # 30% перекриття для вимкнення
+        "CURVE_COMP_MIN_RTK": 4,  # 4 = RTK Fix, 5 = Float
+        "CURVE_COMP_LIMITS": [50, 150],  # [мін, макс] відсотки
+        "CURVE_COMP_THRESHOLD": 0.1,  # Чутливість (градусів/сек)
+        "CURVE_COMP_SMOOTH": 0.3,  # Коефіцієнт плавності (Low-pass filter) (0.1 - повільно, 1.0 - миттєво)
+        # Тепер ти можеш змінювати AUTO_SECTION_MIN_OVERLAP
+        # (наприклад, поставити 0.5, щоб вимикалося лише при 50% перекриття)
+        # та CURVE_COMP_SMOOTH, щоб знайти ідеальний баланс для свого заліза.
+
+        "GPS_PORT": "com1",
+        "GPS_PORT_SPEED": 115200,
+        "GPS_TIME_RECONNECT": 5000,
+        "GPS_ENABLE": False,
+
+        "CONTROL_BOARD_PORT": "com2",
+        "CONTROL_BOARD_PORT_SPEED": 115200,
+        "CONTROL_BOARD_TIME_RECONNECT": 5000,
+        "CONTROL_BOARD_ENABLE": False,
+
+    }
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            try:
+                cfg = json.load(f)
+                # Синхронизируем количество режимов с количеством секций
+                if len(cfg.get("SECTION_MODES", [])) != len(
+                    cfg.get("SECTION_WIDTHS", [])
+                ):
+                    cfg["SECTION_MODES"] = ["AUTO"] * len(cfg["SECTION_WIDTHS"])
+                return {**default, **cfg}
+            except:
+                return default
+    return default
+
+
+def save_config(cfg):
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=4)
