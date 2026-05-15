@@ -403,6 +403,8 @@
             })
                 .then(res => { if (res.ok) { window.location.href = '/'; } else { alert("Ошибка сохранения."); } })
                 .catch(err => { console.error(err); alert("Ошибка сети."); });
+            console.log(cfg);
+
         }
 
         drawSecs();
@@ -443,25 +445,42 @@
         // Запускаємо автосканування портів при завантаженні сторінки налаштувань
         document.addEventListener("DOMContentLoaded", loadAvailablePorts);
 
-
+        /*
+                document.addEventListener("DOMContentLoaded", () => {
+                    // Обробляємо кліки на кастомні тумблери
+                    document.querySelectorAll('.switch').forEach(switchEl => {
+                        switchEl.addEventListener('click', function (e) {
+                            // Запобігаємо будь-яким подвійним тач-подіям мобільних пристроїв
+                            e.preventDefault();
+                            e.stopPropagation();
+        
+                            const input = this.querySelector('input[type="checkbox"]');
+                            if (!input) return;
+        
+                            // 1. Перемикаємо візуальний CSS клас активності (анімація зсуву та кольору)
+                            this.classList.toggle('active-ts');
+        
+                            // 2. Синхронізуємо логічний стан інпуту відповідно до наявності класу
+                            input.checked = this.classList.contains('active-ts');
+        
+                            console.log(`[UI] Тумблер ${input.id} візуально змінено. Стан checked:`, input.checked);
+                        });
+                    });
+                });
+        */
         document.addEventListener("DOMContentLoaded", () => {
-            // Обробляємо кліки на кастомні тумблери
-            document.querySelectorAll('.switch').forEach(switchEl => {
-                switchEl.addEventListener('click', function (e) {
-                    // Запобігаємо будь-яким подвійним тач-подіям мобільних пристроїв
-                    e.preventDefault();
-                    e.stopPropagation();
+            // Вешаем событие change напрямую на чекбоксы внутри .switch
+            document.querySelectorAll('.switch input[type="checkbox"]').forEach(checkbox => {
+                checkbox.addEventListener('change', function () {
+                    // На мобильных и ПК состояние checked уже изменилось само!
 
-                    const input = this.querySelector('input[type="checkbox"]');
-                    if (!input) return;
+                    // Если вам все еще нужен класс active-ts на контейнере:
+                    const parent = this.closest('.switch');
+                    if (parent) {
+                        parent.classList.toggle('active-ts', this.checked);
+                    }
 
-                    // 1. Перемикаємо візуальний CSS клас активності (анімація зсуву та кольору)
-                    this.classList.toggle('active-ts');
-
-                    // 2. Синхронізуємо логічний стан інпуту відповідно до наявності класу
-                    input.checked = this.classList.contains('active-ts');
-
-                    console.log(`[UI] Тумблер ${input.id} візуально змінено. Стан checked:`, input.checked);
+                    console.log(`[UI] Тумблер ${this.id} успешно изменен. Стан checked:`, this.checked);
                 });
             });
         });
