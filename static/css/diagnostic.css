@@ -1,0 +1,68 @@
+/* static/css/diagnostic.css */
+.diag-panel {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 6px 12px;
+    background: rgba(20, 20, 20, 0.4);
+    border-radius: 8px;
+    width: fit-content;
+    font-family: sans-serif;
+    color: #fff;
+    box-sizing: border-box;
+}
+
+.diag-col {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.diag-icon-box {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.diag-slash {
+    position: absolute;
+    width: 40px;
+    height: 2px;
+    background: #e74c3c;
+    transform: rotate(45deg);
+    top: 15px;
+    left: -4px;
+    transition: opacity 0.2s;
+    opacity: 1;
+}
+
+.diag-text-box {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 95px;
+}
+
+.diag-status {
+    font-weight: bold;
+    font-size: 0.85rem;
+    color: #e74c3c;
+    transition: color 0.2s;
+    line-height: 1.1;
+}
+
+.diag-sub {
+    font-size: 0.75rem;
+    color: #555;
+    transition: color 0.2s;
+    margin-top: 1px;
+}
+
+.diag-divider {
+    width: 1px;
+    height: 30px;
+    background: rgba(255, 255, 255, 0.1);
+}

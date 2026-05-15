@@ -19,7 +19,7 @@ class GPSWorker(threading.Thread):
         self.current_baud = None
 
     def run(self):
-        print("[GPS_Unit] Поток GPS запущен.")
+        print("[GPS_Unit] GPS is Run.")
         while self.running:
             # 1. Проверяем режим эмуляции
             if self.state.emu_enabled:
@@ -46,7 +46,7 @@ class GPSWorker(threading.Thread):
                 active_port != self.current_port or active_baud != self.current_baud
             ):
                 print(
-                    f"[GPS_Unit] Настройки изменены во фронтенде! Переключение на {active_port}..."
+                    f"[GPS_Unit] Setting change! Connect to port: {active_port}..."
                 )
                 self.close_port()
 
@@ -65,10 +65,12 @@ class GPSWorker(threading.Thread):
             self.current_port = port
             self.current_baud = baud
             self.connected = True
-            print(f"[GPS_Unit] Успешно подключено к железу: {port} ({baud} baud)")
+            self.state.gps_connected = True 
+            print(f"[GPS_Unit] Connect to port:: {port} ({baud} baud)")
         except Exception as e:
-            print(f"[GPS_Unit] Ошибка порта {port}: {e}. Повтор через {delay} сек...")
+            print(f"[GPS_Unit] Error port {port}: {e}. Repiat {delay} sec...")
             self.connected = False
+            self.state.gps_connected = False 
             time.sleep(delay)
 
     def read_and_parse(self):
@@ -94,15 +96,16 @@ class GPSWorker(threading.Thread):
                 self.state.hdg = float(msg.true_track or self.state.hdg)
 
         except Exception as e:
-            print(f"[GPS_Unit] Потеряна связь с GPS-модулем: {e}")
+            print(f"[GPS_Unit] Lost connect GPS: {e}")
             self.close_port()
 
     def close_port(self):
         self.connected = False
+        self.state.gps_connected = False 
         if self.serial_device:
             try:
                 self.serial_device.close()
-                print("[GPS_Unit] Порт успешно освобожден.")
+                print("[GPS_Unit] Close port.")
             except:
                 pass
         self.serial_device = None

@@ -1,3 +1,7 @@
 fields/
 __pycache__/
+old/
+templates/old/
+static/css/old/
+static/js/old/
 history.json

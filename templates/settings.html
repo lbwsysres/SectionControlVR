@@ -153,8 +153,9 @@
     <div id="tab3" class="tab-content">
         <div class="card" style="border-top: 4px solid #f1c40f;">
             <h2 style="color: #f1c40f;">🛰️ Аппаратный GNSS/GPS Приемник</h2>
+
             <div class="touch-row">
-                <span class="label-main">Включить работу по UART порту</span>
+                <span class="label-main">Увімкнути реальний GPS</span>
                 <label class="switch">
                     <input type="checkbox" id="c_gps_enable" {{ 'checked' if cfg.GPS_ENABLE else '' }}>
                     <span class="slider-round"></span>
@@ -165,7 +166,12 @@
                     <span class="label-main">Имя COM-порта</span>
                     <span class="label-hint">Win: COM1 | Linux: /dev/ttyUSB0</span>
                 </div>
-                <input type="text" id="c_gps_port" value="{{ cfg.GPS_PORT }}" class="input-text-touch">
+                <!-- input type="text" id="c_gps_port" value="{{ cfg.GPS_PORT }}" class="input-text-touch" -->
+                <select id="c_gps_port"
+                    style="width: 480px; height: 50px; background: #000; border: 2px solid #444; border-radius: 10px; color: #fff; font-size: 0.9rem; padding: 0 10px; font-weight: bold; outline: none;">
+                    <!-- Сюди значення допише Jinja2 для поточної бази -->
+                    <option value="{{ cfg.GPS_PORT }}" selected>{{ cfg.GPS_PORT }} (Поточний)</option>
+                </select>
             </div>
             <div class="touch-row">
                 <span class="label-main">Скорость шины (Baudrate)</span>
@@ -186,9 +192,9 @@
         </div>
 
         <div class="card" style="border-top: 4px solid #3498db;">
-            <h2 style="color: #3498db;">🎛️ Плата Управления Секциями (Реле)</h2>
+            <h2 style="color: #3498db;">🎛️ Плата Управления Секциями</h2>
             <div class="touch-row">
-                <span class="label-main">Включить отправку маски на реле</span>
+                <span class="label-main">Увімкнути плату клапанів</span>
                 <label class="switch">
                     <input type="checkbox" id="c_board_enable" {{ 'checked' if cfg.CONTROL_BOARD_ENABLE else '' }}>
                     <span class="slider-round"></span>
@@ -199,7 +205,12 @@
                     <span class="label-main">Имя COM-порта</span>
                     <span class="label-hint">Порт подключения силовой платы</span>
                 </div>
-                <input type="text" id="c_board_port" value="{{ cfg.CONTROL_BOARD_PORT }}" class="input-text-touch">
+                <!-- input type="text" id="c_board_port" value="{{ cfg.CONTROL_BOARD_PORT }}" class="input-text-touch" -->
+                <select id="c_board_port"
+                    style="width: 480px; height: 50px; background: #000; border: 2px solid #444; border-radius: 10px; color: #fff; font-size: 0.9rem; padding: 0 10px; font-weight: bold; outline: none;">
+                    <option value="{{ cfg.CONTROL_BOARD_PORT }}" selected>{{ cfg.CONTROL_BOARD_PORT }} (Поточний)
+                    </option>
+                </select>
             </div>
             <div class="touch-row">
                 <span class="label-main">Скорость шины (Baudrate)</span>
@@ -229,6 +240,7 @@
                     <button type="button" onclick="change('c_port', 1)">+</button>
                 </div>
             </div>
+            <!-- 1. ОТРИСОВКА ЗАКРИТИХ СЕКЦІЙ -->
             <div class="touch-row">
                 <span class="label-main">Отрисовка закрытых секций</span>
                 <label class="switch">
@@ -236,6 +248,7 @@
                     <span class="slider-round"></span>
                 </label>
             </div>
+
             <div class="touch-row">
                 <span class="label-main">Визуальный масштаб карты</span>
                 <div class="spinner">
@@ -393,6 +406,68 @@
         }
 
         drawSecs();
+
+        function loadAvailablePorts() {
+            fetch('/api/available_ports')
+                .then(res => res.json())
+                .then(ports => {
+                    const gpsSelect = document.getElementById('c_gps_port');
+                    const boardSelect = document.getElementById('c_board_port');
+
+                    // Запам'ятовуємо, що зараз вибрано в конфігу, щоб не скинути при завантаженні
+                    const currentGpsPort = gpsSelect.value;
+                    const currentBoardPort = boardSelect.value;
+
+                    // Очищаємо старі опції
+                    gpsSelect.innerHTML = '';
+                    boardSelect.innerHTML = '';
+
+                    ports.forEach(p => {
+                        // Створюємо рядок під ПІПЛА (Коротке ім'я + Опис заліза)
+                        let visibleText = `${p.device} (${p.description})`;
+
+                        // Опція для GPS
+                        let optGps = new Option(visibleText, p.device);
+                        if (p.device.toLowerCase() === currentGpsPort.toLowerCase()) optGps.selected = true;
+                        gpsSelect.add(optGps);
+
+                        // Опція для Плати реле
+                        let optBoard = new Option(visibleText, p.device);
+                        if (p.device.toLowerCase() === currentBoardPort.toLowerCase()) optBoard.selected = true;
+                        boardSelect.add(optBoard);
+                    });
+                })
+                .catch(err => console.error("Помилка сканування заліза:", err));
+        }
+
+        // Запускаємо автосканування портів при завантаженні сторінки налаштувань
+        document.addEventListener("DOMContentLoaded", loadAvailablePorts);
+
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // Обробляємо кліки на кастомні тумблери
+            document.querySelectorAll('.switch').forEach(switchEl => {
+                switchEl.addEventListener('click', function (e) {
+                    // Запобігаємо будь-яким подвійним тач-подіям мобільних пристроїв
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const input = this.querySelector('input[type="checkbox"]');
+                    if (!input) return;
+
+                    // 1. Перемикаємо візуальний CSS клас активності (анімація зсуву та кольору)
+                    this.classList.toggle('active-ts');
+
+                    // 2. Синхронізуємо логічний стан інпуту відповідно до наявності класу
+                    input.checked = this.classList.contains('active-ts');
+
+                    console.log(`[UI] Тумблер ${input.id} візуально змінено. Стан checked:`, input.checked);
+                });
+            });
+        });
+
+
+
     </script>
 </body>
 

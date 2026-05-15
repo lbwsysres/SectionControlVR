@@ -11,7 +11,7 @@ class EmulatorWorker(threading.Thread):
         self.dt = 0.1 # Працюємо на 10 Гц (як реальний GPS)
 
     def run(self):
-        print("[Emu_Unit] Поток віртуального руху трактора запущен.")
+        print("[Emu_Unit] Tread is Run.")
         while self.running:
             # Працюємо ТІЛЬКИ якщо емулятор увімкнено на фронтенді та є швидкість
             if self.state.emu_enabled and self.state.emu_speed > 0:

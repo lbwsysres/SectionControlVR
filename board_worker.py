@@ -18,7 +18,7 @@ class BoardWorker(threading.Thread):
         self.last_sent_states = []  # Для отправки данных ТОЛЬКО при изменении состояний
 
     def run(self):
-        print("[Board_Unit] Поток платы клапанов запущен.")
+        print("[Board_Unit] Tread section ON.")
         while self.running:
             cfg = config_manager.load_config()
 
@@ -36,7 +36,7 @@ class BoardWorker(threading.Thread):
             if self.connected and (
                 active_port != self.current_port or active_baud != self.current_baud
             ):
-                print(f"[Board_Unit] Смена порта платы на {active_port}...")
+                print(f"[Board_Unit] Change port to {active_port}...")
                 self.close_port()
 
             if not self.connected:
@@ -52,12 +52,14 @@ class BoardWorker(threading.Thread):
             self.current_port = port
             self.current_baud = baud
             self.connected = True
-            print(f"[Board_Unit] Подключена плата управления: {port} ({baud} baud)")
+            self.state.board_connected = True 
+            print(f"[Board_Unit] Board CONNECT: {port} ({baud} baud)")
         except Exception as e:
             print(
-                f"[Board_Unit] Плата на {port} недоступна: {e}. Повтор через {delay} сек..."
+                f"[Board_Unit] Board port {port} Not : {e}. Repiat {delay} sec..."
             )
             self.connected = False
+            self.state.board_connected = False 
             time.sleep(delay)
 
     def send_commands_to_hardware(self):
@@ -78,19 +80,20 @@ class BoardWorker(threading.Thread):
 
                 self.last_sent_states = current_states
                 print(
-                    f"[Board_Unit] Отправлена команда на залізо: {status_str.strip()}"
+                    f"[Board_Unit] Send command: {status_str.strip()}"
                 )
 
         except Exception as e:
-            print(f"[Board_Unit] Ошибка отправки на плату: {e}")
+            print(f"[Board_Unit] Error send command: {e}")
             self.close_port()
 
     def close_port(self):
         self.connected = False
+        self.state.board_connected = False 
         if self.serial_device:
             try:
                 self.serial_device.close()
-                print("[Board_Unit] Порт платы закрыт.")
+                print("[Board_Unit] Cloase port.")
             except:
                 pass
         self.serial_device = None

@@ -12,7 +12,7 @@ import math
 import pyproj
 import dump_manager
 import os
-
+import serial.tools.list_ports
 
 # def meters_to_gps(sc, mx, my):
 #     if mx is None or my is None:
@@ -445,5 +445,47 @@ def create_app(state, sc):
             return {"status": "success"}, 200
         return {"error": "Файл не знайдено"}, 404
 
+
+    @app.route('/api/status', methods=['GET'])
+    def get_status():
+        # 1. Проверяем, запущен ли реальный поток GPS или мы крутим джойстик
+        # Для этого смотрим, активен ли последовательный порт в воркере
+        # (Для упрощения можно выставить флаг прямо из gps_worker.py в state.gps_connected)
+        gps_hardware_connected = getattr(state, 'gps_connected', False)
+        
+        # 2. Проверяем, на связи ли плата реле/клапанов
+        board_hardware_connected = getattr(state, 'board_connected', False)
+
+        # 3. Собираем пакет для фронтенда
+        status_pack = {
+            "gps_connected": gps_hardware_connected,
+            "emu_enabled": state.emu_enabled,
+            "rtk_status": state.rtk,       # 0=No, 1=GPS, 4=RTK Fix, 5=Float
+            "sats": getattr(state, 'gps_sats', 0), # Количество спутников
+            "board_connected": board_hardware_connected,
+            "speed": round(state.speed, 1),
+            "hdg": round(state.hdg, 1)
+        }
+        
+        return jsonify(status_pack), 200
+    
+    @app.route('/api/available_ports', methods=['GET'])
+    def get_available_ports():
+        ports_list = []
+        # comports() автоматично збирає імена та описи на Windows та Linux
+        for p in serial.tools.list_ports.comports():
+            ports_list.append({
+                "device": p.device,       # Для конфігу (наприклад, 'COM3' або '/dev/ttyUSB0')
+                "description": p.description # Для ПІПЛА (наприклад, 'USB-SERIAL CH340')
+            })
+        
+        # Якщо заліза взагалі немає, кидаємо заглушку, щоб інтерфейс не пустував
+        if not ports_list:
+            ports_list = [
+                {"device": "com1", "description": "Демо-порт 1 (Заглушка)"},
+                {"device": "/dev/ttyUSB0", "description": "Демо-порт Linux"}
+            ]
+            
+        return jsonify(ports_list), 200
 
     return app

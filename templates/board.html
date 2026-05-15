@@ -5,6 +5,7 @@
     <title>MySection Pro Terminal</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/diagnostic.css') }}">
 </head>
 
 <body>
@@ -173,6 +174,47 @@
                 </div>
             </div>
         </div>
+        <div class="diag-panel">
+
+            <!-- КОЛОНКА 1: GPS -->
+            <div class="diag-col">
+                <div id="gps_icon_container" class="diag-icon-box">
+                    <svg id="svg_gps" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e74c3c"
+                        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+                        style="transition: stroke 0.2s;">
+                        <circle cx="12" cy="12" r="10" />
+                        <circle cx="12" cy="12" r="6" />
+                        <circle cx="12" cy="12" r="2" />
+                    </svg>
+                    <div id="gps_slash" class="diag-slash"></div>
+                </div>
+                <div class="diag-text-box">
+                    <span id="txt_gps_status" class="diag-status">NO FIX</span>
+                    <span id="txt_gps_sats" class="diag-sub">Спутники: 0</span>
+                </div>
+            </div>
+
+            <div class="diag-divider"></div>
+
+            <!-- КОЛОНКА 2: BOARD -->
+            <div class="diag-col">
+                <div id="board_icon_container" class="diag-icon-box">
+                    <svg id="svg_board" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e74c3c"
+                        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+                        style="transition: stroke 0.2s;">
+                        <rect x="2" y="4" width="20" height="16" rx="2" />
+                        <path d="M6 8h2v2H6zM6 14h2v2H6zM11 11h7v2h-7z" />
+                    </svg>
+                    <div id="board_slash" class="diag-slash"></div>
+                </div>
+                <div class="diag-text-box">
+                    <span id="txt_board_status" class="diag-status">OFFLINE</span>
+                    <span id="board_template_1" class="diag-sub">Параметр: —</span>
+                </div>
+            </div>
+
+        </div>
+
     </div>
 
     <!-- Панель GPS Координат (Lat/Lon) з обмеженням ширини -->
@@ -1119,6 +1161,7 @@
                 lonInput.value = "";
             }
         }
+
     </script>
 
     <div id="connectionModal" class="modal-overlay" style="display: none;">
@@ -1144,7 +1187,7 @@
             </div>
         </div>
     </div>
-
+    <script src="{{ url_for('static', filename='js/diagnostic.js') }}"></script>
 </body>
 
 </html>

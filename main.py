@@ -32,6 +32,10 @@ class SharedState:
         self.guidance_error = 0.0
         self.flow_percents = []
 
+        self.gps_connected = False
+        self.board_connected = False
+        self.gps_sats = 0 # Чтобы парсер NMEA писал сюда число спутников
+
 # Ініціалізація глобальних об'єктів (Singletons)
 state = SharedState()
 cfg = config_manager.load_config()
@@ -44,7 +48,7 @@ def main_calculation_loop():
     Йому абсолютно байдуже, ХТО наповнив коордитати у state (залізо чи емулятор).
     Воно просто бере їх і рахує геометрію відсікання секцій.
     """
-    print("[Main_Engine] Потік математичних розрахунків секцій запущен.")
+    print("[Main_Engine] Tread calculate is Run.")
     while True:
         active_cfg = config_manager.load_config()
         sc.cfg = active_cfg

@@ -1,4 +1,7 @@
-/* static/css/settings.css */
+/* ==================================================================================== */
+/* ТЕМНАЯ ТЕМА И ИНТЕРФЕЙС SectionControlVR (Delphi Style)                              */
+/* ==================================================================================== */
+
 :root {
     --bg-main: #0a0a0a;
     --bg-card: #181818;
@@ -19,7 +22,7 @@ body {
     padding: 20px 40px 120px 40px;
 }
 
-/* Навігація табами */
+/* --- НАВИГАЦИЯ ТАБАМИ --- */
 .tabs-nav {
     display: flex;
     gap: 5px;
@@ -58,7 +61,7 @@ body {
     display: block;
 }
 
-/* Карточки параметрів */
+/* --- КАРТОЧКИ ПАРАМЕТРОВ --- */
 .card {
     background: var(--bg-card);
     border-radius: 15px;
@@ -75,7 +78,7 @@ h2 {
     letter-spacing: 0.5px;
 }
 
-/* Рядки параметрів (Touch-friendly) */
+/* --- СТРОКИ ПАРАМЕТРОВ (Touch-friendly) --- */
 .touch-row {
     display: flex;
     justify-content: space-between;
@@ -101,7 +104,7 @@ h2 {
     margin-top: 2px;
 }
 
-/* Тач-спінери (+ / -) */
+/* --- ТАЧ-СПИННЕРЫ (+ / -) --- */
 .spinner {
     display: flex;
     align-items: center;
@@ -133,9 +136,9 @@ h2 {
     font-weight: bold;
 }
 
-/* Поля вводу тексту/портів */
-.input-text-touch {
-    width: 140px;
+/* --- ПОЛЯ ВВОДА ТЕКСТА / СЕЛЕКТЫ ПОРТОВ --- */
+.input-text-touch, select {
+    width: 180px;
     height: 60px;
     background: #000;
     border: 2px solid #444;
@@ -145,13 +148,14 @@ h2 {
     text-align: center;
     font-weight: bold;
     outline: none;
+    box-sizing: border-box;
 }
 
-.input-text-touch:focus {
+.input-text-touch:focus, select:focus {
     border-color: var(--accent);
 }
 
-/* Великий слайдер повзунка */
+/* --- БОЛЬШОЙ СЛАЙДЕР ПОВЗУНКА --- */
 .slider {
     -webkit-appearance: none;
     width: 100%;
@@ -172,7 +176,7 @@ h2 {
     cursor: pointer;
 }
 
-/* Елементи списку секцій штанги */
+/* --- ЭЛЕМЕНТЫ СПИСКА СЕКЦИЙ ШТАНГИ --- */
 .section-item {
     display: flex;
     align-items: center;
@@ -195,53 +199,71 @@ h2 {
     cursor: pointer;
 }
 
-/* Перемикач типів Toggle Switch */
+/* ==================================================================================== */
+/* ЧИСТЫЙ НАТИВНЫЙ ТУМБЛЕР (РАБОТАЕТ БЕЗ JS-СКРИПТОВ И БЕЗ ОШИБОК)                     */
+/* ==================================================================================== */
+
 .switch {
     position: relative;
     display: inline-block;
-    width: 80px;
-    height: 34px;
+    width: 74px;   /* Оптимальный габарит под палец */
+    height: 38px;  /* Увеличенная высота для надежного тача */
 }
 
+/* Растягиваем невидимый чекбокс на всю площадь, чтобы он в одиночку ловил тачи */
 .switch input {
     opacity: 0;
-    width: 0;
-    height: 0;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    margin: 0;
+    cursor: pointer;
+    z-index: 10;   /* Строго поверх ползунка */
 }
 
+/* Основа тумблера (Состояние: ВЫКЛ) */
 .slider-round {
     position: absolute;
-    cursor: pointer;
     top: 0; left: 0; right: 0; bottom: 0;
-    background-color: #333;
-    transition: .4s;
-    border-radius: 34px;
+    background-color: #333333;
+    transition: background-color 0.2s ease;
+    border-radius: 38px;
+    z-index: 1;
 }
 
+/* Круглый бегунок внутри */
 .slider-round:before {
     position: absolute;
     content: "";
-    height: 26px;
-    width: 26px;
+    height: 30px;
+    width: 30px;
     left: 4px;
     bottom: 4px;
-    background-color: white;
-    transition: .4s;
+    background-color: #ffffff;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    z-index: 2;
 }
 
-input: checked + .slider-round {
-    background-color: var(--accent);
+/* При активации: перекрашиваем фон в ярко-зеленый (БЕЗ синтаксических пробелов) */
+.switch input:checked + .slider-round {
+    background-color: #2ecc71 !important;
 }
 
-input: checked + .slider-round:before {
-    transform: translateX(46px);
+/* При активации: плавно смещаем бегунок строго в правый край */
+.switch input:checked + .slider-round:before {
+    transform: translateX(36px) !important;
 }
 
-/* Фіксована нижня панель */
+/* --- ФИКСИРОВАННАЯ НИЖНЯЯ ПАНЕЛЬ --- */
 .bottom-dock {
     position: fixed;
-    bottom: 0; left: 0; width: 100%;
+    bottom: 0;
+    left: 0;
+    width: 100%;
     padding: 20px 40px;
     box-sizing: border-box;
     display: flex;
@@ -249,7 +271,7 @@ input: checked + .slider-round:before {
     align-items: center;
     z-index: 999;
     pointer-events: none;
-    background: linear-gradient(to top, rgba(0,0,0,1) 70%, rgba(0,0,0,0));
+    background: linear-gradient(to top, rgba(0, 0, 0, 1) 70%, rgba(0, 0, 0, 0));
 }
 
 .btn-dock-action {
@@ -260,15 +282,18 @@ input: checked + .slider-round:before {
     font-size: 1.4rem;
     font-weight: bold;
     cursor: pointer;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
     pointer-events: auto;
 }
 
-/* Модальне вікно */
+/* --- МОДАЛЬНОЕ ОКНО --- */
 #customModal {
     display: none;
     position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     background: rgba(0, 0, 0, 0.9);
     z-index: 9999;
     justify-content: center;
