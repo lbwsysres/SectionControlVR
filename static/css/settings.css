@@ -137,7 +137,8 @@ h2 {
 }
 
 /* --- ПОЛЯ ВВОДА ТЕКСТА / СЕЛЕКТЫ ПОРТОВ --- */
-.input-text-touch, select {
+.input-text-touch,
+select {
     width: 180px;
     height: 60px;
     background: #000;
@@ -151,7 +152,8 @@ h2 {
     box-sizing: border-box;
 }
 
-.input-text-touch:focus, select:focus {
+.input-text-touch:focus,
+select:focus {
     border-color: var(--accent);
 }
 
@@ -206,8 +208,10 @@ h2 {
 .switch {
     position: relative;
     display: inline-block;
-    width: 74px;   /* Оптимальный габарит под палец */
-    height: 38px;  /* Увеличенная высота для надежного тача */
+    width: 74px;
+    /* Оптимальный габарит под палец */
+    height: 38px;
+    /* Увеличенная высота для надежного тача */
 }
 
 /* Растягиваем невидимый чекбокс на всю площадь, чтобы он в одиночку ловил тачи */
@@ -220,13 +224,17 @@ h2 {
     left: 0;
     margin: 0;
     cursor: pointer;
-    z-index: 10;   /* Строго поверх ползунка */
+    z-index: 10;
+    /* Строго поверх ползунка */
 }
 
 /* Основа тумблера (Состояние: ВЫКЛ) */
 .slider-round {
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background-color: #333333;
     transition: background-color 0.2s ease;
     border-radius: 38px;
@@ -244,17 +252,17 @@ h2 {
     background-color: #ffffff;
     transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: 50%;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
     z-index: 2;
 }
 
 /* При активации: перекрашиваем фон в ярко-зеленый (БЕЗ синтаксических пробелов) */
-.switch input:checked + .slider-round {
+.switch input:checked+.slider-round {
     background-color: #2ecc71 !important;
 }
 
 /* При активации: плавно смещаем бегунок строго в правый край */
-.switch input:checked + .slider-round:before {
+.switch input:checked+.slider-round:before {
     transform: translateX(36px) !important;
 }
 
@@ -287,7 +295,7 @@ h2 {
 }
 
 /* --- МОДАЛЬНОЕ ОКНО --- */
-#customModal {
+/*#customModal {
     display: none;
     position: fixed;
     top: 0;
@@ -298,6 +306,33 @@ h2 {
     z-index: 9999;
     justify-content: center;
     align-items: center;
+}*/
+#customModal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    /* Залишаємо flex для центрування */
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+
+    /* Нові властивості для плавної анімації */
+    opacity: 0;
+    /* Спочатку вікно повністю прозоре */
+    pointer-events: none;
+    /* Крізь нього можна клікати, коли воно закрите */
+    transition: opacity 0.3s ease;
+    /* Час появи — 0.3 секунди */
+}
+
+#customModal.show {
+    opacity: 1;
+    pointer-events: auto;
+    /* Активуємо кліки по вікну */
 }
 
 .modal-card {
@@ -308,4 +343,23 @@ h2 {
     border-radius: 20px;
     text-align: center;
     box-shadow: 0 10px 50px rgba(0, 0, 0, 0.8);
+}
+
+#customModal>div {
+    background: #1e1e1e;
+    /* або ваш колір фону */
+    border-radius: 12px;
+    padding: 24px;
+
+    /* Нові стилі для анімації контенту */
+    transform: translateY(-20px) scale(0.95);
+    /* Зміщуємо трохи вгору і зменшуємо */
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    /* Ефект легкого пружного відскоку */
+}
+
+/* Коли модалка активна — повертаємо контент у початковий стан */
+#customModal.show>div {
+    transform: translateY(0) scale(1);
+    /* Повертаємо на місце та в оригінальний розмір */
 }

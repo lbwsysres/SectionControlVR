@@ -350,17 +350,50 @@
                 drawSecs();
             });
         }
-
-        function askUser(text, theme, confirmText, onConfirm) {
+        function askUser(text, theme, confirmText, onConfirm = null) {
             const modal = document.getElementById('customModal');
             const confirmBtn = document.getElementById('modalConfirmBtn');
+            const cancelBtn = document.getElementById('modalCancelBtn');
+
             document.getElementById('modalText').innerHTML = text;
             confirmBtn.innerText = confirmText;
             confirmBtn.style.background = (theme === 'danger') ? '#c0392b' : '#2ecc71';
-            modal.style.display = 'flex';
-            confirmBtn.onclick = () => { onConfirm(); modal.style.display = 'none'; };
-            document.getElementById('modalCancelBtn').onclick = () => { modal.style.display = 'none'; };
+
+            if (onConfirm === null) {
+                cancelBtn.style.display = 'none';
+            } else {
+                cancelBtn.style.display = 'inline-block';
+            }
+
+            // Вмикаємо плавну появу додаванням класу
+            modal.classList.add('show');
+
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+            // Функція для плавного закриття вікна
+            const closeModal = () => {
+                modal.classList.remove('show');
+            };
+
+            newConfirmBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (typeof onConfirm === 'function') onConfirm();
+                closeModal();
+            }, { once: true });
+
+            cancelBtn.onclick = (e) => {
+                e.preventDefault();
+                closeModal();
+            };
+
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    closeModal();
+                }
+            };
         }
+
 
         function confirmSave() {
             askUser('Сохранить изменения?<br><small>Новые параметры заліза будут применены RAM-потоками немедленно</small>', 'success', 'СОХРАНИТЬ', () => { saveAll(); });
@@ -395,14 +428,29 @@
                 CONTROL_BOARD_PORT_SPEED: parseInt(document.getElementById('c_board_speed').innerText),
                 CONTROL_BOARD_TIME_RECONNECT: parseInt(document.getElementById('c_board_recon').innerText)
             };
-
             fetch('/save_settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(cfg)
             })
-                .then(res => { if (res.ok) { window.location.href = '/'; } else { alert("Ошибка сохранения."); } })
-                .catch(err => { console.error(err); alert("Ошибка сети."); });
+                .then(res => {
+                    if (res.ok) {
+                        // Викликаємо як ALERT (без 4-го параметра)
+                        // Перенаправлення відбудеться ТОДІ, коли користувач натисне "OK"
+                        askUser("Настройки успешно сохранены!", 'success', 'OK', () => {
+                            window.location.href = '/';
+                        });
+                    } else {
+                        // Замінюємо помилку сервера на кастомну модалку
+                        askUser("Ошибка сохранения на сервере.", 'danger', 'OK');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    // Замінюємо помилку мережі на кастомну модалку
+                    askUser("Ошибка сети. Проверьте подключение.", 'danger', 'OK');
+                });
+
             console.log(cfg);
 
         }
@@ -444,30 +492,6 @@
 
         // Запускаємо автосканування портів при завантаженні сторінки налаштувань
         document.addEventListener("DOMContentLoaded", loadAvailablePorts);
-
-        /*
-                document.addEventListener("DOMContentLoaded", () => {
-                    // Обробляємо кліки на кастомні тумблери
-                    document.querySelectorAll('.switch').forEach(switchEl => {
-                        switchEl.addEventListener('click', function (e) {
-                            // Запобігаємо будь-яким подвійним тач-подіям мобільних пристроїв
-                            e.preventDefault();
-                            e.stopPropagation();
-        
-                            const input = this.querySelector('input[type="checkbox"]');
-                            if (!input) return;
-        
-                            // 1. Перемикаємо візуальний CSS клас активності (анімація зсуву та кольору)
-                            this.classList.toggle('active-ts');
-        
-                            // 2. Синхронізуємо логічний стан інпуту відповідно до наявності класу
-                            input.checked = this.classList.contains('active-ts');
-        
-                            console.log(`[UI] Тумблер ${input.id} візуально змінено. Стан checked:`, input.checked);
-                        });
-                    });
-                });
-        */
         document.addEventListener("DOMContentLoaded", () => {
             // Вешаем событие change напрямую на чекбоксы внутри .switch
             document.querySelectorAll('.switch input[type="checkbox"]').forEach(checkbox => {
