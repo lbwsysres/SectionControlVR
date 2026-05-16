@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from pathlib import Path
 
 DUMP_DIR = os.path.abspath("fields")
 CURRENT_SESSION_FILE = os.path.join(DUMP_DIR, "current_session.json")
@@ -54,6 +55,8 @@ def load_session_dump(state, sc, filename=None):
         state.point_b = dump.get("point_b")
         state.guidance_error = dump.get("guidance_error", 0.0)
         state.path_history = dump.get("path_history", [])
+        #state.current_file = CURRENT_SESSION_FILE
+        state.current_file = os.path.splitext(os.path.basename(target_file))[0]
         
         # Синхронізуємо двигун обчислення секцій
         sc.path_history = state.path_history

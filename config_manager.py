@@ -35,41 +35,49 @@ DEFAULT_CONFIG = {
     "CONTROL_BOARD_PORT_SPEED": 115200,
     "CONTROL_BOARD_TIME_RECONNECT": 5000,
     "CONTROL_BOARD_ENABLE": False,
+    "LOOK_AHEAD_ON_TIME": 0.8,
+    "LOOK_AHEAD_OFF_TIME": 0.3,
 }
 
+
 def load_config():
-    """ Повертає конфігурацію з оперативної пам'яті (без дискового I/O) """
+    """Повертає конфігурацію з оперативної пам'яті (без дискового I/O)"""
     global _cached_config
-    
+
     # Якщо це перший запуск — читаємо з диска
     if _cached_config is None:
         _cached_config = _read_from_disk()
-        
+
     return _cached_config
 
+
 def save_config(new_cfg):
-    """ Оновлює кеш в RAM та одночасно записує дані на диск """
+    """Оновлює кеш в RAM та одночасно записує дані на диск"""
     global _cached_config
-    
+
     # Синхронізуємо кількість режимів із кількістю секцій перед збереженням
     if len(new_cfg.get("SECTION_MODES", [])) != len(new_cfg.get("SECTION_WIDTHS", [])):
         new_cfg["SECTION_MODES"] = ["AUTO"] * len(new_cfg["SECTION_WIDTHS"])
-        
+
     # Оновлюємо глобальний RAM-кеш
     _cached_config = {**DEFAULT_CONFIG, **new_cfg}
-    
+
     # Записуємо на диск в асинхронному стилі (один раз)
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(_cached_config, f, indent=4)
-    print("[Config] Конфігурацію успішно збережено на диск та оновлено в RAM.")
+    print("[Config] Save congif disk and RAM.")
+    #print(new_cfg)
+
 
 def _read_from_disk():
-    """ Внутрішня функція для первинного читання файлу з диска """
+    """Внутрішня функція для первинного читання файлу з диска"""
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             try:
                 cfg = json.load(f)
-                if len(cfg.get("SECTION_MODES", [])) != len(cfg.get("SECTION_WIDTHS", [])):
+                if len(cfg.get("SECTION_MODES", [])) != len(
+                    cfg.get("SECTION_WIDTHS", [])
+                ):
                     cfg["SECTION_MODES"] = ["AUTO"] * len(cfg["SECTION_WIDTHS"])
                 return {**DEFAULT_CONFIG, **cfg}
             except Exception as e:

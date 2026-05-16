@@ -17,7 +17,7 @@ class SharedState:
     def __init__(self):
         cfg = config_manager.load_config()
         self.current_states = [False] * len(cfg.get("SECTION_WIDTHS", [3.0]))
-        self.last_lat, self.last_lon = 49.0, 29.0
+        self.last_lat, self.last_lon = 49.76, 29.00
         self.area, self.speed, self.hdg, self.rtk = 0.0, 0.0, 0.0, 0
         self.path_history = []
         self.reset_flag = False
@@ -35,6 +35,7 @@ class SharedState:
         self.gps_connected = False
         self.board_connected = False
         self.gps_sats = 0 # Чтобы парсер NMEA писал сюда число спутников
+        self.current_file = "NEW"
 
 # Ініціалізація глобальних об'єктів (Singletons)
 state = SharedState()
@@ -132,4 +133,4 @@ if __name__ == "__main__":
 
     # 4. Запуск Flask веб-сервера
     app = web_server.create_app(state, sc)
-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=80, debug=True, use_reloader=False)

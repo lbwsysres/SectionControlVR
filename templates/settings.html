@@ -61,6 +61,32 @@
                     <button type="button" onclick="change('c_look', 0.1)">+</button>
                 </div>
             </div>
+
+            <div class="touch-row">
+                <div class="label-box">
+                    <span class="label-main">Look Ahead ON (сек)</span>
+                    <span class="label-hint">Время упреждения на срабатывание клапанов</span>
+                </div>
+                <div class="spinner">
+                    <button type="button" onclick="change('c_look_on', -0.1)">-</button>
+                    <span id="c_look_on">{{ cfg.LOOK_AHEAD_ON_TIME }}</span>
+                    <button type="button" onclick="change('c_look_on', 0.1)">+</button>
+                </div>
+            </div>
+
+            <div class="touch-row">
+                <div class="label-box">
+                    <span class="label-main">Look Ahead OFF(сек)</span>
+                    <span class="label-hint">Время упреждения на срабатывание клапанов</span>
+                </div>
+                <div class="spinner">
+                    <button type="button" onclick="change('c_look_off', -0.1)">-</button>
+                    <span id="c_look_off">{{ cfg.LOOK_AHEAD_OFF_TIME }}</span>
+                    <button type="button" onclick="change('c_look_off', 0.1)">+</button>
+                </div>
+            </div>
+
+
             <div class="touch-row">
                 <div class="label-box">
                     <span class="label-main">Мин. вынос штанги (м)</span>
@@ -406,6 +432,9 @@
                 SECTION_WIDTHS: widths,
                 AUTO_SECTION_MIN_OVERLAP: parseFloat(document.getElementById('c_overlap').value),
                 LOOK_AHEAD_TIME: parseFloat(document.getElementById('c_look').innerText),
+                LOOK_AHEAD_ON_TIME: parseFloat(document.getElementById('c_look_on').innerText),
+                LOOK_AHEAD_OFF_TIME: parseFloat(document.getElementById('c_look_off').innerText),
+
                 AUTO_SECTION_BUFFER: parseFloat(document.getElementById('c_buf').innerText),
                 CURVE_COMP_SMOOTH: parseFloat(document.getElementById('c_smooth').value),
                 CURVE_COMP_MIN_RTK: parseInt(document.getElementById('c_rtk').innerText),

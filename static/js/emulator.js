@@ -33,7 +33,7 @@ function updateEmuUI() {
 }
 
 function sendEmuData() {
-    console.log(`Sending: hdg=${currentHdg}, speed=${currentSpd}`);
+    //console.log(`Sending: hdg=${currentHdg}, speed=${currentSpd}`);
     // Тут буде ваш fetch або WebSocket відправка
     const data = {
         enabled: emuEnabled,
