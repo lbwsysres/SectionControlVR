@@ -6,3 +6,7 @@ static/css/old/
 static/js/old/
 history.json
 install.txt
+# Игнорировать папки во всех поддиректориях проекта
+**/.pio/
+**/.vscode/
+hardware/

@@ -103,8 +103,31 @@ def create_app(state, sc):
                 "uy": sc.last_y,
                 "new_points": new_points,
                 "total_count": len(state.path_history),
+                "gps_mode": state.gps_mode,
+                "gps_mode_text": state.gps_mode_text,
             }
         )
+    @app.route("/panel_data")
+    def panel_data():
+        """
+        Ультра-легкий роут для заліза (ESP32 / LVGL).
+        Ніякої історії, мінімальний JSON, швидка відповідь.
+        """
+        cfg = config_manager.load_config()
+        
+        # Скорочуємо імена ключів, щоб ESP32 витрачала менше пам'яті на парсинг тексту
+        return jsonify({
+            "mo": cfg.get("SECTION_MODES", ["AUTO"] * len(state.current_states)),
+            "st": state.current_states,  # [True, False, ...] — стани лампочок секцій
+            "fl": state.flow_percents,   # [100, 120, ...] — відсотки виливу для екрану
+            "sp": round(state.speed, 1), # Швидкість
+            "hd": state.hdg,             # Курс для компаса LVGL
+            "rt": state.rtk,             # Статус RTK
+            "er": round(getattr(state, "guidance_error", 0), 2), # Відхилення А-Б у метрах
+            "ar": state.area,            # Оброблена площа в га
+            "m_g": state.gps_mode,       # Наш цифровий код стану (0, 1, 2, 3)
+            "ms": cfg.get("MASTER_SW", False) # Головний тумблер
+        })
 
     @app.route("/settings")
     def settings():
@@ -188,7 +211,7 @@ def create_app(state, sc):
             "SECTION_WIDTHS": ("SECTION_WIDTHS", lambda v: [float(x) for x in v]),
             "AUTO_SECTION_MIN_OVERLAP": ("AUTO_SECTION_MIN_OVERLAP", float),
             "LOOK_AHEAD_TIME": ("LOOK_AHEAD",float,),
-            
+
             "LOOK_AHEAD_ON_TIME": ("LOOK_AHEAD_ON_TIME",float,),
             "LOOK_AHEAD_OFF_TIME": ("LOOK_AHEAD_OFF_TIME",float,),
 
@@ -212,6 +235,7 @@ def create_app(state, sc):
             "CONTROL_BOARD_PORT": ("CONTROL_BOARD_PORT", lambda v: str(v).strip()),
             "CONTROL_BOARD_PORT_SPEED": ("CONTROL_BOARD_PORT_SPEED", int),
             "CONTROL_BOARD_TIME_RECONNECT": ("CONTROL_BOARD_TIME_RECONNECT", int),
+            "SMART_TURN_ENABLED": ("SMART_TURN_ENABLED", bool),
         }
 
         # 3. Елегантний динамічний цикл замість 20 штук операторів "if"

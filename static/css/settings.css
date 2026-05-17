@@ -320,7 +320,7 @@ select:focus {
 #customModal.show {
     opacity: 1;
     pointer-events: auto;
-    /* Активуємо кліки по вікну */
+    display: flex !important;
 }
 
 .modal-card {
@@ -350,4 +350,38 @@ select:focus {
 #customModal.show>div {
     transform: translateY(0) scale(1);
     /* Повертаємо на місце та в оригінальний розмір */
+}
+
+.btn-help {
+    background: transparent;
+    color: var(--accent, #2ecc71);
+    border: 2px solid var(--accent, #2ecc71);
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin-right: 5px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-help:active {
+    background: var(--accent, #2ecc71);
+    color: #000;
+    transform: scale(0.9);
+}
+
+/* Вспомогательный класс для выравнивания иконки и текстов */
+.help-layout {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
 }

@@ -11,6 +11,7 @@
 <body>
     <!-- НИЗ: Управление секциями -->
     <div class="bottom-controls">
+        <div id="lb_gps_mode_text"> . . . </div>
         <div id="sections-container">
             <div id="manual_ctrl" class="mode-grid"></div>
         </div>
@@ -789,7 +790,8 @@
             updateEmuUI();
         }
         // *************************************************************************************** //
-
+        let currentCompassRotation = 0;
+        let lastServerHeading = 0;
         setInterval(() => {
             fetch(`/map_data?last=${lastReceivedIndex}`)
                 .then(r => {
@@ -847,6 +849,44 @@
                             }
                         });
                     }
+                    //const lb_gps_mode_text_in = document.getElementById(`lb_gps_mode_text`);
+                    //lb_gps_mode_text_in.innerText = d.gps_mode_text;
+
+                    const statusPanel = document.getElementById('lb_gps_mode_text'); // Замініть на ваш реальний ID елемента
+
+                    if (statusPanel) {
+                        statusPanel.innerText = d.gps_mode_text; // Виводимо текст із бекенду, як зараз
+
+                        // Динамічно змінюємо стиль плашки залежно від цифрового коду
+                        switch (d.gps_mode) {
+                            case 1: // ПОВНИЙ АВТОМАТ (Все ОК)
+                                //statusPanel.style.background = "rgba(46, 204, 113, 0.2)"; // Прозоро-зелений фон
+                                //statusPanel.style.border = "1px solid #2ecc71";
+                                statusPanel.style.color = "#2ecc71";
+                                break;
+
+                            case 2: // НАПІВ-АВТОМАТ (Заморозка карти через втрату RTK або стрибок)
+                                //statusPanel.style.background = "rgba(241, 196, 15, 0.2)"; // Прозоро-жовтий фон
+                                //statusPanel.style.border = "1px solid #f1c40f";
+                                statusPanel.style.color = "#f1c40f";
+                                break;
+
+                            case 3: // СТОЇМО НА МІСЦІ (Ваша поточна картинка)
+                                //statusPanel.style.background = "rgba(44, 62, 80, 0.6)"; // Акуратний темний фон, як зараз
+                                //statusPanel.style.border = "1px solid #7f8c8d";
+                                statusPanel.style.color = "#fff";
+                                break;
+
+                            case 0: // ХАНА (Втрата GPS сигналу)
+                                //statusPanel.style.background = "rgba(231, 76, 60, 0.3)"; // Прозоро-червоний тривожний фон
+                                //statusPanel.style.border = "1px solid #e74c3c";
+                                statusPanel.style.color = "#e74c3c";
+                                break;
+                        }
+                    }
+
+
+
                     // *************************************************************************************** //
                     // Индикатор отклонения от линии A B
                     // <div class="lightbar-section">
@@ -901,11 +941,26 @@
                         lastTractorPos = [d.pos[0], d.pos[1]];
                     }
 
+                    // if (d.hdg !== undefined) {
+                    //     const needle = document.getElementById('needle');
+                    //     if (needle) {
+                    //         // Обертаємо стрілку на кут курсу
+                    //         needle.style.transform = `rotate(${d.hdg}deg)`;
+                    //     }
+                    // }
                     if (d.hdg !== undefined) {
                         const needle = document.getElementById('needle');
                         if (needle) {
-                            // Обертаємо стрілку на кут курсу
-                            needle.style.transform = `rotate(${d.hdg}deg)`;
+                            // Считаем разницу между новым курсом и предыдущим
+                            let diff = d.hdg - lastServerHeading;
+                            // Нормализуем разницу в диапазон от -180 до +180 градусов (кратчайший путь поворота)
+                            diff = ((diff + 180) % 360 + 360) % 360 - 180;
+                            // Прибавляем эту разницу к общему накопленному углу вращения
+                            currentCompassRotation += diff;
+                            // Запоминаем текущий курс сервера для следующего кадра
+                            lastServerHeading = d.hdg;
+                            // Поворачиваем стрелку. Она будет плавно скользить благодаря CSS-переходу
+                            needle.style.transform = `rotate(${currentCompassRotation}deg)`;
                         }
                     }
                     // 2. Координати точок А та В у градусах (якщо сервер їх прислав)

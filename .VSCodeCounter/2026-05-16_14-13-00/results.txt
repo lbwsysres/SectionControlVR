@@ -1,0 +1,51 @@
+Date : 2026-05-16 14:13:00
+Directory : d:\Project\MZT\MySection\SYS
+Total : 18 files,  4685 codes, 1104 comments, 915 blanks, all 6704 lines
+
+Languages
++------------+------------+------------+------------+------------+------------+
+| language   | files      | code       | comment    | blank      | total      |
++------------+------------+------------+------------+------------+------------+
+| HTML       |          3 |      1,904 |         72 |        253 |      2,229 |
+| Python     |          8 |      1,382 |        845 |        463 |      2,690 |
+| PostCSS    |          4 |      1,093 |        163 |        156 |      1,412 |
+| JavaScript |          2 |        253 |         24 |         43 |        320 |
+| JSON       |          1 |         53 |          0 |          0 |         53 |
++------------+------------+------------+------------+------------+------------+
+
+Directories
++--------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                   | files      | code       | comment    | blank      | total      |
++--------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                      |         18 |      4,685 |      1,104 |        915 |      6,704 |
+| . (Files)                                              |          9 |      1,435 |        845 |        463 |      2,743 |
+| static                                                 |          6 |      1,346 |        187 |        199 |      1,732 |
+| static\css                                             |          4 |      1,093 |        163 |        156 |      1,412 |
+| static\js                                              |          2 |        253 |         24 |         43 |        320 |
+| templates                                              |          3 |      1,904 |         72 |        253 |      2,229 |
++--------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++--------------------------------------------------------+------------+------------+------------+------------+------------+
+| filename                                               | language   | code       | comment    | blank      | total      |
++--------------------------------------------------------+------------+------------+------------+------------+------------+
+| d:\Project\MZT\MySection\SYS\board_worker.py           | Python     |         80 |          6 |         18 |        104 |
+| d:\Project\MZT\MySection\SYS\config.json               | JSON       |         53 |          0 |          0 |         53 |
+| d:\Project\MZT\MySection\SYS\config_manager.py         | Python     |        101 |         23 |         27 |        151 |
+| d:\Project\MZT\MySection\SYS\dump_manager.py           | Python     |         51 |         15 |         11 |         77 |
+| d:\Project\MZT\MySection\SYS\emulator_worker.py        | Python     |         31 |          9 |         11 |         51 |
+| d:\Project\MZT\MySection\SYS\gps_worker.py             | Python     |        124 |         54 |         38 |        216 |
+| d:\Project\MZT\MySection\SYS\main.py                   | Python     |        299 |         72 |         75 |        446 |
+| d:\Project\MZT\MySection\SYS\section_engine.py         | Python     |        349 |        553 |        203 |      1,105 |
+| d:\Project\MZT\MySection\SYS\static\css\diagnostic.css | PostCSS    |         60 |          1 |          8 |         69 |
+| d:\Project\MZT\MySection\SYS\static\css\emulator.css   | PostCSS    |         72 |          1 |          9 |         82 |
+| d:\Project\MZT\MySection\SYS\static\css\settings.css   | PostCSS    |        279 |         35 |         39 |        353 |
+| d:\Project\MZT\MySection\SYS\static\css\style.css      | PostCSS    |        682 |        126 |        100 |        908 |
+| d:\Project\MZT\MySection\SYS\static\js\diagnostic.js   | JavaScript |        130 |         15 |         11 |        156 |
+| d:\Project\MZT\MySection\SYS\static\js\emulator.js     | JavaScript |        123 |          9 |         32 |        164 |
+| d:\Project\MZT\MySection\SYS\templates\board.html      | HTML       |      1,107 |         47 |        157 |      1,311 |
+| d:\Project\MZT\MySection\SYS\templates\fields.html     | HTML       |        312 |         12 |         40 |        364 |
+| d:\Project\MZT\MySection\SYS\templates\settings.html   | HTML       |        485 |         13 |         56 |        554 |
+| d:\Project\MZT\MySection\SYS\web_server.py             | Python     |        347 |        113 |         80 |        540 |
+| Total                                                  |            |      4,685 |      1,104 |        915 |      6,704 |
++--------------------------------------------------------+------------+------------+------------+------------+------------+

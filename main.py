@@ -7,11 +7,13 @@ import config_manager
 import web_server
 import dump_manager
 from section_engine import SectionControl
+import pyproj
 
 # ІМПОРТ ВСІХ НАШИХ ІЗОЛЬОВАНИХ ЮНІТІВ-ВОРКЕРІВ
 from gps_worker import GPSWorker
 from board_worker import BoardWorker
-from emulator_worker import EmulatorWorker # <-- Наш новий модуль
+from emulator_worker import EmulatorWorker  # <-- Наш новий модуль
+
 
 class SharedState:
     def __init__(self):
@@ -21,12 +23,12 @@ class SharedState:
         self.area, self.speed, self.hdg, self.rtk = 0.0, 0.0, 0.0, 0
         self.path_history = []
         self.reset_flag = False
-        
+
         # Параметри для нашого нового квадратного джойстика
         self.emu_enabled = False
         self.emu_hdg = 0.0
         self.emu_speed = 0.0
-        
+
         self.point_a = None
         self.point_b = None
         self.guidance_error = 0.0
@@ -34,8 +36,12 @@ class SharedState:
 
         self.gps_connected = False
         self.board_connected = False
-        self.gps_sats = 0 # Чтобы парсер NMEA писал сюда число спутников
+        self.gps_sats = 0  # Чтобы парсер NMEA писал сюда число спутников
         self.current_file = "NEW"
+        # --- ДОДАНО ДЛЯ РЕЖИМІВ GPS ТА КЕРУВАННЯ НАПІВ-АВТОМАТОМ ---
+        self.gps_mode = 0  # 0 = хана, 1 = ОК, 2 = так собі, 3 = стоїмо на місці
+        self.gps_mode_text = "CRITICAL: Initializing..."  # Текстовий опис для логів
+
 
 # Ініціалізація глобальних об'єктів (Singletons)
 state = SharedState()
@@ -43,8 +49,299 @@ cfg = config_manager.load_config()
 sc = SectionControl(cfg)
 sc.path_history = state.path_history
 
+
 def main_calculation_loop():
     """ 
+    Головне математичне ядро. Частота 10 Гц.
+    Керує режимами роботи системи через цифрові коди стану (state.gps_mode).
+    """
+    print("[Main_Engine] Tread calculate is Run.")
+    
+    last_track_x = None
+    last_track_y = None
+
+    while True:
+        active_cfg = config_manager.load_config()
+        sc.cfg = active_cfg
+
+        if state.reset_flag:
+            sc.reset()
+            state.path_history = []
+            state.area = 0.0
+            state.guidance_error = 0.0
+            dump_manager.clear_current_dump()
+            state.reset_flag = False
+            last_track_x = last_track_y = None
+
+        # Перевіряємо наявність базового зв'язку з GPS
+        has_gps_signal = (state.last_lat != 0 and state.last_lon != 0)
+
+        if has_gps_signal:
+            is_moving = state.speed >= active_cfg.get("MIN_SPEED", 1.0)
+            master_on = active_cfg.get("MASTER_SW", False)
+
+            if is_moving:
+                # 1. Перевірка на аномальний стрибок координат
+                gps_jump_detected = False
+                # пока блокируем 
+                # if sc.last_x is not None and sc.transformer_to_m is not None:
+                #     tx, ty = sc.transformer_to_m.transform(state.last_lon, state.last_lat)
+                #     dist_step = math.sqrt((tx - sc.last_x)**2 + (ty - sc.last_y)**2)
+                #     if dist_step > 1.5:
+                #         gps_jump_detected = True
+
+                # 2. Перевірка якості RTK
+                min_rtk_allowed = active_cfg.get("MIN_REQUIRED_RTK", 4)
+                is_rtk_good = (state.rtk >= min_rtk_allowed) or state.emu_enabled
+
+                # 3. ВИЗНАЧЕННЯ РЕЖИМУ ТА РОЗРАХУНОК ГЕОМЕТРІЇ
+                if master_on and is_rtk_good and not gps_jump_detected:
+                    # =======================================================================
+                    # РЕЖИМ 1: ОК (ПОВНИЙ АВТОМАТ)
+                    # =======================================================================
+                    state.gps_mode = 1
+                    state.gps_mode_text = "OK: Full Auto Mode"
+
+                    auto_res = sc.process(state.last_lat, state.last_lon, state.hdg, state.speed)
+                    state.flow_percents = sc.curve_compensation(state.speed, state.hdg, state.rtk)
+                    
+                    final_states = []
+                    modes = active_cfg.get("SECTION_MODES", ["AUTO"] * len(active_cfg["SECTION_WIDTHS"]))
+                    for i in range(len(active_cfg["SECTION_WIDTHS"])):
+                        mode = modes[i]
+                        if mode == "ON": final_states.append(True)
+                        elif mode == "OFF": final_states.append(False)
+                        else: final_states.append(auto_res[i] if auto_res else False)
+                    state.current_states = final_states
+                    
+                    last_track_x = last_track_y = None
+
+                elif master_on and (not is_rtk_good or gps_jump_detected):
+                    # =======================================================================
+                    # РЕЖИМ 2: ТАК СОБІ (НАПІВ-АВТОМАТ / ЗАМОРОЗКА КАРТИ)
+                    # =======================================================================
+                    state.gps_mode = 2
+                    state.gps_mode_text = f"WARNING: Low Accuracy ({'GPS Jump' if gps_jump_detected else 'Float'}). Fallback to Semi-Auto."
+                    print(f"[Main_Engine] {state.gps_mode_text}")
+
+                    # Заморожуємо карту (sc.process НЕ викликається).
+                    # Утримуємо останні стабільні стани AUTO-секцій, щоб уникнути хаотичного торохтіння клапанів
+                    modes = active_cfg.get("SECTION_MODES", ["AUTO"] * len(active_cfg["SECTION_WIDTHS"]))
+                    fallback_states = []
+                    for i, mode in enumerate(modes):
+                        if mode == "OFF":
+                            fallback_states.append(False)
+                        elif mode == "ON":
+                            fallback_states.append(True)
+                        else:
+                            # Для AUTO: утримуємо попередній стан, якщо він був, інакше примусово вмикаємо (True) проти пропусків
+                            fallback_states.append(state.current_states[i] if state.current_states else True)
+                    
+                    state.current_states = fallback_states
+                    state.flow_percents = [100] * len(active_cfg.get("SECTION_WIDTHS", []))
+
+                else:
+                    # =======================================================================
+                    # РЕЖИМ 1 (АЛЕ MASTER_SW = FALSE): ТРАКТОР РУХАЄТЬСЯ, АЛЕ ОБПРИСКУВАННЯ ВИМКНЕНО
+                    # =======================================================================
+                    state.gps_mode = 1 
+                    state.gps_mode_text = "OK: Spraying is Disabled (Master Off)"
+                    
+                    state.current_states = [False] * len(active_cfg["SECTION_WIDTHS"])
+                    state.flow_percents = [100] * len(active_cfg.get("SECTION_WIDTHS", []))
+                    
+                    # Запис спрощеного фонового треку через кожні 2.5 метри
+                    if sc.transformer_to_m is not None:
+                        tx, ty = sc.transformer_to_m.transform(state.last_lon, state.last_lat)
+                        dist_moved = math.sqrt((tx - last_track_x)**2 + (ty - last_track_y)**2) if last_track_x is not None else 999.0
+                        
+                        if dist_moved >= 2.5:
+                            pt_blank = [state.last_lat, state.last_lon, state.hdg, list(state.current_states)]
+                            sc.path_history.append(pt_blank)
+                            if len(sc.path_history) > 10000: sc.path_history.pop(0)
+                            last_track_x, last_track_y = tx, ty
+
+                # Розрахунок ліній паралельного водіння А-Б (потрібен у режимах 1 та 2)
+                if state.point_a and state.point_b:
+                    if sc.transformer_to_m is None:
+                        zone = int((state.last_lon + 180) / 6) + 1
+                        sc.transformer_to_m = pyproj.Transformer.from_crs("epsg:4326", f"epsg:326{zone}", always_xy=True)
+                    
+                    tx, ty = sc.transformer_to_m.transform(state.last_lon, state.last_lat)
+                    ax, ay = state.point_a
+                    bx, by = state.point_b
+                    
+                    num = (by - ay) * tx - (bx - ax) * ty + bx * ay - by * ax
+                    den = math.sqrt((by - ay) ** 2 + (bx - ax) ** 2)
+                    if den > 0:
+                        dist_to_ab = num / den
+                        sw = sum(active_cfg["SECTION_WIDTHS"])
+                        pass_num = round(dist_to_ab / sw)
+                        state.guidance_error = dist_to_ab - (pass_num * sw)
+
+            else:
+                # =======================================================================
+                # РЕЖИМ 3: СОВСЕМ ПЛОХО (ТРАКТОР СТОЇТЬ НА МІСЦІ)
+                # =======================================================================
+                state.gps_mode = 3
+                state.gps_mode_text = "STOPPED: Speed is too low. Valves closed."
+                
+                state.current_states = [False] * len(active_cfg["SECTION_WIDTHS"])
+                state.flow_percents = [100] * len(active_cfg.get("SECTION_WIDTHS", []))
+
+            state.area = sc.get_area_ha()
+            state.path_history = sc.path_history
+
+            if len(state.path_history) % 50 == 0 and len(state.path_history) > 0:
+                dump_manager.save_session_dump(state, sc)
+        else:
+            # =======================================================================
+            # РЕЖИМ 0: ХАНА (ПОВНА ВТРАТА СИГНАЛУ GPS / NO FIX)
+            # =======================================================================
+            state.gps_mode = 0
+            state.gps_mode_text = "CRITICAL: No GPS Signal! All valves forced closed."
+            
+            state.current_states = [False] * len(active_cfg["SECTION_WIDTHS"])
+
+        time.sleep(0.1) # Суворі 10 Гц розрахунків
+
+
+
+
+def main_calculation_loop_2():
+    """
+    Головне математичне ядро. Працює на частоті 10 Гц.
+    Оптимізовано для економії пам'яті та захисту від помилкового зафарбовування.
+    """
+    print("[Main_Engine] Tread calculate is Run.")
+
+    # Тимчасові змінні для фільтрації траєкторії при вимкненому MASTER_SW
+    last_track_x = None
+    last_track_y = None
+
+    while True:
+        active_cfg = config_manager.load_config()
+        sc.cfg = active_cfg
+
+        if state.reset_flag:
+            sc.reset()
+            state.path_history = []
+            state.area = 0.0
+            state.guidance_error = 0.0
+            dump_manager.clear_current_dump()
+            state.reset_flag = False
+            last_track_x = last_track_y = None
+
+        # Математика запускається, якщо є реальний Fix АБО якщо увімкнено емулятор
+        if state.last_lat != 0 and (state.rtk >= 1 or state.emu_enabled):
+            is_moving = state.speed >= active_cfg.get("MIN_SPEED", 1.0)
+            master_on = active_cfg.get("MASTER_SW", False)
+
+            if is_moving:
+                # 1. Розрахунок відхилення від лінії А-Б (потрібен завжди для індикатора на екрані)
+                if state.point_a and state.point_b:
+                    if sc.transformer_to_m is None:
+                        # Тимчасова ініціалізація проекції, якщо sc.process ще не викликався
+                        zone = int((state.last_lon + 180) / 6) + 1
+                        sc.transformer_to_m = pyproj.Transformer.from_crs(
+                            "epsg:4326", f"epsg:326{zone}", always_xy=True
+                        )
+
+                    tx, ty = sc.transformer_to_m.transform(
+                        state.last_lon, state.last_lat
+                    )
+                    ax, ay = state.point_a
+                    bx, by = state.point_b
+
+                    num = (by - ay) * tx - (bx - ax) * ty + bx * ay - by * ax
+                    den = math.sqrt((by - ay) ** 2 + (bx - ax) ** 2)
+                    if den > 0:
+                        dist_to_ab = num / den
+                        sw = sum(active_cfg["SECTION_WIDTHS"])
+                        pass_num = round(dist_to_ab / sw)
+                        state.guidance_error = dist_to_ab - (pass_num * sw)
+
+                # 2. ГОЛОВНЕ РОЗДІЛЕННЯ ЛОГІКИ ЗАЛЕЖНО ВІД MASTER_SW
+                if master_on:
+                    # ОБПРИСКУВАННЯ УВІМКНЕНО: Повний цикл розрахунку карти та автоматики секцій (10 Гц)
+                    auto_res = sc.process(
+                        state.last_lat, state.last_lon, state.hdg, state.speed
+                    )
+                    state.flow_percents = sc.curve_compensation(
+                        state.speed, state.hdg, state.rtk
+                    )
+
+                    # Формуємо фінальні стани клапанів
+                    final_states = []
+                    modes = active_cfg.get(
+                        "SECTION_MODES", ["AUTO"] * len(active_cfg["SECTION_WIDTHS"])
+                    )
+                    for i in range(len(active_cfg["SECTION_WIDTHS"])):
+                        mode = modes[i]
+                        if mode == "ON":
+                            final_states.append(True)
+                        elif mode == "OFF":
+                            final_states.append(False)
+                        else:
+                            final_states.append(auto_res[i] if auto_res else False)
+                    state.current_states = final_states
+
+                    # Скидаємо змінні фонового треку, бо ми в режимі поливу
+                    last_track_x = last_track_y = None
+                else:
+                    # ОБПРИСКУВАННЯ ВИМКНЕНО (Розворот або переїзд): Штанга закрита!
+                    state.current_states = [False] * len(active_cfg["SECTION_WIDTHS"])
+                    state.flow_percents = [100] * len(
+                        active_cfg.get("SECTION_WIDTHS", [])
+                    )
+
+                    # ФІЛЬТР ТРАЄКТОРІЇ: Пишемо точку в історію для екрану ТІЛЬКИ якщо проїхали більше 2.5 метрів
+                    if sc.transformer_to_m is not None:
+                        tx, ty = sc.transformer_to_m.transform(
+                            state.last_lon, state.last_lat
+                        )
+                        if last_track_x is not None:
+                            dist_moved = math.sqrt(
+                                (tx - last_track_x) ** 2 + (ty - last_track_y) ** 2
+                            )
+                        else:
+                            dist_moved = (
+                                999.0  # Перша точка після вимкнення запишеться відразу
+                            )
+
+                        if (
+                            dist_moved >= 2.5
+                        ):  # Крок запису траєкторії на розвороті — 2.5 метри
+                            # Додаємо «порожню» точку (всі секції False) суто для малювання лінії сліду на Canvas
+                            pt_blank = [
+                                state.last_lat,
+                                state.last_lon,
+                                state.hdg,
+                                list(state.current_states),
+                            ]
+                            sc.path_history.append(pt_blank)
+                            if len(sc.path_history) > 10000:
+                                sc.path_history.pop(0)
+
+                            last_track_x, last_track_y = tx, ty
+            else:
+                # Трактор повністю стоїть — клапани закриті, рух відсутній
+                state.current_states = [False] * len(active_cfg["SECTION_WIDTHS"])
+                state.flow_percents = [100] * len(active_cfg.get("SECTION_WIDTHS", []))
+
+            state.area = sc.get_area_ha()
+            state.path_history = sc.path_history
+
+            # Безпечний Snapshot системи на диск кожні 50 точок (викликається рідко завдяки фільтрації)
+            if len(state.path_history) % 50 == 0 and len(state.path_history) > 0:
+                dump_manager.save_session_dump(state, sc)
+        else:
+            # Немає зв'язку з GPS — негайно закриваємо всі форсунки
+            state.current_states = [False] * len(active_cfg["SECTION_WIDTHS"])
+
+        time.sleep(0.1)  # Суворі 10 Гц розрахунків
+def main_calculation_loop_1():
+    """
     Головне математичне ядро. Воно працює на частоті 10 Гц.
     Йому абсолютно байдуже, ХТО наповнив коордитати у state (залізо чи емулятор).
     Воно просто бере їх і рахує геометрію відсікання секцій.
@@ -68,9 +365,13 @@ def main_calculation_loop():
             master_on = active_cfg.get("MASTER_SW", False)
 
             if is_moving:
-                auto_res = sc.process(state.last_lat, state.last_lon, state.hdg, state.speed)
-                state.flow_percents = sc.curve_compensation(state.speed, state.hdg, state.rtk)
-                
+                auto_res = sc.process(
+                    state.last_lat, state.last_lon, state.hdg, state.speed
+                )
+                state.flow_percents = sc.curve_compensation(
+                    state.speed, state.hdg, state.rtk
+                )
+
                 # Розрахунок ліній паралельного водіння А-Б
                 if state.point_a and state.point_b and sc.last_x is not None:
                     ax, ay = state.point_a
@@ -83,15 +384,20 @@ def main_calculation_loop():
                         sw = sum(active_cfg["SECTION_WIDTHS"])
                         pass_num = round(dist_to_ab / sw)
                         state.guidance_error = dist_to_ab - (pass_num * sw)
-                
+
                 # Застосування режимів секцій (AUTO / ON / OFF)
                 final_states = []
-                modes = active_cfg.get("SECTION_MODES", ["AUTO"] * len(active_cfg["SECTION_WIDTHS"]))
+                modes = active_cfg.get(
+                    "SECTION_MODES", ["AUTO"] * len(active_cfg["SECTION_WIDTHS"])
+                )
                 for i in range(len(active_cfg["SECTION_WIDTHS"])):
                     mode = modes[i]
-                    if mode == "ON" and master_on: final_states.append(True)
-                    elif mode == "OFF": final_states.append(False)
-                    else: final_states.append(auto_res[i] if auto_res else False)
+                    if mode == "ON" and master_on:
+                        final_states.append(True)
+                    elif mode == "OFF":
+                        final_states.append(False)
+                    else:
+                        final_states.append(auto_res[i] if auto_res else False)
                 state.current_states = final_states
             else:
                 # Трактор стоїть — вимикаємо всі секції штанги
@@ -108,7 +414,8 @@ def main_calculation_loop():
             # Якщо немає жодних координат — штанга закрита
             state.current_states = [False] * len(active_cfg["SECTION_WIDTHS"])
 
-        time.sleep(0.1) # Суворі 10 Гц розрахунків
+        time.sleep(0.1)  # Суворі 10 Гц розрахунків
+
 
 if __name__ == "__main__":
     logging.getLogger("werkzeug").setLevel(logging.ERROR)

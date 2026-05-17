@@ -19,10 +19,14 @@
         <button class="tab-link" onclick="openTab(event, 'tab3')">СИСТЕМА</button>
     </div>
 
-    <!-- ТАБ 1: ГЕОМЕТРІЯ ШТАНГИ -->
+
+    <!-- ТАБ 1: ГЕОМЕТРИЯ ШТАНГИ -->
     <div id="tab1" class="tab-content active">
         <div class="card">
-            <h2>Конфигурация секций опрыскивателя (м)</h2>
+            <div class="help-layout" style="margin-bottom: 15px;">
+                <button type="button" class="btn-help" onclick="showHelp('SECTION_WIDTHS')">?</button>
+                <h2>Конфигурация секций опрыскивателя (м)</h2>
+            </div>
             <div id="sec-list"></div>
             <button type="button" onclick="addSec()"
                 style="width:100%; padding:20px; background:transparent; color:var(--accent); border:2px dashed var(--accent); border-radius:10px; margin-top:15px; font-weight:bold; font-size:1.1rem; cursor:pointer;">
@@ -33,14 +37,17 @@
         <div class="card">
             <h2>Физическое смещение</h2>
             <div class="touch-row">
-                <div class="label-box">
-                    <span class="label-main">Offset Back (м)</span>
-                    <span class="label-hint">Расстояние от GPS антенны назад до форсунок</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('OFFSET_BACK')">?</button>
+                    <div class="label-box">
+                        <span class="label-main">Offset Back (м)</span>
+                        <span class="label-hint">Расстояние от GPS антенны назад до форсунок</span>
+                    </div>
                 </div>
                 <div class="spinner">
-                    <button type="button" onclick="change('c_off_back', -0.1)">-</button>
-                    <span id="c_off_back">{{ cfg.OFFSET_BACK }}</span>
-                    <button type="button" onclick="change('c_off_back', 0.1)">+</button>
+                    <button type="button" onclick="change('OFFSET_BACK', -0.1)">-</button>
+                    <span id="OFFSET_BACK">{{ cfg.OFFSET_BACK }}</span>
+                    <button type="button" onclick="change('OFFSET_BACK', 0.1)">+</button>
                 </div>
             </div>
         </div>
@@ -50,87 +57,106 @@
     <div id="tab2" class="tab-content">
         <div class="card">
             <h2>Временное опережение и скорость</h2>
+
             <div class="touch-row">
-                <div class="label-box">
-                    <span class="label-main">Look Ahead (сек)</span>
-                    <span class="label-hint">Время упреждения на срабатывание клапанов</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('LOOK_AHEAD_ON_TIME')">?</button>
+                    <div class="label-box">
+                        <span class="label-main">Look Ahead ON (сек)</span>
+                        <span class="label-hint">Время упреждения на включение клапанов</span>
+                    </div>
                 </div>
                 <div class="spinner">
-                    <button type="button" onclick="change('c_look', -0.1)">-</button>
-                    <span id="c_look">{{ cfg.LOOK_AHEAD_TIME }}</span>
-                    <button type="button" onclick="change('c_look', 0.1)">+</button>
+                    <button type="button" onclick="change('LOOK_AHEAD_ON_TIME', -0.1)">-</button>
+                    <span id="LOOK_AHEAD_ON_TIME">{{ cfg.LOOK_AHEAD_ON_TIME }}</span>
+                    <button type="button" onclick="change('LOOK_AHEAD_ON_TIME', 0.1)">+</button>
                 </div>
             </div>
 
             <div class="touch-row">
-                <div class="label-box">
-                    <span class="label-main">Look Ahead ON (сек)</span>
-                    <span class="label-hint">Время упреждения на срабатывание клапанов</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('LOOK_AHEAD_OFF_TIME')">?</button>
+                    <div class="label-box">
+                        <span class="label-main">Look Ahead OFF (сек)</span>
+                        <span class="label-hint">Время упреждения на выключение клапанов</span>
+                    </div>
                 </div>
                 <div class="spinner">
-                    <button type="button" onclick="change('c_look_on', -0.1)">-</button>
-                    <span id="c_look_on">{{ cfg.LOOK_AHEAD_ON_TIME }}</span>
-                    <button type="button" onclick="change('c_look_on', 0.1)">+</button>
+                    <button type="button" onclick="change('LOOK_AHEAD_OFF_TIME', -0.1)">-</button>
+                    <span id="LOOK_AHEAD_OFF_TIME">{{ cfg.LOOK_AHEAD_OFF_TIME }}</span>
+                    <button type="button" onclick="change('LOOK_AHEAD_OFF_TIME', 0.1)">+</button>
                 </div>
             </div>
 
             <div class="touch-row">
-                <div class="label-box">
-                    <span class="label-main">Look Ahead OFF(сек)</span>
-                    <span class="label-hint">Время упреждения на срабатывание клапанов</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('MIN_LOOK_AHEAD_DIST')">?</button>
+                    <div class="label-box">
+                        <span class="label-main">Мин. вынос штанги (м)</span>
+                        <span class="label-hint">Минимальная предсказаная дистанция перед форсунками</span>
+                    </div>
                 </div>
                 <div class="spinner">
-                    <button type="button" onclick="change('c_look_off', -0.1)">-</button>
-                    <span id="c_look_off">{{ cfg.LOOK_AHEAD_OFF_TIME }}</span>
-                    <button type="button" onclick="change('c_look_off', 0.1)">+</button>
+                    <button type="button" onclick="change('MIN_LOOK_AHEAD_DIST', -0.1)">-</button>
+                    <span id="MIN_LOOK_AHEAD_DIST">{{ cfg.MIN_LOOK_AHEAD_DIST }}</span>
+                    <button type="button" onclick="change('MIN_LOOK_AHEAD_DIST', 0.1)">+</button>
                 </div>
             </div>
 
-
             <div class="touch-row">
-                <div class="label-box">
-                    <span class="label-main">Мин. вынос штанги (м)</span>
-                    <span class="label-hint">Минимальная предсказанная дистанция перед форсунками</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('MIN_SPEED')">?</button>
+                    <div class="label-box">
+                        <span class="label-main">Мин. скорость (км/ч)</span>
+                        <span class="label-hint">Ниже этой скорости полив полностью блокируется</span>
+                    </div>
                 </div>
                 <div class="spinner">
-                    <button type="button" onclick="change('c_min_dist', -0.1)">-</button>
-                    <span id="c_min_dist">{{ cfg.MIN_LOOK_AHEAD_DIST }}</span>
-                    <button type="button" onclick="change('c_min_dist', 0.1)">+</button>
-                </div>
-            </div>
-            <div class="touch-row">
-                <div class="label-box">
-                    <span class="label-main">Мин. скорость (км/ч)</span>
-                    <span class="label-hint">Ниже этой скорости полив полностью блокируется</span>
-                </div>
-                <div class="spinner">
-                    <button type="button" onclick="change('c_min_speed', -0.1)">-</button>
-                    <span id="c_min_speed">{{ cfg.MIN_SPEED }}</span>
-                    <button type="button" onclick="change('c_min_speed', 0.1)">+</button>
+                    <button type="button" onclick="change('MIN_SPEED', -0.1)">-</button>
+                    <span id="MIN_SPEED">{{ cfg.MIN_SPEED }}</span>
+                    <button type="button" onclick="change('MIN_SPEED', 0.1)">+</button>
                 </div>
             </div>
         </div>
 
         <div class="card">
             <h2>Зоны перекрытия площадей</h2>
+            <div class="touch-row">
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('SMART_TURN_ENABLED')">?</button>
+                    <span class="label-main">Розумний розворот</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="SMART_TURN_ENABLED" {{ 'checked' if cfg.SMART_TURN_ENABLED else '' }}>
+                    <span class="slider-round"></span>
+                </label>
+            </div>
+
             <div class="slider-box">
                 <div class="touch-row">
-                    <span class="label-main">Чувствительность к перекрытию</span>
+                    <div class="help-layout">
+                        <button type="button" class="btn-help" onclick="showHelp('AUTO_SECTION_MIN_OVERLAP')">?</button>
+                        <span class="label-main">Чувствительность к перекрытию</span>
+                    </div>
                     <b id="overlap_label" style="color:var(--accent)">{{ (cfg.AUTO_SECTION_MIN_OVERLAP * 100)|int
                         }}%</b>
                 </div>
-                <input type="range" class="slider" id="c_overlap" min="0" max="1" step="0.05"
+                <input type="range" class="slider" id="AUTO_SECTION_MIN_OVERLAP" min="0" max="1" step="0.05"
                     value="{{ cfg.AUTO_SECTION_MIN_OVERLAP }}" oninput="updateOverlap(this.value)">
             </div>
+
             <div class="touch-row" style="margin-top:20px;">
-                <div class="label-box">
-                    <span class="label-main">Допуск заступа / Buffer (м)</span>
-                    <span class="label-hint">Внутренний защитный отступ полигона секции</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('AUTO_SECTION_BUFFER')">?</button>
+                    <div class="label-box">
+                        <span class="label-main">Допуск заступа / Buffer (м)</span>
+                        <span class="label-hint">Внутренний защитный отступ полигона секции</span>
+                    </div>
                 </div>
                 <div class="spinner">
-                    <button type="button" onclick="change('c_buf', -0.01)">-</button>
-                    <span id="c_buf">{{ cfg.AUTO_SECTION_BUFFER }}</span>
-                    <button type="button" onclick="change('c_buf', 0.01)">+</button>
+                    <button type="button" onclick="change('AUTO_SECTION_BUFFER', -0.01)">-</button>
+                    <span id="AUTO_SECTION_BUFFER">{{ cfg.AUTO_SECTION_BUFFER }}</span>
+                    <button type="button" onclick="change('AUTO_SECTION_BUFFER', 0.01)">+</button>
                 </div>
             </div>
         </div>
@@ -139,119 +165,161 @@
             <h2>Адаптивный вылив на поворотах</h2>
             <div class="slider-box">
                 <div class="touch-row">
-                    <span class="label-main">Плавность фильтрации курса</span>
+                    <div class="help-layout">
+                        <button type="button" class="btn-help" onclick="showHelp('CURVE_COMP_SMOOTH')">?</button>
+                        <span class="label-main">Плавность фильтрации курса</span>
+                    </div>
                     <b id="smooth_label" style="color:var(--accent)">{{ cfg.CURVE_COMP_SMOOTH }}</b>
                 </div>
-                <input type="range" class="slider" id="c_smooth" min="0.1" max="1" step="0.1"
+                <input type="range" class="slider" id="CURVE_COMP_SMOOTH" min="0.1" max="1" step="0.1"
                     value="{{ cfg.CURVE_COMP_SMOOTH }}" oninput="updateSmooth(this.value)">
             </div>
+
             <div class="touch-row" style="margin-top:20px;">
-                <div class="label-box">
-                    <span class="label-main">Мин. RTK статус для работы</span>
-                    <span class="label-hint">4 = RTK Fix (Идеальный), 5 = Float</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('CURVE_COMP_MIN_RTK')">?</button>
+                    <div class="label-box">
+                        <span class="label-main">Мин. RTK статус для работы</span>
+                        <span class="label-hint">4 = RTK Fix (Идеальный), 5 = Float</span>
+                    </div>
                 </div>
                 <div class="spinner">
-                    <button type="button" onclick="change('c_rtk', -1)">-</button>
-                    <span id="c_rtk">{{ cfg.CURVE_COMP_MIN_RTK }}</span>
-                    <button type="button" onclick="change('c_rtk', 1)">+</button>
-                </div>
-            </div>
-            <div class="touch-row">
-                <span class="label-main">Нижний лимит вылива (%)</span>
-                <div class="spinner">
-                    <button type="button" onclick="change('c_limit_low', -5)">-</button>
-                    <span id="c_limit_low">{{ cfg.CURVE_COMP_LIMITS[0] }}</span>
-                    <button type="button" onclick="change('c_limit_low', 5)">+</button>
+                    <button type="button" onclick="change('CURVE_COMP_MIN_RTK', -1)">-</button>
+                    <span id="CURVE_COMP_MIN_RTK">{{ cfg.CURVE_COMP_MIN_RTK }}</span>
+                    <button type="button" onclick="change('CURVE_COMP_MIN_RTK', 1)">+</button>
                 </div>
             </div>
+
             <div class="touch-row">
-                <span class="label-main">Верхний лимит вылива (%)</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('CURVE_COMP_LIMITS')">?</button>
+                    <span class="label-main">Нижний лимит вылива (%)</span>
+                </div>
                 <div class="spinner">
-                    <button type="button" onclick="change('c_limit_high', -5)">-</button>
-                    <span id="c_limit_high">{{ cfg.CURVE_COMP_LIMITS[1] }}</span>
-                    <button type="button" onclick="change('c_limit_high', 5)">+</button>
+                    <button type="button" onclick="change('CURVE_COMP_LIMIT_LOW', -5)">-</button>
+                    <span id="CURVE_COMP_LIMIT_LOW">{{ cfg.CURVE_COMP_LIMITS[0] }}</span>
+                    <button type="button" onclick="change('CURVE_COMP_LIMIT_LOW', 5)">+</button>
+                </div>
+            </div>
+
+            <div class="touch-row">
+                <div class="help-layout">
+                    <span class="label-main">Верхний лимит вылива (%)</span>
+                </div>
+                <div class="spinner">
+                    <button type="button" onclick="change('CURVE_COMP_LIMIT_HIGH', -5)">-</button>
+                    <span id="CURVE_COMP_LIMIT_HIGH">{{ cfg.CURVE_COMP_LIMITS[1] }}</span>
+                    <button type="button" onclick="change('CURVE_COMP_LIMIT_HIGH', 5)">+</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ТАБ 3: АПАРТАТНЕ ЗАЛІЗО ТА МЕРЕЖА -->
+    <!-- ТАБ 3: АППАРАТНОЕ ЖЕЛЕЗО И СЕТЬ -->
     <div id="tab3" class="tab-content">
         <div class="card" style="border-top: 4px solid #f1c40f;">
-            <h2 style="color: #f1c40f;">🛰️ Аппаратный GNSS/GPS Приемник</h2>
-
+            <h2 style="color: #f1c40f;">🛰 Аппаратный GNSS/GPS Приемник</h2>
             <div class="touch-row">
-                <span class="label-main">Увімкнути реальний GPS</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('GPS_ENABLE')">?</button>
+                    <span class="label-main">Увімкнути реальний GPS</span>
+                </div>
                 <label class="switch">
-                    <input type="checkbox" id="c_gps_enable" {{ 'checked' if cfg.GPS_ENABLE else '' }}>
+                    <input type="checkbox" id="GPS_ENABLE" {{ 'checked' if cfg.GPS_ENABLE else '' }}>
                     <span class="slider-round"></span>
                 </label>
             </div>
+
             <div class="touch-row">
-                <div class="label-box">
-                    <span class="label-main">Имя COM-порта</span>
-                    <span class="label-hint">Win: COM1 | Linux: /dev/ttyUSB0</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('GPS_PORT')">?</button>
+                    <div class="label-box">
+                        <span class="label-main">Имя COM-порта</span>
+                        <span class="label-hint">Win: COM1 | Linux: /dev/ttyUSB0</span>
+                    </div>
                 </div>
-                <!-- input type="text" id="c_gps_port" value="{{ cfg.GPS_PORT }}" class="input-text-touch" -->
-                <select id="c_gps_port"
+                <select id="GPS_PORT"
                     style="width: 480px; height: 50px; background: #000; border: 2px solid #444; border-radius: 10px; color: #fff; font-size: 0.9rem; padding: 0 10px; font-weight: bold; outline: none;">
-                    <!-- Сюди значення допише Jinja2 для поточної бази -->
                     <option value="{{ cfg.GPS_PORT }}" selected>{{ cfg.GPS_PORT }} (Поточний)</option>
                 </select>
             </div>
+
             <div class="touch-row">
-                <span class="label-main">Скорость шины (Baudrate)</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('GPS_PORT_SPEED')">?</button>
+                    <span class="label-main">Скорость шины (Baudrate)</span>
+                </div>
                 <div class="spinner">
-                    <button type="button" onclick="rotateBaud('c_gps_speed', -1)">◀</button>
-                    <span id="c_gps_speed" style="min-width: 90px;">{{ cfg.GPS_PORT_SPEED }}</span>
-                    <button type="button" onclick="rotateBaud('c_gps_speed', 1)">▶</button>
+                    <button type="button" onclick="rotateBaud('GPS_PORT_SPEED', -1)">◀</button>
+                    <span id="GPS_PORT_SPEED" style="min-width: 90px;">{{ cfg.GPS_PORT_SPEED }}</span>
+                    <button type="button" onclick="rotateBaud('GPS_PORT_SPEED', 1)">▶</button>
                 </div>
             </div>
+
             <div class="touch-row">
-                <span class="label-main">Таймаут переподключения (мс)</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('GPS_TIME_RECONNECT')">?</button>
+                    <span class="label-main">Таймаут переподключения (мс)</span>
+                </div>
                 <div class="spinner">
-                    <button type="button" onclick="changeInterval('c_gps_recon', -1000)">-1s</button>
-                    <span id="c_gps_recon">{{ cfg.GPS_TIME_RECONNECT }}</span>
-                    <button type="button" onclick="changeInterval('c_gps_recon', 1000)">+1s</button>
+                    <button type="button" onclick="changeInterval('GPS_TIME_RECONNECT', -1000)">-1s</button>
+                    <span id="GPS_TIME_RECONNECT">{{ cfg.GPS_TIME_RECONNECT }}</span>
+                    <button type="button" onclick="changeInterval('GPS_TIME_RECONNECT', 1000)">+1s</button>
                 </div>
             </div>
         </div>
 
         <div class="card" style="border-top: 4px solid #3498db;">
-            <h2 style="color: #3498db;">🎛️ Плата Управления Секциями</h2>
+            <h2 style="color: #3498db;">🎛 Плата Управления Секциями</h2>
             <div class="touch-row">
-                <span class="label-main">Увімкнути плату клапанів</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('CONTROL_BOARD_ENABLE')">?</button>
+                    <span class="label-main">Увімкнути плату клапанів</span>
+                </div>
                 <label class="switch">
-                    <input type="checkbox" id="c_board_enable" {{ 'checked' if cfg.CONTROL_BOARD_ENABLE else '' }}>
+                    <input type="checkbox" id="CONTROL_BOARD_ENABLE" {{ 'checked' if cfg.CONTROL_BOARD_ENABLE else ''
+                        }}>
                     <span class="slider-round"></span>
                 </label>
             </div>
+
             <div class="touch-row">
-                <div class="label-box">
-                    <span class="label-main">Имя COM-порта</span>
-                    <span class="label-hint">Порт подключения силовой платы</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('CONTROL_BOARD_PORT')">?</button>
+                    <div class="label-box">
+                        <span class="label-main">Имя COM-порта</span>
+                        <span class="label-hint">Порт подключения силовой платы</span>
+                    </div>
                 </div>
-                <!-- input type="text" id="c_board_port" value="{{ cfg.CONTROL_BOARD_PORT }}" class="input-text-touch" -->
-                <select id="c_board_port"
+                <select id="CONTROL_BOARD_PORT"
                     style="width: 480px; height: 50px; background: #000; border: 2px solid #444; border-radius: 10px; color: #fff; font-size: 0.9rem; padding: 0 10px; font-weight: bold; outline: none;">
                     <option value="{{ cfg.CONTROL_BOARD_PORT }}" selected>{{ cfg.CONTROL_BOARD_PORT }} (Поточний)
                     </option>
                 </select>
             </div>
+
             <div class="touch-row">
-                <span class="label-main">Скорость шины (Baudrate)</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('CONTROL_BOARD_PORT_SPEED')">?</button>
+                    <span class="label-main">Скорость шины (Baudrate)</span>
+                </div>
                 <div class="spinner">
-                    <button type="button" onclick="rotateBaud('c_board_speed', -1)">◀</button>
-                    <span id="c_board_speed" style="min-width: 90px;">{{ cfg.CONTROL_BOARD_PORT_SPEED }}</span>
-                    <button type="button" onclick="rotateBaud('c_board_speed', 1)">▶</button>
+                    <button type="button" onclick="rotateBaud('CONTROL_BOARD_PORT_SPEED', -1)">◀</button>
+                    <span id="CONTROL_BOARD_PORT_SPEED" style="min-width: 90px;">{{ cfg.CONTROL_BOARD_PORT_SPEED
+                        }}</span>
+                    <button type="button" onclick="rotateBaud('CONTROL_BOARD_PORT_SPEED', 1)">▶</button>
                 </div>
             </div>
+
             <div class="touch-row">
-                <span class="label-main">Таймаут переподключения (мс)</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('CONTROL_BOARD_TIME_RECONNECT')">?</button>
+                    <span class="label-main">Таймаут переподключения (мс)</span>
+                </div>
                 <div class="spinner">
-                    <button type="button" onclick="changeInterval('c_board_recon', -1000)">-1s</button>
-                    <span id="c_board_recon">{{ cfg.CONTROL_BOARD_TIME_RECONNECT }}</span>
-                    <button type="button" onclick="changeInterval('c_board_recon', 1000)">+1s</button>
+                    <button type="button" onclick="changeInterval('CONTROL_BOARD_TIME_RECONNECT', -1000)">-1s</button>
+                    <span id="CONTROL_BOARD_TIME_RECONNECT">{{ cfg.CONTROL_BOARD_TIME_RECONNECT }}</span>
+                    <button type="button" onclick="changeInterval('CONTROL_BOARD_TIME_RECONNECT', 1000)">+1s</button>
                 </div>
             </div>
         </div>
@@ -259,28 +327,37 @@
         <div class="card">
             <h2>Системная сеть и трек</h2>
             <div class="touch-row">
-                <span class="label-main">UDP Базовый порт</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('UDP_PORT')">?</button>
+                    <span class="label-main">UDP Базовый порт</span>
+                </div>
                 <div class="spinner">
-                    <button type="button" onclick="change('c_port', -1)">-</button>
-                    <span id="c_port">{{ cfg.UDP_PORT }}</span>
-                    <button type="button" onclick="change('c_port', 1)">+</button>
+                    <button type="button" onclick="change('UDP_PORT', -1)">-</button>
+                    <span id="UDP_PORT">{{ cfg.UDP_PORT }}</span>
+                    <button type="button" onclick="change('UDP_PORT', 1)">+</button>
                 </div>
             </div>
-            <!-- 1. ОТРИСОВКА ЗАКРИТИХ СЕКЦІЙ -->
+
             <div class="touch-row">
-                <span class="label-main">Отрисовка закрытых секций</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('DRAW_OFF_SECTIONS')">?</button>
+                    <span class="label-main">Отрисовка закрытых секций</span>
+                </div>
                 <label class="switch">
-                    <input type="checkbox" id="c_draw_off" {{ 'checked' if cfg.DRAW_OFF_SECTIONS else '' }}>
+                    <input type="checkbox" id="DRAW_OFF_SECTIONS" {{ 'checked' if cfg.DRAW_OFF_SECTIONS else '' }}>
                     <span class="slider-round"></span>
                 </label>
             </div>
 
             <div class="touch-row">
-                <span class="label-main">Визуальный масштаб карты</span>
+                <div class="help-layout">
+                    <button type="button" class="btn-help" onclick="showHelp('VISUAL_SCALE')">?</button>
+                    <span class="label-main">Визуальный масштаб карты</span>
+                </div>
                 <div class="spinner">
-                    <button type="button" onclick="change('c_scale', -0.1)">-</button>
-                    <span id="c_scale">{{ cfg.VISUAL_SCALE }}</span>
-                    <button type="button" onclick="change('c_scale', 0.1)">+</button>
+                    <button type="button" onclick="change('VISUAL_SCALE', -0.1)">-</button>
+                    <span id="VISUAL_SCALE">{{ cfg.VISUAL_SCALE }}</span>
+                    <button type="button" onclick="change('VISUAL_SCALE', 0.1)">+</button>
                 </div>
             </div>
         </div>
@@ -331,6 +408,22 @@
 
         function change(id, val) {
             let el = document.getElementById(id);
+            if (!el) return; // Защита от ошибок, если элемент не найден
+            let n = parseFloat(el.innerText) + val;
+            const isInteger = id === 'UDP_PORT' ||
+                id === 'CURVE_COMP_MIN_RTK' ||
+                id === 'CURVE_COMP_LIMIT_LOW' ||
+                id === 'CURVE_COMP_LIMIT_HIGH';
+            if (isInteger) {
+                el.innerText = Math.round(n);
+            } else {
+                el.innerText = n.toFixed(2); // Все остальные параметры (метры, секунды) пишем с двумя знаками
+            }
+        }
+
+
+        function change_1(id, val) {
+            let el = document.getElementById(id);
             let n = parseFloat(el.innerText) + val;
             el.innerText = (id === 'c_port' || id === 'c_rtk' || id === 'c_limit_low' || id === 'c_limit_high') ? Math.round(n) : n.toFixed(2);
         }
@@ -368,7 +461,13 @@
             `).join('');
         }
 
-        function changeW(i, v) { widths[i] = Math.max(0.1, widths[i] + v); drawSecs(); }
+        function changeW(i, v) {
+            // Складываем, округляем до 1 знака после запятой и превращаем обратно в число
+            let newValue = parseFloat((widths[i] + v).toFixed(1));
+            // Записываем в массив, защищая от ухода в ноль или минус
+            widths[i] = Math.max(0.1, newValue);
+            drawSecs();
+        }
         function addSec() { widths.push(1.0); drawSecs(); }
         function removeSection(index) {
             askUser(`Удалить секцию №${index + 1}?`, 'danger', 'УДАЛИТЬ', () => {
@@ -380,6 +479,16 @@
             const modal = document.getElementById('customModal');
             const confirmBtn = document.getElementById('modalConfirmBtn');
             const cancelBtn = document.getElementById('modalCancelBtn');
+            // --- ЗАЩИТА ОТ ГОНКИ ОКЕН (ЗАДЕРЖКА) ---
+            // Если окно уже открыто (имеет класс 'show'), сначала закрываем его
+            // и перезапускаем askUser через 200 мс, когда анимация полностью завершится
+            if (modal.classList.contains('show')) {
+                modal.classList.remove('show');
+                setTimeout(() => {
+                    askUser(text, theme, confirmText, onConfirm);
+                }, 200); // 200 мс — идеальное время для плавного переключения окон
+                return;
+            }
 
             document.getElementById('modalText').innerHTML = text;
             confirmBtn.innerText = confirmText;
@@ -422,12 +531,77 @@
 
 
         function confirmSave() {
+            if (widths.length === 0) {
+                askUser('Ошибка: Опрыскиватель должен иметь хотя бы одну секцию!', 'danger', 'ОК', null);
+                return;
+            }
             askUser('Сохранить изменения?<br><small>Новые параметры заліза будут применены RAM-потоками немедленно</small>', 'success', 'СОХРАНИТЬ', () => { saveAll(); });
         }
 
         function goBack() { window.location.href = '/'; }
 
         function saveAll() {
+            const newCfg = {
+                "SECTION_WIDTHS": widths,
+                "OFFSET_BACK": parseFloat(document.getElementById('OFFSET_BACK').innerText) || 0.0,
+
+                "LOOK_AHEAD_ON_TIME": parseFloat(document.getElementById('LOOK_AHEAD_ON_TIME').innerText) || 0.8,
+                "LOOK_AHEAD_OFF_TIME": parseFloat(document.getElementById('LOOK_AHEAD_OFF_TIME').innerText) || 0.3,
+                "MIN_LOOK_AHEAD_DIST": parseFloat(document.getElementById('MIN_LOOK_AHEAD_DIST').innerText) || 0.5,
+                "MIN_SPEED": parseFloat(document.getElementById('MIN_SPEED').innerText) || 1.0,
+
+                "SMART_TURN_ENABLED": document.getElementById('SMART_TURN_ENABLED').checked,
+                "AUTO_SECTION_MIN_OVERLAP": parseFloat(document.getElementById('AUTO_SECTION_MIN_OVERLAP').value) || 0.3,
+                "AUTO_SECTION_BUFFER": parseFloat(document.getElementById('AUTO_SECTION_BUFFER').innerText) || -0.05,
+
+                "CURVE_COMP_SMOOTH": parseFloat(document.getElementById('CURVE_COMP_SMOOTH').value) || 0.3,
+                "CURVE_COMP_MIN_RTK": parseInt(document.getElementById('CURVE_COMP_MIN_RTK').innerText) || 4,
+                "CURVE_COMP_LIMITS": [
+                    parseFloat(document.getElementById('CURVE_COMP_LIMIT_LOW').innerText) || 50,
+                    parseFloat(document.getElementById('CURVE_COMP_LIMIT_HIGH').innerText) || 150
+                ],
+                "GPS_ENABLE": document.getElementById('GPS_ENABLE').checked,
+                "GPS_PORT": document.getElementById('GPS_PORT').value,
+                "GPS_PORT_SPEED": parseInt(document.getElementById('GPS_PORT_SPEED').innerText) || 115200,
+                "GPS_TIME_RECONNECT": parseInt(document.getElementById('GPS_TIME_RECONNECT').innerText) || 5000,
+
+                "CONTROL_BOARD_ENABLE": document.getElementById('CONTROL_BOARD_ENABLE').checked,
+                "CONTROL_BOARD_PORT": document.getElementById('CONTROL_BOARD_PORT').value,
+                "CONTROL_BOARD_PORT_SPEED": parseInt(document.getElementById('CONTROL_BOARD_PORT_SPEED').innerText) || 115200,
+                "CONTROL_BOARD_TIME_RECONNECT": parseInt(document.getElementById('CONTROL_BOARD_TIME_RECONNECT').innerText) || 5000,
+
+                "UDP_PORT": parseInt(document.getElementById('UDP_PORT').innerText) || 9999,
+                "DRAW_OFF_SECTIONS": document.getElementById('DRAW_OFF_SECTIONS').checked,
+                "VISUAL_SCALE": parseFloat(document.getElementById('VISUAL_SCALE').innerText) || 1.0
+            };
+            console.log(newCfg);
+
+            //return;
+            // 3. Отправляем чистый JSON на твой эндпоинт /save_settings
+            fetch('/save_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newCfg)
+            })
+                .then(r => r.json())
+                .then(data => {
+                    // Проверяем статус ответа (твой бэкенд вернет успех или ошибку)
+                    if (data.status === 'success' || !data.error) {
+                        askUser("Конфигурация успешно сохранена и применена!", 'success', 'ОК', () => {
+                            window.location.reload();
+                        });
+                    } else {
+                        askUser("Ошибка сохранения: " + (data.error || data.message), 'error', 'ОК', null);
+                    }
+                })
+                .catch(err => {
+                    askUser("Ошибка сети при сохранении конфигурации!", 'error', 'ОК', null);
+                });
+        }
+
+
+
+        function saveAll_1() {
             const cfg = {
                 SECTION_WIDTHS: widths,
                 AUTO_SECTION_MIN_OVERLAP: parseFloat(document.getElementById('c_overlap').value),
@@ -455,7 +629,8 @@
                 CONTROL_BOARD_ENABLE: document.getElementById('c_board_enable').checked,
                 CONTROL_BOARD_PORT: document.getElementById('c_board_port').value.trim(),
                 CONTROL_BOARD_PORT_SPEED: parseInt(document.getElementById('c_board_speed').innerText),
-                CONTROL_BOARD_TIME_RECONNECT: parseInt(document.getElementById('c_board_recon').innerText)
+                CONTROL_BOARD_TIME_RECONNECT: parseInt(document.getElementById('c_board_recon').innerText),
+                SMART_TURN_ENABLED: document.getElementById('c_smart_turn').checked,
             };
             fetch('/save_settings', {
                 method: 'POST',
@@ -490,8 +665,8 @@
             fetch('/api/available_ports')
                 .then(res => res.json())
                 .then(ports => {
-                    const gpsSelect = document.getElementById('c_gps_port');
-                    const boardSelect = document.getElementById('c_board_port');
+                    const gpsSelect = document.getElementById('GPS_PORT');
+                    const boardSelect = document.getElementById('CONTROL_BOARD_PORT');
 
                     // Запам'ятовуємо, що зараз вибрано в конфігу, щоб не скинути при завантаженні
                     const currentGpsPort = gpsSelect.value;
@@ -538,6 +713,52 @@
             });
         });
 
+
+        function showHelp(paramKey) {
+            const text = HELP_TEXTS[paramKey] || `Описание для параметра "${paramKey}" еще не добавлено.`;
+            askUser(text, 'success', 'ПОНЯТНО', null);
+        }
+        const HELP_TEXTS = {
+            // --- СЕТЬ И ИНТЕРФЕЙС КАРТЫ ---
+            "UDP_PORT": "<b>UDP Порт:</b> Сетевой порт системы для обмена данными по протоколу UDP между модулями навигации и внешними сервисами.",
+            "SECTION_WIDTHS": "<b>Ширина секций:</b> Список рабочей ширины (в метрах) для каждой отдельной секции опрыскивателя.",
+            "DRAW_OFF_SECTIONS": "<b>Отрисовка закрытых секций:</b> Включение или выключение визуального отображения отключенных секций на главном экране.",
+            "LOOK_AHEAD": "<b>Look Ahead (Общий):</b> Базовое системное время упреждения (в секундах) для расчетов геометрических полигонов.",
+            "MIN_SPEED": "<b>Минимальная скорость:</b> Порог скорости (в км/ч), ниже которого автоматика полностью блокирует полив, защищая почву от перелива на месте.",
+            "VISUAL_SCALE": "<b>Масштаб карты:</b> Коэффициент масштабирования графического интерфейса отображения поля на экране планшета.",
+            "OFFSET_BACK": "<b>Вынос штанги назад:</b> Физическое расстояние в метрах от точки установки GPS-антенны назад до линии форсунок опрыскивателя.",
+            "MASTER_SW": "<b>Главный выключатель (Master Switch):</b> Общий флаг программного разрешения работы всей системы полива (Вкл/Выкл).",
+            "SECTION_MODES": "<b>Режимы секций:</b> Массив индивидуальных состояний для каждой секции штанги ('AUTO' — автоматика перекрытий, 'ON' — принудительно открыта, 'OFF' — закрыта).",
+            "SAVE_FILE": "<b>Файл карты покрытия:</b> Имя файла на диске для моментального сохранения бинарной геометрии обработанного поля (.wkb).",
+            "HISTORY_FILE": "<b>Файл истории траектории:</b> Имя файла для сохранения записанных точек пройденного трактором пути в формате JSON.",
+
+            // --- ВРЕМЕННОЕ ОПЕРЕЖЕНИЕ (LOOK AHEAD) ---
+            "LOOK_AHEAD_TIME": "<b>Общее время упреждения:</b> Резервный параметр времени реакции системы на изменение геометрии движения.",
+            "MIN_LOOK_AHEAD_DIST": "<b>Мин. вынос штанги вперед:</b> Минимальное расстояние в метрах, которое автоматика гарантированно сканирует перед собой, предотвращая схлопывание зон детекции на сверхмалых скоростях.",
+            "LOOK_AHEAD_ON_TIME": "<b>Время опережения ON:</b> Время в секундах, за которое система дает команду на открытие клапанов до въезда на необработанную зону, чтобы насос успел поднять рабочее давление.",
+            "LOOK_AHEAD_OFF_TIME": "<b>Время опережения OFF:</b> Время в секундах, за которое система перекрывает клапаны до заезда на старый след, компенсируя физическую инерцию закрытия форсунок.",
+
+            // --- КАРТА, ДОПУСКИ И ПЕРЕКРЫТИЯ ---
+            "AUTO_SECTION_BUFFER": "<b>Допуск заступа (Buffer):</b> Внутренний защитный отступ (в метрах) для полигона секции, нивелирующий флуктуации координат GPS на стыках проходов.",
+            "AUTO_SECTION_MIN_OVERLAP": "<b>Порог перекрытия секции:</b> Доля площади секции (от 0.0 до 1.0), которая должна заехать на уже обработанную зону для её автоматического отключения (например, 0.3 = 30%).",
+
+            // --- АДАПТИВНЫЙ ВЫЛИВ И КУРС (CURVE COMP) ---
+            "CURVE_COMP_MIN_RTK": "<b>Мин. RTK для компенсации:</b> Минимально допустимый статус качества спутникового сигнала (обычно 4 = RTK Fix), необходимый для расчета дифференциального вылива на разворотах.",
+            "CURVE_COMP_LIMITS": "<b>Пределы изменения вылива:</b> Минимальный и максимальный порог регулировки расхода жидкости (в процентах) для крайних секций штанги при крутых маневрах.",
+            "CURVE_COMP_THRESHOLD": "<b>Порог угловой скорости:</b> Минимальная скорость изменения курса (градусы в секунду), начиная с которой активируется расчет разности скоростей левого и правого крыла штанги.",
+            "CURVE_COMP_SMOOTH": "<b>Плавность фильтра курса:</b> Коэффициент фильтрации (Low-Pass Filter) для сглаживания команд управления клапанами, оберегающий гидравлику от резких скачков давления.",
+
+            // --- АППАРАТНОЕ ОБЕСПЕЧЕНИЕ (GPS & BOARD) ---
+            "GPS_PORT": "<b>Имя COM-порта GPS:</b> Идентификатор системного последовательного интерфейса (COM-порт), к которому физически подключен навигационный GNSS-приемник.",
+            "GPS_PORT_SPEED": "<b>Скорость порта GPS:</b> Скорость передачи данных (Baudrate) по шине связи с GPS-приемником (по умолчанию 115200).",
+            "GPS_TIME_RECONNECT": "<b>Таймаут восстановления GPS:</b> Время ожидания в миллисекундах, через которое поток навигации попытается перезапустить порт в случае потери физического контакта с датчиком.",
+            "GPS_ENABLE": "<b>Включение модуля GPS:</b> Главный флаг активации потока чтения реальных спутниковых данных из порта связи.",
+            "CONTROL_BOARD_PORT": "<b>Порт силовой платы:</b> Системный COM-порт, через который компьютер обменивается командами со шкафом реле и клапанами штанги.",
+            "CONTROL_BOARD_PORT_SPEED": "<b>Скорость силовой платы:</b> Скорость обмена данными (Baudrate) по шине связи с исполнительным блоком электроники.",
+            "CONTROL_BOARD_TIME_RECONNECT": "<b>Таймаут силовой платы:</b> Время в миллисекундах, через которое система попытается заново инициализировать плату управления секциями при обрыве связи.",
+            "CONTROL_BOARD_ENABLE": "<b>Включение силовой платы:</b> Программный флаг, разрешающий отправку физических команд на реле открытия и закрытия форсунок.",
+            "SMART_TURN_ENABLED": "<b>Умный разворот:</b> Математический режим динамического моделирования изгиба штанги по дуге круга при маневрах, предотвращающий клиновидные пропуски и перекрытия на углах поля."
+        };
 
 
     </script>
