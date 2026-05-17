@@ -38,17 +38,17 @@ function updateDiagnosticPanel() {
                     pdopEl.style.color = '#2ecc71'; // Зеленый (отличная точность)
                 }
             }
-
+            const rtk = parseInt(data.rtk_status || 0);
             if (data.emu_enabled) {
                 svgGps.setAttribute('stroke', '#2ecc71');
                 gpsSlash.style.opacity = '0';
-                txtGpsStatus.innerText = "SIMULATOR";
+                txtGpsStatus.innerText = "SIMULATOR: " + rtk;
                 txtGpsStatus.style.color = "#2ecc71";
                 txtGpsSats.style.color = "#888";
                 txtGpsSpeed.style.color = "#888";
             } else {
                 // Повний список станів якості згідно специфікації NMEA GGA (data.rtk_status)
-                const rtk = parseInt(data.rtk_status || 0);
+                //const rtk = parseInt(data.rtk_status || 0);
 
                 if (rtk === 4) {
                     // 4 = RTK Fix (Найвища точність, сантиметри)

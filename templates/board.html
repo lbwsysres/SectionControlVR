@@ -138,7 +138,7 @@
 
     <!-- ***************************************************************************************** -->
     <!-- Панель эмулятора -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/emulator.css') }}">
+    <!-- link rel="stylesheet" href="{{ url_for('static', filename='css/emulator.css') }}">
     <div id="emulator" class="emu-panel">
         <div style="margin-bottom: 0px; text-align: center;">
             <button id="emu_status_btn" class="emu-btn-status" onclick="toggleEmu()">OFF</button>
@@ -151,7 +151,19 @@
             </div>
         </div>
     </div>
+    <script src="{{ url_for('static', filename='js/emulator.js') }}"></script -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/emulator.css') }}">
+    <div id="emulator" class="emu-panel">
+        <div class="emu-joy-container">
+            <div id="joy_zone" class="emu-joy-zone">
+                <div class="emu-axis-v"></div>
+                <div class="emu-axis-h"></div>
+                <div id="joy_stick" class="emu-joy-stick"></div>
+            </div>
+        </div>
+    </div>
     <script src="{{ url_for('static', filename='js/emulator.js') }}"></script>
+
     <!-- ***************************************************************************************** -->
 
     <!-- Компас -->

@@ -301,3 +301,14 @@ class SectionControl:
             print(f"Помилка атомарного збереження WKB: {e}")
             if 'tmp_file' in locals() and os.path.exists(tmp_file):
                 os.remove(tmp_file)
+    def reset(self):
+            """Скидання поточної карти поля"""
+            self.covered_area = MultiPolygon()
+            self.path_history = []
+            self.last_x = self.last_y = None
+            self.last_p1_list = []
+            self.last_p2_list = []
+            
+            save_file = self.cfg.get("SAVE_FILE", "coverage.wkb")
+            if os.path.exists(save_file):
+                os.remove(save_file)

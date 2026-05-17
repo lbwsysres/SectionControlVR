@@ -2,39 +2,30 @@
 let emuEnabled = false;
 let currentHdg = 0;
 let currentSpd = 0;
-
-let joyZone, joyStick, emuStatusBtn;
+let joyZone, joyStick;
 let isDragging = false;
 const halfSize = 75;
-
 const defaultX = 0;
-const defaultY = halfSize;
-
+const defaultY = halfSize; // Стартовая позиция внизу (выключен)
 let currentX = defaultX;
 let currentY = defaultY;
 let animationFrameId = null;
 
-// Функція ініціалізації, яку викличемо після завантаження DOM
 function initEmulator() {
     joyZone = document.getElementById('joy_zone');
     joyStick = document.getElementById('joy_stick');
-    emuStatusBtn = document.getElementById('emu_status_btn');
-
     if (!joyZone || !joyStick) return;
 
     updateStickPosition(defaultX, defaultY);
     setupEmulatorEvents();
+    updateVisualState();
 }
 
 function updateEmuUI() {
-    //document.getElementById('hdg_val').innerText = currentHdg;
-    //document.getElementById('spd_val').innerText = currentSpd.toFixed(1);
     sendEmuData();
 }
 
 function sendEmuData() {
-    //console.log(`Sending: hdg=${currentHdg}, speed=${currentSpd}`);
-    // Тут буде ваш fetch або WebSocket відправка
     const data = {
         enabled: emuEnabled,
         hdg: currentHdg,
@@ -47,22 +38,9 @@ function sendEmuData() {
     }).catch(err => console.error("Emu error:", err));
 }
 
-function toggleEmu() {
-    emuEnabled = !emuEnabled;
-
-    emuStatusBtn.innerText = emuEnabled ? "RUN" : "STOP";
-    emuStatusBtn.style.background = emuEnabled ? "#2ecc71" : "#444";
+// Изменение цвета ободка джойстика в зависимости от статуса
+function updateVisualState() {
     joyStick.style.borderColor = emuEnabled ? "#2ecc71" : "#e74c3c";
-
-    if (!emuEnabled) {
-        currentHdg = 0;
-        currentSpd = 0;
-        currentX = defaultX;
-        currentY = defaultY;
-        joyStick.style.transition = "left 0.3s ease-out, top 0.3s ease-out";
-        updateStickPosition(defaultX, defaultY);
-        updateEmuUI();
-    }
 }
 
 function updateStickPosition(x, y) {
@@ -71,7 +49,7 @@ function updateStickPosition(x, y) {
 }
 
 function handleMove(clientX, clientY) {
-    if (!isDragging || !emuEnabled) return;
+    if (!isDragging) return;
 
     const rect = joyZone.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
@@ -83,23 +61,44 @@ function handleMove(clientX, clientY) {
     currentX = Math.max(-halfSize, Math.min(halfSize, currentX));
     currentY = Math.max(-halfSize, Math.min(halfSize, currentY));
 
+    // ЛОГИКА ПЕРЕКЛЮЧЕНИЯ:
+    // currentY < 0 означает, что джойстик потянули выше центральной оси
+    if (!emuEnabled && currentY < (halfSize * 0.5)) {
+        emuEnabled = true;
+        updateVisualState();
+    }
+    // currentY === halfSize означает, что джойстик опустили в самый низ (до упора)
+    else if (emuEnabled && currentY >= halfSize) {
+        emuEnabled = false;
+        updateVisualState();
+    }
+
     updateStickPosition(currentX, currentY);
 
-    currentHdg = Math.round((currentX / halfSize) * 30);
-    const invertedY = -currentY;
-    const speedPercent = (invertedY + halfSize) / (halfSize * 2);
-    currentSpd = speedPercent * 10;
+    if (emuEnabled) {
+        currentHdg = Math.round((currentX / halfSize) * 30);
+        const invertedY = -currentY;
+        const speedPercent = (invertedY + halfSize) / (halfSize * 2);
+        currentSpd = speedPercent * 10;
+    } else {
+        currentHdg = 0;
+        currentSpd = 0;
+    }
 
     updateEmuUI();
 }
 
 function smoothResetX() {
     if (isDragging) return;
+
+    // Возвращаем по горизонтали к центру (0)
     currentX = currentX * 0.82;
 
     if (Math.abs(currentX) < 0.5) {
         currentX = 0;
-        currentHdg = 0;
+        if (emuEnabled) {
+            currentHdg = 0;
+        }
         updateStickPosition(currentX, currentY);
         updateEmuUI();
         cancelAnimationFrame(animationFrameId);
@@ -107,9 +106,10 @@ function smoothResetX() {
     }
 
     updateStickPosition(currentX, currentY);
-    currentHdg = Math.round((currentX / halfSize) * 30);
+    if (emuEnabled) {
+        currentHdg = Math.round((currentX / halfSize) * 30);
+    }
     updateEmuUI();
-
     animationFrameId = requestAnimationFrame(smoothResetX);
 }
 
@@ -120,9 +120,8 @@ function startResetAnimation() {
 }
 
 function setupEmulatorEvents() {
-    // Миша
+    // Мышь
     joyStick.addEventListener('mousedown', (e) => {
-        if (!emuEnabled) return;
         isDragging = true;
         cancelAnimationFrame(animationFrameId);
         joyStick.style.transition = "none";
@@ -130,7 +129,6 @@ function setupEmulatorEvents() {
     });
 
     window.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
-
     window.addEventListener('mouseup', () => {
         if (isDragging) {
             isDragging = false;
@@ -139,9 +137,8 @@ function setupEmulatorEvents() {
         }
     });
 
-    // Тач (Мобільні)
+    // Тач устройства
     joyStick.addEventListener('touchstart', (e) => {
-        if (!emuEnabled) return;
         isDragging = true;
         cancelAnimationFrame(animationFrameId);
         joyStick.style.transition = "none";
@@ -159,5 +156,4 @@ function setupEmulatorEvents() {
     });
 }
 
-// Автоматичний запуск після завантаження сторінки
 document.addEventListener("DOMContentLoaded", initEmulator);
