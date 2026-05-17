@@ -38,6 +38,9 @@ DEFAULT_CONFIG = {
     "SMART_TURN_ENABLED": True,
     "LOOK_AHEAD_ON_TIME": 0.8,
     "LOOK_AHEAD_OFF_TIME": 0.3,
+    # Дописуємо в DEFAULT_CONFIG всередині config_manager.py
+    "VRA_RATE_DEFAULT": 0.0,  # Твоя захисна норма 0.0 за замовчуванням
+    "VRA_CALC_MODE": "boom",  # Режим обчислення: "boom" (вся штанга) або "sections" (посекційно)
 }
 
 
@@ -51,6 +54,7 @@ def load_config():
 
     return _cached_config
 
+
 def save_config(new_cfg):
     """Оновлює кеш в RAM та одночасно записує дані на диск"""
     global _cached_config
@@ -63,8 +67,12 @@ def save_config(new_cfg):
     updated_config = {**_cached_config, **new_cfg}
 
     # Синхронізуємо кількість режимів із кількістю секцій перед збереженням
-    if len(updated_config.get("SECTION_MODES", [])) != len(updated_config.get("SECTION_WIDTHS", [])):
-        updated_config["SECTION_MODES"] = ["AUTO"] * len(updated_config["SECTION_WIDTHS"])
+    if len(updated_config.get("SECTION_MODES", [])) != len(
+        updated_config.get("SECTION_WIDTHS", [])
+    ):
+        updated_config["SECTION_MODES"] = ["AUTO"] * len(
+            updated_config["SECTION_WIDTHS"]
+        )
 
     # Оновлюємо глобальний RAM-кеш
     _cached_config = updated_config
@@ -76,6 +84,7 @@ def save_config(new_cfg):
         print("[Config] Save config to disk and RAM successfully.")
     except Exception as e:
         print(f"[Config] Помилка збереження конфігу: {e}")
+
 
 def save_config_1(new_cfg):
     """Оновлює кеш в RAM та одночасно записує дані на диск"""
@@ -92,7 +101,7 @@ def save_config_1(new_cfg):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(_cached_config, f, indent=4)
     print("[Config] Save congif disk and RAM.")
-    #print(new_cfg)
+    # print(new_cfg)
 
 
 def _read_from_disk():
@@ -114,7 +123,9 @@ def _read_from_disk():
     final_config = {**DEFAULT_CONFIG, **current_disk_cfg}
 
     # 3. Синхронізація масивів секцій (ваша чудова логіка безпеки)
-    if len(final_config.get("SECTION_MODES", [])) != len(final_config.get("SECTION_WIDTHS", [])):
+    if len(final_config.get("SECTION_MODES", [])) != len(
+        final_config.get("SECTION_WIDTHS", [])
+    ):
         final_config["SECTION_MODES"] = ["AUTO"] * len(final_config["SECTION_WIDTHS"])
         config_changed = True
 
@@ -127,11 +138,14 @@ def _read_from_disk():
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(final_config, f, indent=4)
-            print("[Config] Знайдено нові параметри! Файл config.json на диску успішно оновлено.")
+            print(
+                "[Config] Знайдено нові параметри! Файл config.json на диску успішно оновлено."
+            )
         except Exception as e:
             print(f"[Config] Не вдалося оновити файл на диску: {e}")
 
     return final_config
+
 
 def _read_from_disk_1():
     """Внутрішня функція для первинного читання файлу з диска"""

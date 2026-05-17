@@ -61,31 +61,77 @@ class BoardWorker(threading.Thread):
             self.connected = False
             self.state.board_connected = False 
             time.sleep(delay)
-
+    
     def send_commands_to_hardware(self):
         try:
-            # Проверяем, изменилось ли состояние секций, чтобы не спамить в порт зря
-            current_states = list(self.state.current_states)
+            import struct
 
-            if current_states != self.last_sent_states:
-                # ПРИМЕР ФОРМИРОВАНИЯ КОМАНДЫ (замените под ваш протокол Arduino/Реле):
-                # Переводим массив [True, False, True] в битовую маску или JSON строку
-                # Например, преобразуем в строку вида "1,0,1,0,0,0,0,0\n"
-                status_str = (
-                    ",".join(["1" if s else "0" for s in current_states]) + "\n"
-                )
+            # 1. Витягуємо трійку голих параметрів із нашого спільного state
+            states = getattr(self.state, 'current_states', [])
+            percents = getattr(self.state, 'flow_percents', [])
+            flows = getattr(self.state, 'vra_flows', [])
+            
+            num_sections = len(states)
+            if num_sections == 0:
+                return
 
-                self.serial_device.write(status_str.encode("ascii"))
-                self.serial_device.flush()  # Принудительно выталкиваем буфер в провод
-
-                self.last_sent_states = current_states
-                print(
-                    f"[Board_Unit] Send command: {status_str.strip()}"
-                )
+            # 2. Формуємо заголовок бінарного пакету: 
+            # Маркер (0xAA) + Кількість секцій (1 байт)
+            packet = bytearray(struct.pack("<BB", 0xAA, num_sections))
+            
+            # 3. Послідовно забиваємо голі цифри кожної секції в байт-буфер
+            for i in range(num_sections):
+                sec_on = 1 if states[i] else 0
+                sec_pct = int(percents[i]) if i < len(percents) else 100
+                sec_flow = float(flows[i]) if i < len(flows) else 0.0
+                
+                # ХАРДКОРНА УПАКОВКА:
+                # B = uint8_t (1 байт) -> стан ON/OFF
+                # H = uint16_t (2 байти) -> відсоток повороту
+                # f = float (4 байти) -> цільова доза з карти (л/га)
+                packet.extend(struct.pack("<BHf", sec_on, sec_pct, sec_flow))
+            
+            # 4. Рахуємо контрольну суму XOR по всьому пакету (захист від завад генератора трактора)
+            crc = 0
+            for b in packet:
+                crc ^= b
+            packet.extend(struct.pack("<B", crc))
+            
+            # 5. Виштовхуємо чисті байти прямо в мідний провід UART
+            self.serial_device.write(packet)
+            self.serial_device.flush()  # Примусово чистимо буфер ОС для мінімізації затримок
+            
+            # Для відладки в терміналі (можна закоментувати, щоб не спамило)
+            # print(f"[Board_Unit] Sent binary packet: {len(packet)} bytes for {num_sections} sections.")
 
         except Exception as e:
-            print(f"[Board_Unit] Error send command: {e}")
+            print(f"[Board_Unit] Error send binary command: {e}")
             self.close_port()
+
+    # def send_commands_to_hardware(self):
+    #     try:
+    #         # Проверяем, изменилось ли состояние секций, чтобы не спамить в порт зря
+    #         current_states = list(self.state.current_states)
+
+    #         if current_states != self.last_sent_states:
+    #             # ПРИМЕР ФОРМИРОВАНИЯ КОМАНДЫ (замените под ваш протокол Arduino/Реле):
+    #             # Переводим массив [True, False, True] в битовую маску или JSON строку
+    #             # Например, преобразуем в строку вида "1,0,1,0,0,0,0,0\n"
+    #             status_str = (
+    #                 ",".join(["1" if s else "0" for s in current_states]) + "\n"
+    #             )
+
+    #             self.serial_device.write(status_str.encode("ascii"))
+    #             self.serial_device.flush()  # Принудительно выталкиваем буфер в провод
+
+    #             self.last_sent_states = current_states
+    #             print(
+    #                 f"[Board_Unit] Send command: {status_str.strip()}"
+    #             )
+
+    #     except Exception as e:
+    #         print(f"[Board_Unit] Error send command: {e}")
+    #         self.close_port()
 
     def close_port(self):
         self.connected = False

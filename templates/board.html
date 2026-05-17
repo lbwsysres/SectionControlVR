@@ -325,6 +325,21 @@
                 </path>
             </svg>
         </button>
+        
+        <button class="tool-btn" onclick="location.href='/vra_control'" title="Керування картами VRA"
+            style="margin-top: 8px;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <!-- Малюємо контур складеної карти поля -->
+                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
+                <line x1="9" y1="3" x2="9" y2="18"></line>
+                <line x1="15" y1="6" x2="15" y2="21"></line>
+
+                <!-- Акуратне технологічне клеймо VRA по центру іконки -->
+                <text x="12" y="14" font-family="sans-serif" font-size="5px" font-weight="900" fill="currentColor"
+                    stroke="none" text-anchor="middle">VRA</text>
+            </svg>
+        </button>
     </div>
 
     <canvas id="bgCanvas"></canvas>
@@ -421,7 +436,8 @@
             <div class="section-column">
                 <div id="lamp_${i}" class="lamp-indicator"></div>
                 <!-- div class="section-label">S${i + 1}</div -->
-                <div id="rate_${i}" class="section-label">0</div>
+                <div id="flow_percents_${i}" class="section-label">0</div>
+                <div id="vra_flows_${i}" class="section-label">0</div>
                 <button id="btn_sec_${i}" class="mode-btn mode-btn-${i} active" data-mode="AUTO" onclick="toggleSectionMode(${i})">AUTO</button>
             </div>`;
             });
@@ -437,6 +453,12 @@
         fieldCanvas.width = 10000;  // 10000 пікселів = приблизно 1-2 км поля
         fieldCanvas.height = 10000;
 
+        // НАШ НОВИЙ БУФЕР ДЛЯ КАРТИ ЗАВДАНЬ (VRA)
+        const vraCanvas = document.createElement('canvas');
+        const vCtx = vraCanvas.getContext('2d');
+        vraCanvas.width = fieldCanvas.width;  // Такий самий розмір 10000x10000 пікселів
+        vraCanvas.height = fieldCanvas.height;
+
         const fCenterX = fieldCanvas.width / 2;
         const fCenterY = fieldCanvas.height / 2;
 
@@ -446,6 +468,112 @@
         let lastPointFromPreviousFetch = null; // Зберігає останню точку для з'єднання пакетів
         let _timeRead = 0;
         let _abLineNum = "НЕМАЄ ЛІНІЇ";
+
+        let isVraMapRendered = false;
+        let isVraLoading = false; // Прапорець-запобіжник від подвійного запуску
+
+        function initVraBuffer() {
+            // 1. Якщо карта вже малюється або вже намальована — миттєво виходимо
+            if (isVraMapRendered || isVraLoading) return;
+
+            // 2. Якщо координати ще нульові — плануємо наступну перевірку через 1 секунду
+            if (refLat === null || refLon === null) {
+                setTimeout(initVraBuffer, 1000);
+                return;
+            }
+
+            // 3. Блокуємо функцію, щоб жоден інший потік чи таймер не викликав її паралельно
+            isVraLoading = true;
+            console.log("[VRA] Знайдено refLat/refLon. Починаємо завантаження з Flask...");
+
+            fetch('/api/vra/map')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status !== "success") {
+                        console.log("[VRA] Карта на сервері відсутня.");
+                        isVraLoading = false; // Знімаємо блок, раптом карту завантажать пізніше
+                        return;
+                    }
+
+                    const minR = data.min_rate;
+                    const maxR = data.max_rate;
+
+                    function projectGeoToBuffer(lat, lon) {
+                        const gx = (lon - refLon) * 111320 * Math.cos(refLat * Math.PI / 180);
+                        const gy = (lat - refLat) * 111320;
+                        return {
+                            x: Math.round(gx * 10 + fCenterX),
+                            y: Math.round(-gy * 10 + fCenterY)
+                        };
+                    }
+
+                    function getColorForRate(rate) {
+                        if (rate <= minR) return "rgba(46, 204, 113, 0.35)";
+                        if (rate >= maxR) return "rgba(231, 76, 60, 0.35)";
+
+                        const percent = (rate - minR) / (maxR - minR);
+                        if (percent < 0.5) {
+                            const r = Math.round(46 + (241 - 46) * (percent * 2));
+                            const g = Math.round(204 + (196 - 204) * (percent * 2));
+                            const b = Math.round(113 + (15 - 113) * (percent * 2));
+                            return `rgba(${r}, ${g}, ${b}, 0.35)`;
+                        } else {
+                            const p2 = (percent - 0.5) * 2;
+                            const r = Math.round(241 + (231 - 241) * p2);
+                            const g = Math.round(196 + (76 - 196) * p2);
+                            const b = Math.round(15 + (60 - 15) * p2);
+                            return `rgba(${r}, ${g}, ${b}, 0.35)`;
+                        }
+                    }
+
+                    // Отрисовка подложки полигонов внутри initVraBuffer()
+                    data.polygons.forEach(poly => {
+                        // Перевірка: для полігону потрібно мінімум 3 точки
+                        if (!poly.points || poly.points.length < 3) return;
+
+                        // Встановлюємо динамічний колір для зони
+                        vCtx.fillStyle = getColorForRate(poly.rate);
+                        vCtx.beginPath();
+
+                        // 1. Беремо найпершу точку масиву (poly.points[0])
+                        // points[0][0] — це Lat (49.76...), points[0][1] — це Lon (29.00...)
+                        const firstPoint = poly.points[0];
+                        const startPt = projectGeoToBuffer(firstPoint[0], firstPoint[1]);
+                        vCtx.moveTo(startPt.x, startPt.y);
+
+                        // 2. Ведемо лінії по всіх наступних точках контуру
+                        for (let i = 1; i < poly.points.length; i++) {
+                            const currentPoint = poly.points[i];
+                            const pt = projectGeoToBuffer(currentPoint[0], currentPoint[1]);
+                            vCtx.lineTo(pt.x, pt.y);
+                        }
+
+                        vCtx.closePath();
+                        vCtx.fill(); // Заливаємо зону кольором
+
+                        // Тонка біла лінія між зонами, щоб бачити межі, навіть якщо кольори схожі
+                        vCtx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+                        vCtx.lineWidth = 1;
+                        vCtx.stroke();
+                    });
+
+                    isVraMapRendered = true; // Фіксуємо, що буфер успішно заповнено
+                    console.log("[VRA BUFFER] Карта успішно зарендерена в буфер.");
+
+                })
+                .catch(err => {
+                    console.error("Помилка генерації VRA буфера:", err);
+                    isVraLoading = false; // У разі помилки мережі даємо шанс спробувати знову
+                });
+        }
+
+        // Запускаємо цей саморегульований конвеєр один раз при старті сторінки:
+        document.addEventListener("DOMContentLoaded", () => {
+            initVraBuffer();
+        });
+
+
+
 
         // 2: Функція розрахунку координат
         function getGlobalCoords(lat, lon, heading, sectionIdx, isRightSide = false) {
@@ -484,6 +612,7 @@
         // Безпечна черга для фонової обробки великих масивів даних
         let isProcessingQueue = false;
         const pointsQueue = [];
+
 
         function updateFieldMap(newPoints) {
             if (!newPoints || newPoints.length === 0) return;
@@ -620,29 +749,9 @@
             const tx_m = (data.pos[1] - refLon) * 111320 * Math.cos(refLat * Math.PI / 180);
             const ty_m = -(data.pos[0] - refLat) * 111320;
 
-            // *************************************************************************************** //
-            // 1. СЕТКА (фоновая)
-            // bgCtx.strokeStyle = "rgba(255,255,255,0.3)";
-            // let gridStep = 10 * zoom; // init zoom = 15
-            // for (let x = (cx % gridStep); x < bgCanvas.width; x += gridStep) {
-            //     bgCtx.beginPath(); bgCtx.moveTo(x, 0); bgCtx.lineTo(x, bgCanvas.height); bgCtx.stroke();
-            // }
-            // for (let y = (cy % gridStep); y < bgCanvas.height; y += gridStep) {
-            //     bgCtx.beginPath(); bgCtx.moveTo(0, y); bgCtx.lineTo(bgCanvas.width, y); bgCtx.stroke();
-            // }
-
-            // *************************************************************************************** //
-            // 1. СЕТКА (фоновая)
             bgCtx.strokeStyle = "rgba(255,255,255,0.1)";
             let gridStep = 20 * zoom; // Крок сітки в пікселях
 
-            // Переводимо поточні координати трактора в метрах (tx_m, ty_m) у пікселі екрана
-            // const tx_m = (data.pos[1] - refLon) * 111320 * Math.cos(refLat * Math.PI / 180);
-            // const ty_m = -(data.pos[0] - refLat) * 111320;
-
-            // Рахуємо зміщення в пікселях (враховуючи, що масштаб поля scaleFactor = zoom / 10, а базовий буфер має 10 пікс/метр)
-            // Метри * 10 * scaleFactor скорочується до: Метри * zoom
-            //const offsetX = tx_m * zoom;
             const offsetX = 0;
             const offsetY = ty_m * zoom;
 
@@ -667,19 +776,52 @@
                 bgCtx.stroke();
             }
             // *************************************************************************************** //
+            // *************************************************************************************** //
+            // // Отрисовка пути и карты задания (VRA)
+            // bgCtx.save();
+            // bgCtx.translate(bgCanvas.width / 2, bgCanvas.height / 2);
+            // bgCtx.rotate(-data.hdg * Math.PI / 180);
 
+            // const scaleFactor = zoom / 10;
+            // bgCtx.scale(scaleFactor, scaleFactor);
+            // // ШАР 1: Малюємо карту диференційованого внесення (підкладка)
+            // // Вона використовує ті ж самі зміщення, тому ідеально стане на своє місце
+            // if (isVraMapRendered) {
+            //     bgCtx.drawImage(vraCanvas, -(tx_m * 10 + fCenterX), -(ty_m * 10 + fCenterY));
+            // }
+            // // ШАР 2: Малюємо буфер проходів (слід трактора малюється ПОВЕРХ карти)
+            // bgCtx.drawImage(fieldCanvas, -(tx_m * 10 + fCenterX), -(ty_m * 10 + fCenterY));
+            // bgCtx.restore(); // Повертаємо контекст назад
+            // // *************************************************************************************** //
+            // // Отрисовка пути
+            // bgCtx.save();
+            // bgCtx.translate(bgCanvas.width / 2, bgCanvas.height / 2);
+            // bgCtx.rotate(-data.hdg * Math.PI / 180);
+            // bgCtx.scale(scaleFactor, scaleFactor); // Використовуємо transform для масштабування всієї картинки буфера
+            // bgCtx.drawImage(fieldCanvas, -(tx_m * 10 + fCenterX), -(ty_m * 10 + fCenterY)); // Тепер малюємо буфер Оскільки ми вже зробили scale, координати tx_m/ty_m теж масштабуються автоматично
 
             // *************************************************************************************** //
-            // Отрисовка пути
+            // ОБ'ЄДНАНА ОТРЕТИСОВКА КАРТИ ЗАВДАННЯ (VRA) ТА СЛІДУ ТРАКТОРУ (ОДИН БЛОК SAVE)
             bgCtx.save();
             bgCtx.translate(bgCanvas.width / 2, bgCanvas.height / 2);
             bgCtx.rotate(-data.hdg * Math.PI / 180);
-            // Поточне положення трактора в метрах
-            // const tx_m = (data.pos[1] - refLon) * 111320 * Math.cos(refLat * Math.PI / 180);
-            // const ty_m = -(data.pos[0] - refLat) * 111320;
-            const scaleFactor = zoom / 10; // Розраховуємо коефіцієнт масштабування відносно нашого буфера (де було 10 пікс/метр)
-            bgCtx.scale(scaleFactor, scaleFactor); // Використовуємо transform для масштабування всієї картинки буфера
-            bgCtx.drawImage(fieldCanvas, -(tx_m * 10 + fCenterX), -(ty_m * 10 + fCenterY)); // Тепер малюємо буфер Оскільки ми вже зробили scale, координати tx_m/ty_m теж масштабуються автоматично
+
+            const scaleFactor = zoom / 10; // Розраховуємо коефіцієнт масштабування відносно нашого буфера (10 пікс/метр)
+            bgCtx.scale(scaleFactor, scaleFactor); // Масштабуємо всю матрицю підкладки
+
+            // ШАР 1: Малюємо карту диференційованого внесення (підкладка)
+            // Вона малюється найпершою знизу
+            if (isVraMapRendered) {
+                bgCtx.drawImage(vraCanvas, -(tx_m * 10 + fCenterX), -(ty_m * 10 + fCenterY));
+            }
+            //console.log(isVraMapRendered);
+            // ШАР 2: Малюємо буфер проходів (слід трактора малюється ПОВЕРХ карти)
+            // Завдяки тому, що ми прибрали другий такий виклик нижче, карта більше не затирається!
+
+            bgCtx.drawImage(fieldCanvas, -(tx_m * 10 + fCenterX), -(ty_m * 10 + fCenterY));
+
+            bgCtx.restore(); // Повертаємо контекст назад, очищуючи матрицю для ліній А-В
+
 
             // *************************************************************************************** //
             // --- 2. МАЛЮЄМО ДИНАМІЧНІ ЛІНІЇ А-В (КРУТЯТЬСЯ І СЛІДУЮТЬ ЗА ТРАКТОРОМ) ---
@@ -980,10 +1122,10 @@
                         lastPointAPos = d.ab_gps.a; // [lat, lon]
                         lastPointBPos = d.ab_gps.b; // [lat, lon]
                     }
-                    // Всередині .then(data => { ... })
-                    if (d.flow && d.flow.length > 0) {
-                        d.flow.forEach((val, i) => {
-                            const rateEl = document.getElementById(`rate_${i}`);
+                    // *********************************************************************************
+                    if (d.flow_percents && d.flow_percents.length > 0) {
+                        d.flow_percents.forEach((val, i) => {
+                            const rateEl = document.getElementById(`flow_percents_${i}`);
                             if (rateEl) {
                                 // Виводимо значення
                                 rateEl.innerText = val + "%";
@@ -999,7 +1141,19 @@
                             }
                         });
                     }
-
+                    
+                    if (d.vra_flows && d.vra_flows.length > 0) {
+                        d.vra_flows.forEach((val, i) => {
+                            const vraEl = document.getElementById(`vra_flows_${i}`);
+                            if (vraEl) {
+                                // Виводимо значення
+                                vraEl.innerText = val;
+                                vraEl.style.color = "#2ecc71"; // Зелений (норма)
+                            }
+                        });
+                    }
+                    
+                    // *********************************************************************************
                     if (d.pos && d.pos.length >= 2) {
                         const latVal = d.pos[0];
                         const lonVal = d.pos[1];
@@ -1049,32 +1203,49 @@
         }
 
 
-
-
-        // *************************************************************************************** //
-        // Скидання площі та історії
-        // function resetAll() {
-        //     if (confirm("Очистить обработанную площадь и историю?")) {
-        //         fetch('/reset_area')
-        //             .then(response => {
-        //                 if (response.ok) {
-        //                     // он пришлет пустую историю сам.
-        //                     localPathHistory = [];
-        //                     // 2. Скидаємо індекс, щоб наступний запит знову почався з 0
-        //                     lastReceivedIndex = 0;
-        //                     console.log("Поле очищено локально та на сервері");
-        //                     setTimeout(() => {
-        //                         location.reload();
-        //                     }, 500);
-        //                 } else {
-        //                     alert("Ошибка сервера при сбросе");
-        //                 }
-        //             })
-        //             .catch(err => console.error("Ошибка сети:", err));
-        //     }
-        // }
-
         function resetAll() {
+            askUser(
+                "ВНИМАНИЕ!<br>Очистить карту и сбросить текущее поле?",
+                "danger",
+                "ОЧИСТИТЬ",
+                () => {
+                    fetch('/reset_area')
+                        .then(r => {
+                            if (!r.ok) throw new Error("Сервер вернул ошибку при сбросе");
+                            return r.json();
+                        })
+                        .then(data => {
+                            if (data.status === "ok") {
+                                console.log("Поле и карта задач успешно очищены на сервере");
+
+                                // 1. Очищаем локальные массивы истории (на всякий случай до перезагрузки)
+                                localPathHistory = [];
+                                lastReceivedIndex = 0;
+
+                                // 2. Полностью очищаем наш холст карты задач, чтобы картинка не зависла в памяти
+                                if (window.vraCanvas && window.vCtx) {
+                                    vCtx.clearRect(0, 0, vraCanvas.width, vraCanvas.height);
+                                }
+                                isVraMapRendered = false;
+                                if (typeof isVraLoading !== 'undefined') isVraLoading = false;
+
+                                // 3. Выполняем ОДИН аккуратный перезапуск страницы через полсекунды,
+                                // чтобы дать серверу гарантированно завершить дисковые операции записи/стирания
+                                setTimeout(() => {
+                                    location.reload();
+                                }, 500);
+                            }
+                        })
+                        .catch(err => {
+                            console.error("Ошибка сети при вызове /reset_area:", err);
+                            askUser("СЕРВЕР НЕ ОТВЕЧАЕТ<br>Проверьте связь с контроллером.", "danger", "ПРИНЯТЬ", () => { });
+                        });
+                }
+            );
+        }
+
+
+        function resetAll_1() {
             askUser(
                 "ВНИМАНИЕ!<br>Очистить карту ?",
                 "danger",

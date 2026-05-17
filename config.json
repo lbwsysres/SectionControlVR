@@ -49,5 +49,7 @@
     "CONTROL_BOARD_ENABLE": false,
     "SMART_TURN_ENABLED": false,
     "LOOK_AHEAD_ON_TIME": 0.8,
-    "LOOK_AHEAD_OFF_TIME": 0.3
+    "LOOK_AHEAD_OFF_TIME": 0.3,
+    "VRA_RATE_DEFAULT": 80.0,
+    "VRA_CALC_MODE": "sections"
 }

@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Керування картами завдань VRA</title>
+    <style>
+        :root {
+            --bg-main: #0a0a0a;
+            --bg-card: #141414;
+            --text: #ffffff;
+            --accent: #00ff7f;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text);
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 10px 40px 120px 40px;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow-x: hidden;
+        }
+
+        h2 {
+            color: var(--accent);
+            border-bottom: 2px solid #222;
+            padding-bottom: 10px;
+            margin-top: 10px;
+        }
+
+        /* Кнопки верхньої панелі */
+        .btn {
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .btn-success {
+            background-color: var(--accent);
+            color: #000;
+        }
+
+        .btn-danger {
+            background-color: #ff4444;
+            color: #fff;
+        }
+
+        .btn-secondary {
+            background-color: #2c2c2c;
+            color: #fff;
+            border: 2px solid #444;
+        }
+
+        /* Панель дій верхнього рівня */
+        .action-card {
+            background: var(--bg-card);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid #222;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        /* Таблиця файлів карт */
+        .table-container {
+            background: var(--bg-card);
+            border-radius: 15px;
+            padding: 10px;
+            border: 1px solid #222;
+            max-height: 55vh;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            padding: 15px 10px;
+            border-bottom: 2px solid #333;
+            color: #aaa;
+            font-size: 1.1rem;
+        }
+
+        td {
+            padding: 15px 10px;
+            border-bottom: 1px solid #222;
+            font-size: 1.2rem;
+        }
+
+        .file-row:hover {
+            background-color: #252525;
+        }
+
+        .active-row {
+            background-color: rgba(0, 255, 127, 0.1) !important;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .badge-active {
+            background-color: var(--accent);
+            color: #000;
+        }
+
+        .badge-passive {
+            background-color: #333;
+            color: #aaa;
+        }
+
+        /* Твоя фірмова фіксована нижня панель навігації */
+        .bottom-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px 40px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            z-index: 999;
+            pointer-events: none;
+        }
+
+        .btn-nav {
+            width: 100%;
+            height: 80px;
+            border-radius: 15px;
+            font-size: 1.4rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
+        }
+
+        /* Твої стилі Модального Вікна (TFormModal) */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: var(--bg-card);
+            border: 2px solid #333;
+            padding: 30px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+            transition: max-width 0.2s ease;
+        }
+
+        .modal-text {
+            font-size: 1.4rem;
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .modal-btn {
+            flex: 1;
+            height: 65px;
+            border-radius: 12px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        /* --- ТАЧ-СПИННЕРЫ (+ / -) --- */
+        .spinner {
+            display: flex;
+            align-items: center;
+            background: #000;
+            border-radius: 10px;
+            padding: 4px;
+            border: 1px solid #222;
+        }
+
+        .spinner button {
+            width: 60px;
+            height: 60px;
+            background: var(--btn-gray);
+            border: none;
+            color: white;
+            font-size: 1.4rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .spinner button:active {
+            background: #444;
+        }
+
+        .spinner span {
+            min-width: 65px;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div
+        style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #222; padding-bottom: 10px; margin-top: 10px;">
+        <h2 style="display: flex; align-items: center; gap: 12px; margin: 0; border: none; padding: 0;">
+            <!-- Твоя красива SVG-іконка карти -->
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round"
+                style="filter: drop-shadow(0 0 5px rgba(0,255,127,0.3));">
+                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
+                <line x1="9" y1="3" x2="9" y2="18"></line>
+                <line x1="15" y1="6" x2="15" y2="21"></line>
+            </svg>
+            <span>Диспетчер карт диференційованого внесення (VRA)</span>
+        </h2>
+
+        <!-- КНОПКА-ШЕСТІРНЯ ПРАВОРУЧ ВІД ЗАГОЛОВКА -->
+        <button class="btn" id="toggleHardwareBtn" onclick="toggleHardwarePanel()"
+            style="background: #222; border: 1px solid #444; color: #fff; width: 55px; height: 55px; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 0;"
+            title="Апаратні налаштування VRA">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                </path>
+            </svg>
+        </button>
+    </div>
+
+
+    <!-- Панель завантаження нової карти -->
+    <!-- <div class="action-card">
+        <input type="file" id="fileInput" accept=".zip" onchange="handleFileSelect()">
+        <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">📥 ЗАВАНТАЖИТИ НОВУ КАРТУ
+            (.ZIP)</button>
+        <button class="btn btn-danger" id="deactivateBtn" style="display: none;" onclick="deactivateCurrentMap()">📴
+            ОТКЛЮЧИТЬ КАРТУ (БАЗОВА НОРМА)</button>
+    </div> -->
+    <!-- Оновлена, красива та симетрична панель дій -->
+    <div class="action-card"
+        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; padding: 15px;">
+        <input type="file" id="fileInput" accept=".zip" onchange="handleFileSelect()">
+
+        <!-- Кнопка завантаження нової карти -->
+        <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()"
+            style="height: 65px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1.2rem; border-radius: 12px; background: #2980b9;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <span>ДОДАТИ НОВУ КАРТУ</span>
+        </button>
+
+        <!-- Феншуйна кнопка відключення поточної карти -->
+        <button class="btn btn-danger" id="deactivateBtn"
+            style="display: none; height: 65px; align-items: center; justify-content: center; gap: 10px; font-size: 1.2rem; border-radius: 12px; font-weight: bold; background: #ff4444;"
+            onclick="deactivateCurrentMap()">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+            </svg>
+            <span>ОТКЛЮЧИТЬ КАРТУ</span>
+        </button>
+    </div>
+
+    <!-- БЛОК НАЛАШТУВАННЬ ЗАЛІЗА VRA (Прямий зв'язок з config.json) -->
+    <!-- div class="card" style="border: 1px solid #444;" -->
+    <div class="action-card" id="hardwareConfigPanel"
+        style="border: 1px solid #444; display: none; margin-top: 15px; margin-bottom: 20px;">
+        <h3 style="color: var(--accent); margin-top: 0; margin-bottom: 20px;">⚙️ Налаштування апаратного режиму VRA</h3>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 25px; align-items: center;">
+            <!-- Поле введення базової захисної норми -->
+            <div style="flex: 1; min-width: 250px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #aaa;">Норма за
+                    замовчуванням (л/га):</label>
+                <!-- input type="number" id="cfgRateDefault" step="1"
+                    style="width: 100%; height: 60px; background: #000; color: #fff; border: 2px solid #444; border-radius: 12px; font-size: 1.6rem; text-align: center; box-sizing: border-box;"
+                    value="0" -->
+                <!-- Твій фірмовий спіннер, адаптований під норму виливу -->
+                <div class="spinner" style="justify-content: space-between; max-width: 260px;">
+                    <!-- Крок мінусу зробимо -10 для зручності агронома, або -1 якщо потрібно точніше -->
+                    <button type="button"
+                        style="width: 60px; height: 60px; background: #2c2c2c; border: none; color: white; font-size: 1.4rem; border-radius: 8px; cursor: pointer;"
+                        onclick="changeVraDefault(-10)">-</button>
+                    <span id="cfgRateDefault"
+                        style="min-width: 80px; text-align: center; font-size: 1.5rem; font-weight: bold; color: #fff;">0</span>
+                    <button type="button"
+                        style="width: 60px; height: 60px; background: #2c2c2c; border: none; color: white; font-size: 1.4rem; border-radius: 8px; cursor: pointer;"
+                        onclick="changeVraDefault(10)">+</button>
+                </div>
+            </div>
+
+            <!-- Тумблер вибору математики обчислень -->
+            <div style="flex: 1.5; min-width: 300px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #aaa;">Алгоритм сканування
+                    карти поля:</label>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-secondary" id="modeBoomBtn"
+                        style="flex: 1; height: 60px; border-radius: 12px; font-size: 1.1rem;"
+                        onclick="setCalcMode('boom')">Вся штанга (1 точка)</button>
+                    <button class="btn btn-secondary" id="modeSectionsBtn"
+                        style="flex: 1; height: 60px; border-radius: 12px; font-size: 1.1rem;"
+                        onclick="setCalcMode('sections')">Посекційно</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Кнопка фіксації змін у конфіг -->
+        <div style="margin-top: 20px; text-align: right;">
+            <button class="btn btn-success"
+                style="height: 55px; font-size: 1.1rem; border-radius: 10px; padding: 0 40px;"
+                onclick="saveVraHardwareConfig()">ЗБЕРЕГТИ НАЛАШТУВАННЯ</button>
+        </div>
+    </div>
+
+    <!-- Вікно списку збережених ZIP карт -->
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 55%;">Назва файлу карти VRA</th>
+                    <th style="width: 20%;">Дата додавання</th>
+                    <th style="width: 13%;">Статус</th>
+                    <th style="width: 12%; text-align: right; padding-right: 25px;">Дії</th>
+                </tr>
+            </thead>
+            <tbody id="mapsTableBody">
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #555; padding: 40px;">Завантаження списку карт...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Нижня панель керування -->
+    <div class="bottom-bar">
+        <button class="btn-nav btn-secondary" onclick="window.location.href='/'">НАЗАД ДО НАВІГАЦІЇ</button>
+    </div>
+
+    <!-- Твоє Універсальне модальне вікно (введення тексту + повідомлення + клавіатура) -->
+    <div id="customModal" class="modal">
+        <div class="modal-content" id="modalContent">
+            <div id="modalText" class="modal-text">Повідомлення</div>
+
+            <div id="inputWrapper" style="display: none; margin-bottom: 20px;">
+                <input type="text" id="modalInput"
+                    style="width: 100%; height: 60px; background: #000; color: #fff; border: 2px solid var(--accent); border-radius: 12px; font-size: 1.6rem; text-align: center; box-sizing: border-box;"
+                    placeholder="Натискайте кнопки нижче...">
+            </div>
+
+            <div id="keyboardWrapper"
+                style="display: none; margin-bottom: 25px; background: #1a1a1a; padding: 12px; border-radius: 15px; border: 1px solid #333;">
+                <div id="virtualKeyboard" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px;">
+                </div>
+            </div>
+
+            <div class="modal-buttons">
+                <button id="modalCancelBtn" class="modal-btn" style="background: #333; color: #fff;"
+                    onclick="closeModal()">СКАСУВАТИ</button>
+                <button id="modalConfirmBtn" class="modal-btn">ОК</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Розкладка символів для промислової екранної клавіатури (Безпечні символи з твого Gist)
+        window.vraDefaultRateValue = 0; // Локальний буфер значення
+        const KB_LAYOUT = [
+            '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+            'Й', 'Ц', 'У', 'К', 'Е', 'Н', 'Г', 'Ш', 'Щ', 'З',
+            'Х', 'Ї', 'Ф', 'І', 'В', 'А', 'П', 'Р', 'О', 'Л',
+            'Д', 'Ж', 'Є', 'Я', 'Ч', 'С', 'М', 'И', 'Т', 'Ь',
+            'Б', 'Ю', '_', '-', 'SPACE', 'BACKSPACE'
+        ];
+
+        // Ініціалізація форми (Аналог TForm.FormCreate)
+        document.addEventListener("DOMContentLoaded", () => {
+            loadMapsList();
+            initVirtualKeyboard();
+        });
+
+        // Твоя оригінальна генерація матриці кнопок віртуальної клавіатури під великі пальці
+        function initVirtualKeyboard() {
+            const kbContainer = document.getElementById('virtualKeyboard');
+            kbContainer.innerHTML = '';
+            const input = document.getElementById('modalInput');
+
+            KB_LAYOUT.forEach(key => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.innerText = key;
+                btn.style.cssText = `
+            height: 55px; background: #2c2c2c; color: #fff; border: 1px solid #444;
+            border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer;
+            user-select: none; -webkit-user-select: none;
+        `;
+
+                if (key === 'SPACE') {
+                    btn.style.gridColumn = 'span 2';
+                    btn.style.background = '#444';
+                    btn.onclick = () => input.value += ' ';
+                } else if (key === 'BACKSPACE') {
+                    btn.style.gridColumn = 'span 2';
+                    btn.style.background = '#d32f2f';
+                    btn.onclick = () => input.value = input.value.slice(0, -1);
+                } else {
+                    btn.onclick = () => input.value += key;
+                }
+                kbContainer.appendChild(btn);
+            });
+        }
+
+        // Твоя модернізована промислова функція askUser
+        function askUser(text, theme, confirmText, onConfirm, isPrompt = false) {
+            const modal = document.getElementById('customModal');
+            const modalContent = document.getElementById('modalContent');
+            const modalText = document.getElementById('modalText');
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            const cancelBtn = document.getElementById('modalCancelBtn');
+            const inputWrapper = document.getElementById('inputWrapper');
+            const keyboardWrapper = document.getElementById('keyboardWrapper');
+            const input = document.getElementById('modalInput');
+
+            modalText.innerHTML = text;
+            confirmBtn.innerText = confirmText;
+
+            if (isPrompt) {
+                input.value = '';
+                inputWrapper.style.display = 'block';
+                keyboardWrapper.style.display = 'block';
+                modalContent.style.maxWidth = '750px';
+                confirmBtn.style.background = 'var(--accent)';
+                confirmBtn.style.color = '#000';
+                cancelBtn.style.display = 'block';
+            } else {
+                inputWrapper.style.display = 'none';
+                keyboardWrapper.style.display = 'none';
+                modalContent.style.maxWidth = '500px';
+
+                if (theme === 'danger') {
+                    confirmBtn.style.background = '#ff4444';
+                    confirmBtn.style.color = '#fff';
+                    cancelBtn.style.display = 'block';
+                } else if (theme === 'success') {
+                    confirmBtn.style.background = 'var(--accent)';
+                    confirmBtn.style.color = '#000';
+                    cancelBtn.style.display = 'block';
+                } else {
+                    confirmBtn.style.background = '#3498db';
+                    confirmBtn.style.color = '#fff';
+                    cancelBtn.style.display = 'none';
+                }
+            }
+
+            confirmBtn.onclick = null;
+            confirmBtn.onclick = () => {
+                if (isPrompt && input.value.trim() === "") return;
+                modal.style.display = 'none';
+                if (onConfirm) {
+                    onConfirm(isPrompt ? input.value.trim() : null);
+                }
+            };
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('customModal').style.display = 'none';
+        }
+
+        // 1. Читання архіва карт через API сервера Flask
+        function loadMapsList() {
+            fetch('/api/vra/list')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status !== "ok") return;
+
+                    const tbody = document.getElementById("mapsTableBody");
+                    tbody.innerHTML = "";
+
+                    if (data.maps.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #555; padding: 40px;">Список порожній. Немає завантажених карт завдання.</td></tr>`;
+                        document.getElementById("deactivateBtn").style.display = "none";
+                        return;
+                    }
+
+                    document.getElementById("deactivateBtn").style.display = data.active_file ? "inline-block" : "none";
+
+                    data.maps.forEach(map => {
+                        const tr = document.createElement("tr");
+                        tr.className = map.is_active ? "file-row active-row" : "file-row";
+
+                        const badge = map.is_active
+                            ? `<span class="status-badge badge-active">АКТИВНА</span>`
+                            : `<span class="status-badge badge-passive">В АРХІВІ</span>`;
+
+                        // const actionBtn = map.is_active
+                        //     ? `<button class="btn btn-secondary" disabled style="font-size:1.1rem; padding:8px 16px;">У РОБОТІ</button>`
+                        //     : `<button class="btn btn-success" style="font-size:1.1rem; padding:8px 16px;" onclick="activateMap('${map.filename}')">ОТКРЫТЬ</button>`;
+                        const actionBtn = map.is_active
+                            ? `<div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button class="btn btn-secondary" disabled style="font-size:1.1rem; padding:8px 16px;">У РОБОТІ</button>
+                        <button class="btn" disabled style="background:#444; color:#666; font-size:1.1rem; padding:8px 16px;">Х</button>
+                       </div>`
+                            : `<div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button class="btn btn-success" style="font-size:1.1rem; padding:8px 16px;" onclick="activateMap('${map.filename}')">ОТКРЫТЬ</button>
+                        <button class="btn btn-danger" style="font-size:1.1rem; padding:8px 16px; font-weight:900;" onclick="deleteMapFile('${map.filename}')">Х</button>
+                       </div>`;
+                        tr.innerHTML = `
+                        <td style="font-weight: bold; color: ${map.is_active ? 'var(--accent)' : '#fff'}">${map.filename}</td>
+                        <td style="color: #aaa;">${map.created}</td>
+                        <td>${badge}</td>
+                        <td style="text-align: right; padding-right: 10px; white-space: nowrap;">${actionBtn}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                    // Оновлюємо значення інпуту з config.json
+                    //document.getElementById("cfgRateDefault").value = data.rate_default;
+                    // Оновлюємо буфер та текст у нашому новому тач-спіннері
+                    window.vraDefaultRateValue = parseFloat(data.rate_default) || 0;
+                    document.getElementById("cfgRateDefault").innerText = window.vraDefaultRateValue;
+
+
+                    // Підсвічуємо активну залізну кнопку перемикача режимів
+                    const btnBoom = document.getElementById("modeBoomBtn");
+                    const btnSec = document.getElementById("modeSectionsBtn");
+
+                    // Тимчасово зберігаємо обраний режим у дата-атрибут для відправки
+                    window.currentSelectedVraMode = data.calc_mode;
+
+                    if (data.calc_mode === "sections") {
+                        btnSec.style.background = "var(--accent)";
+                        btnSec.style.color = "#000";
+                        btnSec.style.border = "none";
+
+                        btnBoom.style.background = "#2c2c2c";
+                        btnBoom.style.color = "#fff";
+                        btnBoom.style.border = "2px solid #444";
+                    } else {
+                        btnBoom.style.background = "var(--accent)";
+                        btnBoom.style.color = "#000";
+                        btnBoom.style.border = "none";
+
+                        btnSec.style.background = "#2c2c2c";
+                        btnSec.style.color = "#fff";
+                        btnSec.style.border = "2px solid #444";
+                    }
+
+                })
+                .catch(err => console.error("Помилка отримання списку карт:", err));
+        }
+
+        // 2. Сценарій ЗАГРУЗИТЬ НОВЫЙ з повною тач-валідацією
+        function handleFileSelect() {
+            const fileInput = document.getElementById("fileInput");
+            if (fileInput.files.length === 0) return;
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            fetch('/api/vra/upload', {
+                method: 'POST',
+                body: formData
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === "ok") {
+                        askUser(
+                            `<b>УСПІХ!</b><br>${data.message}<br><br>Активувати цю карту прямо зараз?`,
+                            'success',
+                            'АКТИВУВАТИ',
+                            () => { activateMap(data.filename); }
+                        );
+                        loadMapsList();
+                    } else {
+                        askUser(`<b>ПОМИЛКА ЗАВАНТАЖЕННЯ:</b><br>${data.message}`, 'danger', 'ПРИЙНЯТИ');
+                    }
+                    fileInput.value = "";
+                })
+                .catch(err => {
+                    askUser("<b>ОШИБКА СВЯЗИ</b><br>Не вдалося відправити файл на SBC.", "danger", "ОК");
+                    fileInput.value = "";
+                });
+        }
+
+        // 3. Сценарій ЗАГРУЗИТЬ СУЩЕСТВУЮЩИЙ (Активація карти)
+        function activateMap(filename) {
+            askUser(
+                `Завантажити карту завдання<br><b>"${filename}"</b><br>в оперативну пам'ять рушія?`,
+                'success',
+                'ВІДКРИТИ',
+                () => {
+                    fetch('/api/vra/activate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ filename: filename })
+                    })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.status === "ok") {
+                                loadMapsList();
+                                askUser(`Карта успішно активована!<br>Рушій диференційованого внесення запущено.`, 'info', 'ОК');
+                            } else {
+                                askUser(`Помилка активації:<br>${data.message}`, 'danger', 'ОК');
+                            }
+                        })
+                        .catch(err => askUser("Сервер не відповідає.", "danger", "ОК"));
+                }
+            );
+        }
+
+        // 4. Сценарій УДАЛИТЬ С КАРТЫ (Феншуйне вивантаження з ОЗУ)
+        function deactivateCurrentMap() {
+            askUser(
+                "<b>УВАГА!</b><br>Вивантажити карту завдань VRA?<br>Система перейде на базову суцільну норму внесення.",
+                "danger",
+                "ОТКЛЮЧИТЬ",
+                () => {
+                    fetch('/api/vra/deactivate', { method: 'POST' })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.status === "ok") {
+                                loadMapsList();
+                                askUser("Карту вивантажено.<br>Контролер перейшов на базовий режим.", "info", "ОК");
+                            }
+                        })
+                        .catch(err => askUser("Помилка зв'язку при відключенні карти", "danger", "ОК"));
+                }
+            );
+        }
+
+        // 5. Сценарій повного видалення файлу карти з флеш-пам'яті SBC
+        function deleteMapFile(filename) {
+            askUser(
+                `УВАГА!<br>Видалити файл карти <b>"${filename}"</b><br>безповоротно з пам'яті контролера?`,
+                'danger',
+                'ВИДАЛИТИ',
+                () => {
+                    fetch('/api/vra/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ filename: filename })
+                    })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.status === "ok") {
+                                loadMapsList(); // Оновлюємо таблицю, файл зникне
+                            } else {
+                                askUser(`Помилка видалення:<br>${data.message}`, 'danger', 'ОК');
+                            }
+                        })
+                        .catch(err => askUser("Сервер не відповідає.", "danger", "ОК"));
+                }
+            );
+        }
+        // Перемикач режимів на екрані (Локальний клік без перезапису диска)
+        function setCalcMode(mode) {
+            window.currentSelectedVraMode = mode;
+            const btnBoom = document.getElementById("modeBoomBtn");
+            const btnSec = document.getElementById("modeSectionsBtn");
+
+            if (mode === "sections") {
+                btnSec.style.background = "var(--accent)"; btnSec.style.color = "#000"; btnSec.style.border = "none";
+                btnBoom.style.background = "#2c2c2c"; btnBoom.style.color = "#fff"; btnBoom.style.border = "2px solid #444";
+            } else {
+                btnBoom.style.background = "var(--accent)"; btnBoom.style.color = "#000"; btnBoom.style.border = "none";
+                btnSec.style.background = "#2c2c2c"; btnSec.style.color = "#fff"; btnSec.style.border = "2px solid #444";
+            }
+        }
+
+        // Запис змінених параметрів у config.json через Flask
+        function saveVraHardwareConfig() {
+            //const rateDefault = document.getElementById("cfgRateDefault").value;
+            const rateDefault = window.vraDefaultRateValue;
+            const calcMode = window.currentSelectedVraMode || "boom";
+
+            fetch('/api/vra/save_config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    rate_default: rateDefault,
+                    calc_mode: calcMode
+                })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === "ok") {
+                        loadMapsList(); // Перечитуємо дані для впевненості
+                        toggleHardwarePanel(); // <-- АВТОМАТИЧНО ХОВАЄМО ПАНЕЛЬ ПІСЛЯ ЗБЕРЕЖЕННЯ
+                        askUser("<b>КОНФІГУРАЦІЮ ОНОВЛЕНО!</b><br>Апаратні налаштування успішно збережено в пам'ять RAM та файл config.json.", "info", "ОК");
+                    } else {
+                        askUser(`Помилка конфігуратора:<br>${data.message}`, "danger", "ОК");
+                    }
+                })
+                .catch(err => askUser("Помилка зв'язку при збереженні конфігурації", "danger", "ОК"));
+        }
+        // Перемикач видимості апаратної панелі конфігу
+        function toggleHardwarePanel() {
+            const panel = document.getElementById("hardwareConfigPanel");
+            const btn = document.getElementById("toggleHardwareBtn");
+
+            if (panel.style.display === "none") {
+                panel.style.display = "block";
+                // Підсвічуємо шестірню зеленим, коли меню відкрите
+                btn.style.borderColor = "var(--accent)";
+                btn.style.color = "var(--accent)";
+            } else {
+                panel.style.display = "none";
+                // Повертаємо сірий дефолтний колір, коли меню закрили
+                btn.style.borderColor = "#444";
+                btn.style.color = "#fff";
+            }
+        }
+        // Функція кліків по кнопках + / - для норми внесення
+        function changeVraDefault(step) {
+            window.vraDefaultRateValue += step;
+            // Захист: норма не може бути від'ємною
+            if (window.vraDefaultRateValue < 0) {
+                window.vraDefaultRateValue = 0;
+            }
+            // Оновлюємо цифру на екрані всередині спіннера
+            document.getElementById("cfgRateDefault").innerText = window.vraDefaultRateValue;
+        }
+
+
+    </script>
+</body>
+
+</html>

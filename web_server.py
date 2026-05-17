@@ -13,7 +13,9 @@ import pyproj
 import dump_manager
 import os
 import serial.tools.list_ports
-
+import datetime
+import re
+import geopandas as gpd
 
 # def meters_to_gps(sc, mx, my):
 #     if mx is None or my is None:
@@ -87,7 +89,8 @@ def create_app(state, sc):
                 "states": state.current_states,
                 "pos": [state.last_lat, state.last_lon],
                 "ab_gps": ab_gps_data,
-                "flow": state.flow_percents,  # [100, 120, 80, ...]
+                "flow_percents": state.flow_percents,  # [100, 120, 80, ...]
+                "vra_flows": state.vra_flows,
                 "speed": round(state.speed, 1),
                 "hdg": state.hdg,
                 "rtk": state.rtk,
@@ -292,6 +295,10 @@ def create_app(state, sc):
     def reset_area():
         try:
             # sc.reset_area() # Викликаємо правильний метод з очищенням об'єктів
+            # 2. Выгружаем карту предписаний из памяти запущенного движка
+            vra = getattr(state, 'vra_manager', None)
+            if vra:
+                vra.reset_manager()
             state.reset_flag = True  # Виставляємо прапорець для gps_loop
             return jsonify({"status": "ok", "message": "Area cleared"})
         except Exception as e:
@@ -556,5 +563,333 @@ def create_app(state, sc):
             ]
 
         return jsonify(ports_list), 200
+
+    # ********************************** VRA **********************************
+    # *************************************************************************
+    @app.route('/api/vra/map', methods=['GET'])
+    def get_vra_map():
+        vra = getattr(state, 'vra_manager', None)
+        if not vra:
+            return jsonify({"status": "no_map"})
+        return jsonify(vra.get_map_polygons())
+    # import os
+    # import datetime
+    # from flask import jsonify, request, render_code # або render_template, залежно від вашого імпорту
+    # from werkzeug.utils import secure_filename
+    # import geopandas as gpd
+
+    # Припустимо, цей код інтегрується в архітектуру вашого створення маршрутів
+    # state — це спільне сховище, де лежить state.vra_manager
+
+    @app.route('/vra_control')
+    def vra_control_page():
+        """Відображає нову сторінку керування картами завдань (vra_maps.html)"""
+        return render_template('vra_maps.html') # Саму сторінку зробимо наступним кроком
+
+
+    # @app.route('/api/vra/list', methods=['GET'])
+    # def get_vra_list():
+    #     """
+    #     1. СКАНУВАННЯ ПАПКИ geodata.
+    #     Повертає список усіх ZIP-карт та показує, яка з них зараз активна в пам'яті.
+    #     """
+    #     vra = getattr(state, 'vra_manager', None)
+    #     #active_file = state.get("active_vra_file", None) if state else None
+    #     active_file = getattr(state, "active_vra_file", None)
+        
+    #     # Якщо карти в пам'яті фізично немає (була вивантажена), скидаємо статус активності
+    #     if vra and vra.rate_data is None:
+    #         active_file = None
+    #         #if state: state.set("active_vra_file", None)
+    #         if state: state.active_vra_file = None
+
+    #     upload_dir = os.path.join(os.getcwd(), "geodata")
+    #     if not os.path.exists(upload_dir):
+    #         os.makedirs(upload_dir, exist_ok=True)
+
+    #     # Збираємо всі .zip файли в папці
+    #     files = [f for f in os.listdir(upload_dir) if f.endswith('.zip')]
+        
+    #     # Формуємо красиву таблицю для фронтенду
+    #     maps_list = []
+    #     for f in files:
+    #         file_path = os.path.join(upload_dir, f)
+    #         stat = os.stat(file_path)
+    #         # Отримуємо дату створення файлу для виводу на екран
+    #         created_time = datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%d.%m.%Y %H:%M')
+            
+    #         maps_list.append({
+    #             "filename": f,
+    #             "created": created_time,
+    #             "is_active": (f == active_file)
+    #         })
+
+    #     return jsonify({
+    #         "status": "ok",
+    #         "active_file": active_file,
+    #         "rate_default": vra.rate_default if vra else 100.0,
+    #         "maps": maps_list
+    #     })
+
+    @app.route('/api/vra/list', methods=['GET'])
+    def get_vra_list():
+        vra = getattr(state, 'vra_manager', None)
+        active_file = getattr(state, "active_vra_file", None)
+        
+        # Витягуємо свіжі залізні налаштування з config.json
+        cfg = config_manager.load_config()
+
+        upload_dir = os.path.join(os.getcwd(), "geodata")
+        os.makedirs(upload_dir, exist_ok=True)
+        files = [f for f in os.listdir(upload_dir) if f.endswith('.zip')]
+        
+        maps_list = []
+        for f in files:
+            file_path = os.path.join(upload_dir, f)
+            stat = os.stat(file_path)
+            created_time = datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%d.%m.%Y %H:%M')
+            maps_list.append({
+                "filename": f,
+                "created": created_time,
+                "is_active": (f == active_file)
+            })
+
+        return jsonify({
+            "status": "ok",
+            "active_file": active_file,
+            # Передаємо актуальні дані з конфігу у фронтенд
+            "rate_default": cfg.get("VRA_RATE_DEFAULT", 0.0),
+            "calc_mode": cfg.get("VRA_CALC_MODE", "boom"),
+            "maps": maps_list
+        })
+    
+    @app.route('/api/vra/save_config', methods=['POST'])
+    def save_vra_config():
+        """
+        Приймає залізні налаштування VRA з фронтенду,
+        оновлює RAM-кеш та синхронізує файл config.json на диску.
+        """
+        data = request.get_json() or {}
+        
+        rate_default = data.get("rate_default")
+        calc_mode = data.get("calc_mode")
+        
+        if calc_mode not in ["boom", "sections"]:
+            return jsonify({"status": "error", "message": "Неверный режим вычислений"}), 400
+
+        try:
+            # Збираємо пачку для оновлення
+            new_cfg_patch = {
+                "VRA_RATE_DEFAULT": float(rate_default) if rate_default is not None else 0.0,
+                "VRA_CALC_MODE": calc_mode
+            }
+            
+            # Викликаємо твій фірмовий збережувач конфігу
+            config_manager.save_config(new_cfg_patch)
+            
+            # Одразу синхронізуємо дефолтне значення в нашому менеджері карт, якщо він запущений
+            vra = getattr(state, 'vra_manager', None)
+            if vra:
+                vra.rate_default = new_cfg_patch["VRA_RATE_DEFAULT"]
+
+            return jsonify({"status": "ok", "message": "Налаштування заліза успішно збережені!"})
+        except Exception as e:
+            return jsonify({"status": "error", "message": f"Помилка конфігуратора: {str(e)}"}), 500
+
+    @app.route('/api/vra/upload', methods=['POST'])
+    def upload_new_vra_map():
+        """
+        2. ЗАВАНТАЖИТИ НОВИЙ (Валідація + Штамп дати/часу при збігу імен)
+        Приймає файл, перевіряє на "адекватність", копіює, але НЕ активує відразу.
+        """
+        if 'file' not in request.files:
+            return jsonify({"status": "error", "message": "Файл не знайдено в запиті"}), 400
+            
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"status": "error", "message": "Файл не обрано"}), 400
+            
+        if not file.filename.endswith('.zip'):
+            return jsonify({"status": "error", "message": "Дозволені лише .zip архіви Shapefile"}), 400
+
+        upload_dir = os.path.join(os.getcwd(), "geodata")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # Очищаємо ім'я файлу від небезпечних системних символів
+        #orig_filename = secure_filename(file.filename)
+        # Безопасная очистка имени файла на чистом Python (вместо secure_filename)
+        filename_cleaned = file.filename.replace(" ", "_") # Меняем пробелы на подчёркивания
+        orig_filename = re.sub(r'[^a-zA-Z0-9_.-]', '', filename_cleaned) # Удаляем спецсимволы
+        # Если после очистки имя стало пустым, даем дефолтное
+        if not orig_filename or orig_filename in ['.zip', '..zip']:
+            orig_filename = "uploaded_map.zip"
+
+        name_part, ext_part = os.path.splitext(orig_filename)
+
+        # ПЕРЕВІРКА НА ЗБІГ ІМЕН: якщо файл існує, додаємо штамп ДДММГГ_ЧЧММ [☍]
+        target_filename = orig_filename
+        name_was_changed = False
+        if os.path.exists(os.path.join(upload_dir, target_filename)):
+            timestamp = datetime.datetime.now().strftime("%d%m%y_%H%M")
+            target_filename = f"{name_part}_{timestamp}{ext_part}"
+            name_was_changed = True
+
+        temp_path = os.path.join(upload_dir, f"temp_upload_{target_filename}")
+        final_path = os.path.join(upload_dir, target_filename)
+
+        try:
+            # Зберігаємо тимчасово на диск для перевірки валідатором geopandas
+            file.save(temp_path)
+            
+            # Перевірка "адекватності" (Валідація)
+            uri = f"zip://{temp_path.replace(os.sep, '/')}"
+            test_df = gpd.read_file(uri)
+            
+            # Шукаємо нашу головну колонку
+            vra = getattr(state, 'vra_manager', None)
+            rate_col = vra.rate_column if vra else 'rate'
+            
+            if rate_col not in test_df.columns:
+                if os.path.exists(temp_path): os.remove(temp_path)
+                return jsonify({
+                    "status": "error", 
+                    "message": f"Валідація провалена! У файлі відсутня обов'язкова колонка норми внеску '{rate_col}'."
+                }), 422
+
+            # Перейменовуємо тимчасовий файл у фінальний робочий архів
+            os.rename(temp_path, final_path)
+            
+            msg = f"Файл успішно збережено як {target_filename}."
+            if name_was_changed:
+                msg = f"Увага! Таке ім'я вже було зайняте. Файл автоматично перейменовано у: {target_filename}"
+
+            return jsonify({
+                "status": "ok",
+                "message": msg,
+                "filename": target_filename
+            }), 200
+
+        except Exception as e:
+            # Якщо geopandas впав — файл бітий, видаляємо сміття
+            if os.path.exists(temp_path): os.remove(temp_path)
+            return jsonify({
+                "status": "error", 
+                "message": f"Помилка читання архіву! Перевірте струкруту Shapefile. Деталі: {str(e)}"
+            }), 400
+
+
+    @app.route('/api/vra/activate', methods=['POST'])
+    def activate_vra_map():
+        """
+        3. ЗАГРУЗИТЬ СУЩЕСТВУЮЩИЙ (Активація карти з архіву папки geodata)
+        """
+        data = request.get_json() or {}
+        filename = data.get("filename")
+        
+        if not filename:
+            return jsonify({"status": "error", "message": "Не вказано ім'я файлу"}), 400
+
+        vra = getattr(state, 'vra_manager', None)
+        if vra:
+            # Атомарно та безпечно завантажуємо карту в пам'яті рушія
+            success = vra.activate_existing_map(filename)
+            if success:
+                # Записуємо в state для DumpManager, щоб зберегти сесію
+                #if state: state.set("active_vra_file", filename)
+                if state: state.active_vra_file = filename
+                return jsonify({"status": "ok", "message": f"Карта {filename} активована в роботу!"})
+                
+        return jsonify({"status": "error", "message": "Не вдалося активувати карту"}), 500
+
+
+    @app.route('/api/vra/deactivate', methods=['POST'])
+    def deactivate_vra_map():
+        """
+        4. ОТКЛЮЧИТЬ КАРТУ (Феншуйне вивантаження з ОЗУ)
+        """
+        vra = getattr(state, 'vra_manager', None)
+        if vra:
+            vra.deactivate_map()
+            #if state: state.set("active_vra_file", None) # Очищаємо сесію
+            if state: state.active_vra_file = None
+            return jsonify({"status": "ok", "message": "Карту вивантажено. Система перейшла на базову норму."})
+            
+        return jsonify({"status": "error", "message": "Менеджер карт не ініціалізовано"}), 500
+    
+    @app.route('/api/vra/delete', methods=['POST'])
+    def delete_vra_map_file():
+        """
+        5. ВИДАЛЕННЯ ФАЙЛУ З ДИСКА.
+        Стирає ZIP-архив з папки geodata.
+        """
+        data = request.get_json() or {}
+        filename = data.get("filename")
+        
+        if not filename:
+            return jsonify({"status": "error", "message": "Не вказано ім'я файлу"}), 400
+
+        # Захист: не дозволяємо видалити карту, яка зараз завантажена в ОЗУ
+        active_file = getattr(state, "active_vra_file", None)
+        if filename == active_file:
+            return jsonify({"status": "error", "message": "Неможливо видалити карту, яка зараз працює в системі! Спочатку відключіть її."}), 422
+
+        file_path = os.path.join(os.getcwd(), "geodata", filename)
+        
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"[VRA INFO]: Файл {filename} фізично видалено з диска.")
+                return jsonify({"status": "ok", "message": "Файл успішно видалено."})
+            else:
+                return jsonify({"status": "error", "message": "Файл не знайдено на диску."}), 444
+        except Exception as e:
+            return jsonify({"status": "error", "message": f"Помилка доступу до диска: {str(e)}"}), 500
+
+
+
+    # @app.route('/api/vra/upload', methods=['POST'])
+    # def upload_vra_map():
+    #     """
+    #     Принимает ZIP-архив с Shapefile, сохраняет его в папку geodata/
+    #     и мгновенно обновляет карту в работающем движке.
+    #     """
+    #     if 'file' not in request.files:
+    #         return jsonify({"error": "Файл не найден в запросе"}), 400
+            
+    #     file = request.files['file']
+    #     if file.filename == '':
+    #         return jsonify({"error": "Файл не выбран"}), 400
+            
+    #     if file and file.filename.endswith('.zip'):
+    #         filename = "test_Shapefile.zip" # Жестко перезаписываем рабочий файл карты
+            
+    #         # Путь к папке geodata в корне проекта
+    #         upload_dir = os.path.join(os.getcwd(), "geodata")
+    #         os.makedirs(upload_dir, exist_ok=True) # Создаем папку, если её нет
+            
+    #         file_path = os.path.join(upload_dir, filename)
+    #         file.save(file_path)
+            
+    #         # Даем команду менеджеру мгновенно перечитать карту в памяти
+    #         vra = getattr(state, 'vra_manager', None)
+    #         if vra:
+    #             success = vra.load_map_from_zip(filename)
+    #             if success:
+    #                 return jsonify({"message": "Карта успешно загружена и активирована!"}), 200
+    #             else:
+    #                 return jsonify({"error": "Архив загружен, но Shapefile внутри поврежден или неверного формата"}), 422
+                    
+    #         return jsonify({"error": "Системная ошибка: VRAManager не инициализирован"}), 500
+            
+    #     return jsonify({"error": "Допускаются только файлы .zip архивов Shapefile"}), 400
+
+
+
+
+
+
+
+
+
 
     return app
