@@ -11,3 +11,4 @@ install.txt
 **/.pio/
 **/.vscode/
 hardware/
+.VSCodeCounter/
