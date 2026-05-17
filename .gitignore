@@ -5,6 +5,7 @@ templates/old/
 static/css/old/
 static/js/old/
 history.json
+coverage.wkb
 install.txt
 # Игнорировать папки во всех поддиректориях проекта
 **/.pio/
