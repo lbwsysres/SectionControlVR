@@ -318,7 +318,7 @@ if __name__ == "__main__":
     dump_manager.load_session_dump(state, sc)
 
     # Инициализируем менеджер карт-предписаний
-    vra_manager = VRAManager()
+    vra_manager = VRAManager(cfg)
     # Загружаем карту из папки корень/geodata/test_Shapefile.zip
     vra_manager.load_map_from_zip("test_Shapefile.zip")
     state.vra_manager = vra_manager

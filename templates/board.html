@@ -135,24 +135,8 @@
             </div>
         </div>
     </div>
-
-    <!-- ***************************************************************************************** -->
-    <!-- Панель эмулятора -->
-    <!-- link rel="stylesheet" href="{{ url_for('static', filename='css/emulator.css') }}">
-    <div id="emulator" class="emu-panel">
-        <div style="margin-bottom: 0px; text-align: center;">
-            <button id="emu_status_btn" class="emu-btn-status" onclick="toggleEmu()">OFF</button>
-        </div>
-        <div class="emu-joy-container">
-            <div id="joy_zone" class="emu-joy-zone">
-                <div class="emu-axis-v"></div>
-                <div class="emu-axis-h"></div>
-                <div id="joy_stick" class="emu-joy-stick"></div>
-            </div>
-        </div>
-    </div>
-    <script src="{{ url_for('static', filename='js/emulator.js') }}"></script -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/emulator.css') }}">
+
     <div id="emulator" class="emu-panel">
         <div class="emu-joy-container">
             <div id="joy_zone" class="emu-joy-zone">
@@ -165,32 +149,10 @@
     <script src="{{ url_for('static', filename='js/emulator.js') }}"></script>
 
     <!-- ***************************************************************************************** -->
-
-    <!-- Компас -->
-    <!-- <svg id="compass" viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r="45" fill="rgba(0,0,0,0.5)" stroke="#444" stroke-width="2" />
-        <text x="50" y="20" fill="white" font-size="12" text-anchor="middle">N</text>
-        <path d="M50 25 L60 75 L50 65 L40 75 Z" fill="#e74c3c" id="needle" />
-    </svg> -->
-
     <!-- ВЕРХНИЙ ЛЕВЫЙ УГОЛ: Инфо-панель -->
     <div class="top-left-panel">
         <div class="panel-main-row">
-            <!-- Левая часть: Площадь -->
-            <!-- <div class="area-block">
-                <span id="area">0.0000</span> <small>ha</small>
-            </div> -->
 
-            <!-- Правая часть: Скорость и GPS друг под другом -->
-            <!-- <div class="right-info">
-                <div class="stat-item speed">
-                    <span id="spd">0.0</span> <small>km/h</small>
-                </div>
-                <div class="stat-item gps">
-                    <div id="rtk_dot" class="dot"></div>
-                    <span id="rtk_val">SINGLE</span>
-                </div>
-            </div> -->
         </div>
         <div class="diag-panel">
             <!-- КОЛОНКА 1: GPS -->
@@ -325,18 +287,12 @@
                 </path>
             </svg>
         </button>
-        
+
         <button class="tool-btn" onclick="location.href='/vra_control'" title="Керування картами VRA"
             style="margin-top: 8px;">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <!-- Малюємо контур складеної карти поля -->
-                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
-                <line x1="9" y1="3" x2="9" y2="18"></line>
-                <line x1="15" y1="6" x2="15" y2="21"></line>
-
-                <!-- Акуратне технологічне клеймо VRA по центру іконки -->
-                <text x="12" y="14" font-family="sans-serif" font-size="5px" font-weight="900" fill="currentColor"
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                <!-- Крупная, отлично читаемая надпись VRA строго по центру -->
+                <text x="12" y="16.5" font-family="sans-serif" font-size="10px" font-weight="900" fill="#2ecc71"
                     stroke="none" text-anchor="middle">VRA</text>
             </svg>
         </button>
@@ -472,7 +428,7 @@
         let isVraMapRendered = false;
         let isVraLoading = false; // Прапорець-запобіжник від подвійного запуску
 
-        function initVraBuffer() {
+        function initVraBuffer_1() {
             // 1. Якщо карта вже малюється або вже намальована — миттєво виходимо
             if (isVraMapRendered || isVraLoading) return;
 
@@ -564,6 +520,113 @@
                 .catch(err => {
                     console.error("Помилка генерації VRA буфера:", err);
                     isVraLoading = false; // У разі помилки мережі даємо шанс спробувати знову
+                });
+        }
+
+        function initVraBuffer() {
+            // 1. Перевірка статусів
+            if (isVraMapRendered || isVraLoading) return;
+
+            // 2. Очікування координат
+            if (refLat === null || refLon === null) {
+                setTimeout(initVraBuffer, 1000);
+                return;
+            }
+
+            // 3. Блокування паралельних викликів
+            isVraLoading = true;
+            console.log("[VRA] Знайдено refLat/refLon. Починаємо завантаження з Flask...");
+
+            // Оптимізація: виносимо незмінний коефіцієнт проекції (Cos для поточної широти)
+            const cosLat = Math.cos(refLat * Math.PI / 180);
+            const metersPerDegree = 111320;
+
+            fetch('/api/vra/map')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status !== "success") {
+                        console.log("[VRA] Карта на сервері відсутня.");
+                        askUser("Карта на сервері відсутня.", "danger", "ПРИНЯТЬ", () => { });
+                        isVraLoading = false;
+                        return;
+                    }
+
+                    // Перевірка наявності даних, щоб уникнути crash в JS
+                    if (!data.polygons || !Array.isArray(data.polygons)) {
+                        console.error("[VRA] Дані полігонів пошкоджені або відсутні.");
+                        askUser("Дані полігонів пошкоджені або відсутні.", "danger", "ПРИНЯТЬ", () => { });
+                        isVraLoading = false;
+                        return;
+                    }
+
+                    const minR = data.min_rate;
+                    const maxR = data.max_rate;
+                    const rateRange = maxR - minR;
+
+                    // Оптимізована функція проекції (використовує константи з замикання)
+                    function projectGeoToBuffer(lat, lon) {
+                        const gx = (lon - refLon) * metersPerDegree * cosLat;
+                        const gy = (lat - refLat) * metersPerDegree;
+                        return {
+                            x: Math.round(gx * 10 + fCenterX),
+                            y: Math.round(-gy * 10 + fCenterY)
+                        };
+                    }
+
+                    function getColorForRate(rate) {
+                        if (rate <= minR) return "rgba(46, 204, 113, 0.35)";
+                        if (rate >= maxR) return "rgba(231, 76, 60, 0.35)";
+                        if (rateRange <= 0) return "rgba(46, 204, 113, 0.35)"; // Захист від ділення на нуль
+
+                        const percent = (rate - minR) / rateRange;
+                        if (percent < 0.5) {
+                            const factor = percent * 2;
+                            const r = Math.round(46 + (241 - 46) * factor);
+                            const g = Math.round(204 + (196 - 204) * factor);
+                            const b = Math.round(113 + (15 - 113) * factor);
+                            return `rgba(${r}, ${g}, ${b}, 0.35)`;
+                        } else {
+                            const factor = (percent - 0.5) * 2;
+                            const r = Math.round(241 + (231 - 241) * factor);
+                            const g = Math.round(196 + (76 - 196) * factor);
+                            const b = Math.round(15 + (60 - 15) * factor);
+                            return `rgba(${r}, ${g}, ${b}, 0.35)`;
+                        }
+                    }
+
+                    // Налаштування обведення меж один раз перед циклом (пришвидшує рендер)
+                    vCtx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+                    vCtx.lineWidth = 1;
+
+                    // Отрисовка подложки полігонів
+                    data.polygons.forEach(poly => {
+                        if (!poly.points || poly.points.length < 3) return;
+
+                        vCtx.fillStyle = getColorForRate(poly.rate);
+                        vCtx.beginPath();
+
+                        // Рендеринг точок контуру
+                        const startPt = projectGeoToBuffer(poly.points[0][0], poly.points[0][1]);
+                        vCtx.moveTo(startPt.x, startPt.y);
+
+                        for (let i = 1; i < poly.points.length; i++) {
+                            const pt = projectGeoToBuffer(poly.points[i][0], poly.points[i][1]);
+                            vCtx.lineTo(pt.x, pt.y);
+                        }
+
+                        vCtx.closePath();
+                        vCtx.fill();
+                        vCtx.stroke();
+                    });
+
+                    isVraMapRendered = true;
+                    isVraLoading = false; // Обов'язково знімаємо статус завантаження після успіху
+                    console.log("[VRA BUFFER] Карта успішно зарендерена в буфер.");
+                    //askUser("Дані полігонів пошкоджені або відсутні.", "danger", "ПРИНЯТЬ", () => { });
+                })
+                .catch(err => {
+                    console.error("Помилка генерації VRA буфера:", err);
+                    isVraLoading = false; // Звільняємо тригер для повторних спроб у разі помилки мережі
                 });
         }
 
@@ -1141,7 +1204,7 @@
                             }
                         });
                     }
-                    
+
                     if (d.vra_flows && d.vra_flows.length > 0) {
                         d.vra_flows.forEach((val, i) => {
                             const vraEl = document.getElementById(`vra_flows_${i}`);
@@ -1152,7 +1215,7 @@
                             }
                         });
                     }
-                    
+
                     // *********************************************************************************
                     if (d.pos && d.pos.length >= 2) {
                         const latVal = d.pos[0];
