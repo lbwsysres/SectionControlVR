@@ -46,6 +46,10 @@ class SharedState:
         self.gps_mode = 0  # 0 = хана, 1 = ОК, 2 = так собі, 3 = стоїмо на місці
         self.gps_mode_text = "CRITICAL: Initializing..."  # Текстовий опис для логів
 
+        self.esp_current_flow = 0.0  # Реальна витрата рідини (л/хв)
+        self.esp_pressure = 0.0      # Поточний тиск у системі (бар)
+        self.esp_pwm = 0             # Поточна потужність насоса (0..1023)
+
 
 # Ініціалізація глобальних об'єктів (Singletons)
 state = SharedState()

@@ -1,0 +1,184 @@
+#include <Arduino.h>
+#include <ArduinoJson.h> // Підключаємо парсер JSON для пакетів
+#include "DebugLog.h"
+#include "ConfigManager.h"
+#include "NetworkManager.h"
+#include "InfoManager.h"
+#include "VraUdpLink.h"
+#include "BoomManager.h"  // <-- Підключаємо менеджер штанги
+
+ConfigManager* configManager = nullptr;
+VraNetworkManager* networkManager = nullptr;
+InfoManager* infoManager = nullptr;
+CommunicationLink* commLink = nullptr;
+BoomManager* boomManager = nullptr; // <-- Створюємо вказівник
+
+void coreZeroNetworkTask(void *pvParameters) {
+    DBG_OUTPUT_PORT.println(F("[CORE 0] All Infrastructure Stack spinning up..."));
+    
+    networkManager->begin();
+    infoManager->begin();
+    boomManager->begin(); // <-- Запуск ініціалізації клапанів
+    
+    commLink->begin(5005);
+
+    String incomingJson = "";
+    JsonDocument doc; // Резервуємо буфер під парсинг вхідного JSON пакета
+
+    for(;;) {
+        // 1. Опитування стану Wi-Fi підключення
+        networkManager->checkConnection();
+        
+        // Перевірка на сценарій "Ой все пропало"
+        if (networkManager->isEmergency()) {
+            boomManager->shutDownAll(); // Автоматичний Fail-Safe захист! Закриваємо заслінки на ходу!
+        }
+        
+        // 2. Слухаємо ефір сокета UDP
+        if (commLink->readPacket(incomingJson)) {
+            // Харчуємо собаку зв'язку
+            networkManager->updateHeartbeat();
+            
+            // Парсимо прилетівший JSON-пакет за стандартом ArduinoJson v7
+            DeserializationError error = deserializeJson(doc, incomingJson);
+            
+            if (!error) {
+                // Перевіряємо, чи є в пакеті наш динамічний масив "sections"
+                if (doc.containsKey("sections") && doc["sections"].is<JsonArray>()) {
+                    JsonArray sections = doc["sections"].as<JsonArray>();
+                    
+                    // Крутимо динамічний цикл по всіх присланих секціях
+                    for (JsonObject sec : sections) {
+                        int id = sec["id"] | 0;
+                        int st = sec["st"] | 0; // Стан: 1 - On, 0 - Off
+                        
+                        // Віддаємо команду на залізо (MOSFET або CAN)
+                        if (id > 0) {
+                            boomManager->setSectionState(id, st);
+                        }
+                    }
+                }
+            }
+            
+            // Відправляємо швидкий ехо-звіт назад на Python
+            commLink->sendPacket("{\"status\":\"ESP_OK\"}");
+        }
+
+        // 3. Крутимо світлодіодну індикацію статусу
+        infoManager->update();
+        
+        vTaskDelay(pdMS_TO_TICKS(10)); // Швидкий такт 10 мс
+    }
+}
+
+void setup()
+{
+    DBG_OUTPUT_PORT.begin(115200);
+    delay(1500); 
+    
+    DBG_OUTPUT_PORT.println(F("\n\n===================================="));
+    DBG_OUTPUT_PORT.println(F("[SYSTEM] VRA Hardware Booted Successfully!"));
+    
+    configManager = new ConfigManager();
+    configManager->begin();
+
+    networkManager = new VraNetworkManager(configManager); 
+    infoManager = new InfoManager(networkManager);
+    boomManager = new BoomManager(configManager); // <-- Ініціалізуємо об'єкт штанги
+    
+    commLink = new VraUdpLink(); 
+
+    xTaskCreatePinnedToCore(
+        coreZeroNetworkTask,
+        "NetworkAndInfoTask",
+        8192,
+        NULL,
+        1,
+        NULL,
+        0
+    );
+}
+
+void loop() {
+    vTaskDelay(pdMS_TO_TICKS(1000));
+}
+
+
+
+// // #define DBG_OUTPUT_PORT Serial0
+// #include <Arduino.h>
+// #include "ConfigManager.h"
+// #include "NetworkManager.h"
+// #include "InfoManager.h"
+// #include "VraUdpLink.h"
+// #include "BoomManager.h"
+// #include "DebugLog.h"
+
+// ConfigManager *configManager = nullptr;
+// VraNetworkManager *networkManager = nullptr;
+// InfoManager *infoManager = nullptr;
+// CommunicationLink *commLink = nullptr;
+// BoomManager* boomManager = nullptr;
+// void coreZeroNetworkTask(void *pvParameters)
+// {
+//     DBG_OUTPUT_PORT.println(F("[CORE 0] Network Stack spinning up..."));
+
+//     networkManager->begin();
+//     infoManager->begin();
+//     boomManager->begin();
+
+
+//     commLink->begin(5005);
+//     String incomingJson = "";
+//     for (;;)
+//     {
+//         networkManager->checkConnection();
+//         // 2. Слухаємо ефір сокета UDP
+//         if (commLink->readPacket(incomingJson))
+//         {
+//             // МИТТЄВО ХАРЧУЄМО СОБАКУ ЗВ'ЯЗКУ! Пакет прийшов — ми живі!
+//             networkManager->updateHeartbeat();
+
+//             // Сюди ми незабаром додамо парсинг нашого розширеного JSON
+//             // і відправку даних у чергу (Queue) для Ядра 1.
+//             // Пока просто виведемо факт прийому для тесту:
+//             // DBG_OUTPUT_PORT.println(incomingJson);
+
+//             // Відправляємо тестовий ехо-звіт назад на Python
+//             commLink->sendPacket("{\"status\":\"ESP_OK\"}");
+//         }
+//         infoManager->update();
+//         vTaskDelay(pdMS_TO_TICKS(50));
+//     }
+// }
+
+// void setup()
+// {
+//     DBG_OUTPUT_PORT.begin(115200);
+//     Serial.begin(115200);
+//     delay(1500);
+
+//     DBG_OUTPUT_PORT.println(F("\n\n===================================="));
+//     DBG_OUTPUT_PORT.println(F("[SYSTEM] VRA Hardware Booted Successfully!"));
+
+//     configManager = new ConfigManager();
+//     configManager->begin();
+
+//     // Було: networkManager = new NetworkManager(configManager);
+//     networkManager = new VraNetworkManager(configManager);
+//     infoManager = new InfoManager(networkManager);
+//     commLink = new VraUdpLink(); 
+//     xTaskCreatePinnedToCore(
+//         coreZeroNetworkTask,
+//         "NetworkTask",
+//         8192,
+//         NULL,
+//         1,
+//         NULL,
+//         0);
+// }
+
+// void loop()
+// {
+//     vTaskDelay(pdMS_TO_TICKS(1000));
+// }

@@ -121,6 +121,10 @@ function updateDiagnosticPanel() {
             const boardSlash = document.getElementById('board_slash');
             const txtBoardStatus = document.getElementById('txt_board_status');
             const t1 = document.getElementById('board_template_1');
+            const txtEsp_current_flow = document.getElementById('txt_esp_current_flow');
+            const txtEsp_pressure = document.getElementById('txt_esp_pressure');
+            const txtEsp_pwm = document.getElementById('txt_esp_pwm');
+            
 
             if (data.board_connected) {
                 svgBoard.setAttribute('stroke', '#2ecc71');
@@ -129,6 +133,14 @@ function updateDiagnosticPanel() {
                 txtBoardStatus.style.color = "#2ecc71";
                 t1.innerText = "Вольтаж: —";
                 t1.style.color = "#888";
+
+                txtEsp_current_flow.innerText = `Поток: ${data.esp_current_flow}`;
+                txtEsp_pressure.innerText = `Давление: ${data.esp_pressure}`;
+                txtEsp_pwm.innerText = `ШИМ: ${data.esp_pwm}`;
+                txtEsp_current_flow.style.color = "#888";
+                txtEsp_pressure.style.color = "#888";
+                txtEsp_pwm.style.color = "#888";
+
             } else {
                 svgBoard.setAttribute('stroke', '#e74c3c');
                 boardSlash.style.opacity = '1';
@@ -136,6 +148,14 @@ function updateDiagnosticPanel() {
                 txtBoardStatus.style.color = "#e74c3c";
                 t1.innerText = "Параметр: —";
                 t1.style.color = "#444";
+
+                txtEsp_current_flow.innerText = "Поток: - ";
+                txtEsp_pressure.innerText = "Давление: - ";
+                txtEsp_pwm.innerText = "ШИМ: - ";
+
+                txtEsp_current_flow.style.color = "#444";
+                txtEsp_pressure.style.color = "#444";
+                txtEsp_pwm.style.color = "#444";
             }
         })
         .catch(err => {
@@ -148,6 +168,9 @@ function updateDiagnosticPanel() {
             document.getElementById('txt_board_status').innerText = "OFF LINE";
             document.getElementById('txt_gps_speed').innerText = "-.- km/h";
             document.getElementById('txtcurrent_file').innerText = "NONE";
+            document.getElementById('txt_esp_current_flow').innerText = "Поток: ? ";
+            document.getElementById('txt_esp_pressure').innerText = "Давление: ? ";
+            document.getElementById('txt_esp_pwm').innerText = "ШИМ: ? ";
         });
 }
 

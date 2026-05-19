@@ -41,6 +41,9 @@ DEFAULT_CONFIG = {
     # Дописуємо в DEFAULT_CONFIG всередині config_manager.py
     "VRA_RATE_DEFAULT": 0.0,  # Твоя захисна норма 0.0 за замовчуванням
     "VRA_CALC_MODE": "boom",  # Режим обчислення: "boom" (вся штанга) або "sections" (посекційно)
+    "CONTROL_BOARD_TYPE": "udp",
+    "CONTROL_BOARD_PORT_NUM": 5005
+
 }
 
 

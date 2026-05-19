@@ -1,14 +1,7 @@
 {
     "UDP_PORT": 9999,
     "SECTION_WIDTHS": [
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0
+        6.0
     ],
     "DRAW_OFF_SECTIONS": true,
     "LOOK_AHEAD": 0.6,
@@ -17,13 +10,6 @@
     "OFFSET_BACK": 0.0,
     "MASTER_SW": true,
     "SECTION_MODES": [
-        "AUTO",
-        "AUTO",
-        "AUTO",
-        "AUTO",
-        "AUTO",
-        "AUTO",
-        "AUTO",
         "AUTO"
     ],
     "SAVE_FILE": "coverage.wkb",
@@ -46,10 +32,12 @@
     "CONTROL_BOARD_PORT": "COM79",
     "CONTROL_BOARD_PORT_SPEED": 115200,
     "CONTROL_BOARD_TIME_RECONNECT": 5000,
-    "CONTROL_BOARD_ENABLE": false,
+    "CONTROL_BOARD_ENABLE": true,
     "SMART_TURN_ENABLED": false,
     "LOOK_AHEAD_ON_TIME": 0.8,
     "LOOK_AHEAD_OFF_TIME": 0.3,
-    "VRA_RATE_DEFAULT": 80.0,
-    "VRA_CALC_MODE": "sections"
+    "VRA_RATE_DEFAULT": 100.0,
+    "VRA_CALC_MODE": "sections",
+    "CONTROL_BOARD_TYPE": "udp",
+    "CONTROL_BOARD_PORT_NUM": 5005
 }
