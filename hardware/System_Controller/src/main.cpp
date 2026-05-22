@@ -47,6 +47,12 @@ void coreZeroNetworkTask(void *pvParameters)
             networkManager->updateHeartbeat();
             DeserializationError error = deserializeJson(doc, incomingJson);
 
+            // ПЕРЕВІРКА: Якщо запущено калібрування з веб-сайту — повністю ігноруємо цей пакет!
+            if (flowController != nullptr && flowController->isInAnyCalibMode())
+            {
+                vTaskDelay(pdMS_TO_TICKS(5)); // <--- Даємо ядру 0 дихнути 5 мс, щоб не тригерувати Watchdog
+                continue;
+            }
             if (!error)
             {
                 int activeCount = 0;
@@ -135,15 +141,16 @@ void setup()
     configManager = new ConfigManager();
     configManager->begin();
 
-
-    DBG_OUTPUT_PORT.println(F("\n\n===================================="));
     networkManager = new VraNetworkManager(configManager);
     infoManager = new InfoManager(networkManager);
     boomManager = new BoomManager(configManager);
-    flowController = new FlowController(configManager, networkManager); // <-- Ініціалізація ПІД
+    // flowController = new FlowController(configManager, networkManager); // <-- Ініціалізація ПІД
+    flowController = new FlowController(configManager, networkManager, boomManager);
+    networkManager->setFlowController(flowController);
 
     commLink = new VraUdpLink();
 
+    DBG_OUTPUT_PORT.println(F("\n\n===================================="));
     // Запуск Мережевого Ядра 0
     xTaskCreatePinnedToCore(coreZeroNetworkTask, "NetworkTask", 8192, NULL, 1, NULL, 0);
 

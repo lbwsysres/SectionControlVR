@@ -17,6 +17,7 @@ private:
     Adafruit_PWMServoDriver _pca; // Об'єкт для роботи з платою PCA9685
     int _totalSections;
     int _hardwareMode; // 0 - Прості клапани (MOSFET/Реле), 1 - Сервоприводи DS5160
+    int _sectionStates[16];
 
 public:
     BoomManager(ConfigManager* configMgr);

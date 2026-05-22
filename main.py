@@ -324,7 +324,7 @@ if __name__ == "__main__":
     # Инициализируем менеджер карт-предписаний
     vra_manager = VRAManager(cfg)
     # Загружаем карту из папки корень/geodata/test_Shapefile.zip
-    vra_manager.load_map_from_zip("test_Shapefile.zip")
+    #vra_manager.load_map_from_zip("test_Shapefile.zip")
     state.vra_manager = vra_manager
     # 3. АВТОЗАГРУЗКА: Проверяем, был ли в прошлой сессии активный файл карты
     # ИСПРАВЛЕНО: Читаем атрибут напрямую из SharedState с дефолтом None

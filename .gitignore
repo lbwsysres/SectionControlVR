@@ -11,6 +11,4 @@ install.txt
 **/.pio/
 **/.vscode/
 hardware/Panel_7_16/
-hardware/
-hardware/System_Controller/data/
 .VSCodeCounter/

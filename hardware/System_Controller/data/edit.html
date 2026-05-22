@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>ESP32 Local IDE</title>
+    <style>
+        body { margin: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; background-color: #1e1e1e; color: #fff; }
+        #toolbar { background: #2d2d2d; padding: 10px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #3f3f3f; }
+        #editor { flex-grow: 1; width: 100%; font-size: 14px; }
+        button { cursor: pointer; padding: 6px 16px; background: #007acc; color: white; border: none; border-radius: 4px; font-weight: bold; }
+        button:hover { background: #0062a3; }
+        select { padding: 6px; background: #3c3c3c; color: white; border: 1px solid #555; border-radius: 4px; min-width: 180px; }
+        #status { font-size: 13px; color: #aaa; }
+    </style>
+    <!-- Підключаємо локальний Ace Editor -->
+    <script src="/ace/ace.js" type="text/javascript" charset="utf-8"></script>
+</head>
+<body>
+
+<div id="toolbar">
+    <select id="fileList" onchange="loadFile()"></select>
+    <button onclick="saveFile()">Зберегти</button>
+    <span id="status">Очікування...</span>
+</div>
+
+<div id="editor"></div>
+
+<script>
+    // Ініціалізація редактора
+    var editor = ace.edit("editor");
+    editor.setTheme("ace/theme/monokai");
+    editor.session.setMode("ace/mode/html");
+    editor.setOption("useWorker", false); 
+
+    // Запит списку файлів у ESP32 при завантаженні сторінки
+    function fetchFileList() {
+        document.getElementById('status').textContent = "Оновлення списку файлів...";
+        fetch('/list-files')
+            .then(res => res.json())
+            .then(files => {
+                const fileList = document.getElementById('fileList');
+                fileList.innerHTML = ""; // Очищуємо старий список
+                
+                // Відфільтровуємо самі файли редактора, щоб випадково їх не зламати
+                const filteredFiles = files.filter(f => !f.startsWith('/ace/'));
+
+                filteredFiles.forEach(f => {
+                    let opt = document.createElement('option');
+                    opt.value = f;
+                    opt.textContent = f;
+                    fileList.appendChild(opt);
+                });
+                
+                if(filteredFiles.length > 0) {
+                    loadFile();
+                } else {
+                    document.getElementById('status').textContent = "Файлів не знайдено!";
+                }
+            })
+            .catch(err => {
+                document.getElementById('status').textContent = "Помилка зв'язку з ESP32!";
+            });
+    }
+
+    // Читання вмісту обраного файлу
+    function loadFile() {
+        let path = document.getElementById('fileList').value;
+        if (!path) return;
+        
+        document.getElementById('status').textContent = "Завантаження " + path + "...";
+        
+        fetch(path)
+            .then(res => res.text())
+            .then(data => {
+                editor.setValue(data, -1);
+                
+                // Автовизначення підсвічування за розширенням
+                let mode = "html";
+                if(path.endsWith(".json")) mode = "json";
+                if(path.endsWith(".js")) mode = "javascript";
+                if(path.endsWith(".css")) mode = "css";
+                
+                editor.session.setMode("ace/mode/" + mode);
+                document.getElementById('status').textContent = "Файл завантажено";
+            });
+    }
+
+    // Надсилання зміненого коду назад у ESP32
+    function saveFile() {
+        let path = document.getElementById('fileList').value;
+        if (!path) return;
+        
+        let content = editor.getValue();
+        document.getElementById('status').textContent = "Збереження у LittleFS...";
+
+        let formData = new FormData();
+        formData.append("path", path);
+        formData.append("data", new Blob([content], {type: 'text/plain'}), path);
+
+        fetch("/edit-upload", { method: "POST", body: formData })
+            .then(res => res.text())
+            .then(txt => {
+                document.getElementById('status').textContent = "Успішно збережено!";
+            })
+            .catch(err => {
+                document.getElementById('status').textContent = "Помилка запису файлу!";
+            });
+    }
+
+    // Запускаємо сканування при відкритті сторінки
+    window.onload = fetchFileList;
+</script>
+</body>
+</html>

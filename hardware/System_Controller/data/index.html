@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRA System Setup</title>
+<style>
+body {
+    font-family: sans-serif;
+    background: #1e1e1e;
+    color: #eaedd5;
+    margin: 0;
+    padding: 20px;
+}
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: #2d2d2d;
+    padding: 20px;
+    border-radius: 8px;
+    border-top: 4px solid #2ecc71;
+}
+h2 {
+    text-align: center;
+    color: #2ecc71;
+    margin-top: 0;
+}
+/* Стилі вкладок */
+.tabs {
+    display: flex;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #444;
+}
+.tab-btn {
+    background: none;
+    border: none;
+    color: #888;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+}
+.tab-btn.active {
+    color: #2ecc71;
+    border-bottom: 3px solid #2ecc71;
+}
+.tab-content {
+    display: none;
+}
+.tab-content.active {
+    display: block;
+}
+/* Стилі форм */
+.form-group {
+    margin-bottom: 15px;
+}
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    font-size: 14px;
+}
+input, select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #444;
+    background: #1e1e1e;
+    color: #fff;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+input:focus {
+    border-color: #2ecc71;
+    outline: none;
+}
+.btn {
+    background: #2ecc71;
+    color: #1e1e1e;
+    border: none;
+    padding: 12px;
+    width: 100%;
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+.btn:hover {
+    background: #27ae60;
+}
+.status {
+    text-align: center;
+    font-weight: bold;
+    margin-top: 15px;
+    color: #3498db;
+}
+.calib-section {
+    padding: 10px 0;
+}
+.help-text {
+    font-size: 0.85em;
+    color: #b0b0b0;
+    margin-bottom: 8px;
+}
+.status-box {
+    background: #1e1e1e;
+    border: 1px solid #444;
+    padding: 8px;
+    border-radius: 4px;
+    margin-top: 8px;
+    font-weight: bold;
+    font-size: 0.9em;
+    color: #3498db;
+}
+.btn-group {
+    display: flex;
+    gap: 10px;
+}
+.btn-green {
+    background-color: #2ecc71;
+    color: #1e1e1e;
+}
+.btn-green:hover {
+    background-color: #27ae60;
+}
+.btn-red {
+    background-color: #e74c3c;
+    color: white;
+}
+.btn-red:hover {
+    background-color: #c0392b;
+}
+.btn-blue {
+    background-color: #3498db;
+    color: white;
+    width: 100%;
+}
+.btn-blue:hover {
+    background-color: #2980b9;
+}
+.btn:disabled {
+    background-color: #444 !important;
+    color: #888 !important;
+    cursor: not-allowed;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<h2>SectionControlVR Setup</h2>
+<div class="tabs">
+    <button class="tab-btn active" onclick="openTab('network')">Мережа</button>
+    <button class="tab-btn" onclick="openTab('hydraulics')">Гідравліка</button>
+    <button class="tab-btn" onclick="openTab('boom')">Штанга</button>
+    <button class="tab-btn" onclick="openTab('calibr')">Калібрування</button>
+</div>
+<form id="configForm">
+    <!-- ВКЛАДКА: МЕРЕЖА -->
+    <div id="network" class="tab-content active">
+        <div class="form-group">
+            <label>Wi-Fi SSID (Назва мережі):</label>
+            <input type="text" name="ssid" id="ssid" placeholder="Введіть назву мережі">
+        </div>
+        <div class="form-group">
+            <label>Wi-Fi Пароль:</label>
+            <input type="password" name="password" id="password" placeholder="Введіть пароль">
+        </div>
+        <div class="form-group">
+            <label>IP-адреса Сервера (Python):</label>
+            <input type="text" name="server_ip" id="server_ip" placeholder="Приклад: 192.168.1.100">
+        </div>
+    </div>
+
+    <!-- ВКЛАДКА: ГІДРАВЛІКА -->
+    <div id="hydraulics" class="tab-content">
+        <div class="form-group">
+            <label>Імпульсів витратоміра на 1 літр:</label>
+            <input type="number" name="flow_pulses" id="flow_pulses" value="450">
+        </div>
+        <div class="form-group">
+            <label>Макс. потік невідомого насоса (л/хв):</label>
+            <input type="number" name="max_pump_flow" id="max_pump_flow" value="15.0" step="0.1">
+        </div>
+        <div class="form-group">
+            <label>Мінімальний ШІМ насоса (%):</label>
+            <input type="number" name="pwm_min" id="pwm_min" value="15" min="0" max="100">
+        </div>
+        <div class="form-group">
+            <label>Максимальний ШІМ насоса (%):</label>
+            <input type="number" name="pwm_max" id="pwm_max" value="100" min="0" max="100">
+        </div>
+        <div class="form-group">
+            <label>Зона нечутливості ПІД (Deadband %):</label>
+            <input type="number" name="deadband" id="deadband" value="2" min="0" max="20">
+        </div>
+    </div>
+
+    <!-- ВКЛАДКА: ШТАНГА -->
+    <div id="boom" class="tab-content">
+        <div class="form-group">
+            <label>Загальна кількість секцій/клапанів:</label>
+            <input type="number" name="total_sections" id="total_sections" value="5" min="1" max="32">
+        </div>
+        <div class="form-group">
+            <label>Тип виконання клапанів:</label>
+            <select name="hardware_mode" id="hardware_mode">
+                <option value="0">Локальні MOSFET / Реле</option>
+                <option value="1">Мережеві CAN-клапани (Китай)</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- ВКЛАДКА: АВТОКАЛИБРОВКА -->
+    <div id="calibr" class="tab-content">
+        <div class="card alert-card">
+            <h3>🔧 Автокалібрування заліза</h3>
+            
+            <!-- Крок 1: Калібрування датчика потоку -->
+            <div class="calib-section">
+                <h4>1. Калібрування датчика потоку (Імпульси)</h4>
+                <p class="help-text">Підставте мірну ємність (наприклад, відро 10л). Натисніть "СТАРТ", дочекайтеся наповнення і натисніть "СТОП".</p>
+                <div class="btn-group">
+                    <button type="button" id="btn-flow-start" class="btn btn-green" onclick="startFlowCalib()">▶ СТАРТ</button>
+                    <button type="button" id="btn-flow-stop" class="btn btn-red" onclick="stopFlowCalib()" disabled>🛑 СТОП</button>
+                </div>
+                <div id="flow-calib-status" class="status-box">Статус: Очікування старту...</div>
+                
+                <div id="flow-result-box" style="display:none; margin-top:10px;">
+                    <label>Введіть фактичний об'єм ємності (Літри):</label>
+                    <input type="number" id="calib-actual-liters" value="10" step="0.1" style="width:100px; margin-bottom: 8px;">
+                    <button type="button" class="btn" onclick="saveFlowCalib()">💾 Розрахувати та внести коефіцієнт</button>
+                </div>
+            </div>
+            
+            <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
+
+            <!-- Крок 2: Калібрування максимального потоку насоса -->
+            <div class="calib-section">
+                <h4>2. Автотест продуктивності насоса</h4>
+                <p class="help-text">Переконайтеся, що крок №1 успішно пройдено, а всі секції штанги ВІДКРИТІ. Система сама увімкне насос на 100% на 5 секунд та виміряє потік.</p>
+                <button type="button" id="btn-pump-test" class="btn btn-blue" onclick="startPumpTest()">⚡ ЗАПУСТИТИ АВТОТЕСТ (5 сек)</button>
+                <div id="pump-calib-status" class="status-box">Статус: Очікування...</div>
+            </div>
+        </div>
+    </div>
+
+    <button type="button" class="btn" onclick="saveConfig()">Зберегти налаштування в ESP32</button>
+</form>
+<div id="statusMessage" class="status"></div>
+</div>
+
+<script>
+// ГЛОБАЛЬНИЙ ОБ'ЄКТ WEBSOCKET ДЛЯ ЗВ'ЯЗКУ
+let websocket;
+let accumulatedPulses = 0;
+
+// Функція автоматичного запуску сокету
+function initWebSocket() {
+    // Підключаємося до IP адреси, з якої завантажили сторінку
+    let wsGateway = `ws://${window.location.hostname}/ws`;
+    console.log('Connecting to WebSocket:', wsGateway);
+    websocket = new WebSocket(wsGateway);
+    
+    websocket.onopen = function(evt) { console.log('WebSocket Connection OPEN'); };
+    websocket.onclose = function(evt) { 
+        console.log('WebSocket Connection CLOSED. Reconnecting...'); 
+        setTimeout(initWebSocket, 2000); // Автоперепідключення при збої
+    };
+    
+    websocket.onmessage = function(evt) {
+        console.log("Incoming data:", evt.data);
+        
+        // Обробка відповідей калібрування від ESP32
+        if (evt.data.startsWith("PULSES:")) {
+            accumulatedPulses = parseInt(evt.data.split(":")[1]) || 0;
+            document.getElementById('flow-calib-status').innerHTML = "📊 Тест завершено! Накопичено імпульсів: <b>" + accumulatedPulses + "</b>";
+            document.getElementById('flow-result-box').style.display = 'block';
+            return;
+        }
+        
+        if (evt.data.startsWith("MAX_FLOW:")) {
+            let maxFlow = parseFloat(evt.data.split(":")[1]) || 0.0;
+            if (document.getElementById('max_pump_flow')) {
+                document.getElementById('max_pump_flow').value = maxFlow.toFixed(1);
+            }
+            document.getElementById('pump-calib-status').innerHTML = "✅ Максимальний потік визначено: <b>" + maxFlow.toFixed(1) + " л/хв</b>. Значення підставлено!";
+            return;
+        }
+    };
+}
+
+// Запуск сокету при старті
+window.addEventListener('load', () => {
+    initWebSocket();
+});
+
+// Логіка перемикання вкладок
+function openTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    event.currentTarget.classList.add('active');
+}
+
+// Завантаження поточних налаштувань
+window.onload = function () {
+    initWebSocket(); // Про всяк випадок дублюємо старт сокету
+    fetch('/get-config')
+    .then(response => response.json())
+    .then(data => {
+        if (data.ssid) document.getElementById('ssid').value = data.ssid;
+        if (data.password) document.getElementById('password').value = data.password;
+        if (data.server_ip) document.getElementById('server_ip').value = data.server_ip;
+        
+        document.getElementById('flow_pulses').value = parseInt(data.flow_pulses) || 450;
+        document.getElementById('max_pump_flow').value = parseFloat(data.max_pump_flow) || 15.0;
+        document.getElementById('pwm_min').value = parseInt(data.pwm_min) || 15;
+        document.getElementById('pwm_max').value = parseInt(data.pwm_max) || 100;
+        document.getElementById('deadband').value = parseInt(data.deadband) || 2;
+        document.getElementById('total_sections').value = parseInt(data.total_sections) || 5;
+        document.getElementById('hardware_mode').value = parseInt(data.hardware_mode) || 0;
+    });
+};
+
+// Відправка нових налаштувань
+function saveConfig() {
+    const msgDiv = document.getElementById('statusMessage');
+    msgDiv.style.color = '#3498db';
+    msgDiv.innerText = "Збереження...";
+
+    const obj = {
+        ssid: document.getElementById('ssid').value,
+        password: document.getElementById('password').value,
+        server_ip: document.getElementById('server_ip').value,
+        flow_pulses: parseInt(document.getElementById('flow_pulses').value) || 450,
+        max_pump_flow: parseFloat(document.getElementById('max_pump_flow').value) || 15.0,
+        pwm_min: parseInt(document.getElementById('pwm_min').value) || 15,
+        pwm_max: parseInt(document.getElementById('pwm_max').value) || 100,
+        deadband: parseInt(document.getElementById('deadband').value) || 2,
+        total_sections: parseInt(document.getElementById('total_sections').value) || 5,
+        hardware_mode: parseInt(document.getElementById('hardware_mode').value) || 0
+    };
+
+    fetch('/save-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(obj)
+    })
+    .then(res => res.text())
+    .then(text => {
+        msgDiv.style.color = '#2ecc71';
+        msgDiv.innerText = "Конфіг оновлено успішно! Контролер перезавантажується...";
+    })
+    .catch(err => {
+        msgDiv.style.color = '#e74c3c';
+        msgDiv.innerText = "Помилка збереження!";
+    });
+}
+
+// ******************************* ЛОГІКА КНОПОК АВТОКАЛІБРУВАННЯ
+function startFlowCalib() {
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) { alert("Немає зв'язку з ESP32!"); return; }
+    document.getElementById('btn-flow-start').disabled = true;
+    document.getElementById('btn-flow-stop').disabled = false;
+    document.getElementById('flow-result-box').style.display = 'none';
+    document.getElementById('flow-calib-status').innerHTML = "⏳ Насос увімкнено (50%). Рахую імпульси...";
+    
+    websocket.send("START_FLOW_CALIB");
+}
+
+function stopFlowCalib() {
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) return;
+    document.getElementById('btn-flow-start').disabled = false;
+    document.getElementById('btn-flow-stop').disabled = true;
+    document.getElementById('flow-calib-status').innerHTML = "🛑 Насос зупинено. Очікую дані від плати...";
+    
+    websocket.send("STOP_FLOW_CALIB");
+}
+
+function saveFlowCalib() {
+    let liters = parseFloat(document.getElementById('calib-actual-liters').value);
+    if (isNaN(liters) || liters <= 0) {
+        alert("Введіть коректний об'єм у літрах!");
+        return;
+    }
+    
+    // Розрахунок коефіцієнта імпульсів на 1 літр
+    let calculatedPulsesPerLiter = Math.round(accumulatedPulses / liters);
+    
+    if (document.getElementById('flow_pulses')) {
+        document.getElementById('flow_pulses').value = calculatedPulsesPerLiter;
+    }
+    
+    alert("Успішно пораховано: " + calculatedPulsesPerLiter + " імп/л.\nНатисніть фінальну кнопку 'Зберегти налаштування в ESP32' для запису в пам'ять.");
+    document.getElementById('flow-result-box').style.display = 'none';
+    document.getElementById('flow-calib-status').innerHTML = "✅ Відкалібровано: " + calculatedPulsesPerLiter + " імп/л";
+}
+
+function startPumpTest() {
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) { alert("Немає зв'язку з ESP32!"); return; }
+    let btn = document.getElementById('btn-pump-test');
+    btn.disabled = true;
+    document.getElementById('pump-calib-status').innerHTML = "🚀 Насос увімкнено на 100%! Замір максимального потоку...";
+    
+    websocket.send("START_PUMP_TEST");
+    
+    // Блокування кнопки на час виконання тесту
+    setTimeout(() => { btn.disabled = false; }, 5500);
+}
+</script>
+</body>
+</html>
