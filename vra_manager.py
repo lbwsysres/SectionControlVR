@@ -27,6 +27,8 @@ class VRAManager:
             uri = f"zip://{absolute_zip_path.replace(os.sep, '/')}"
             self.rate_data = gpd.read_file(uri)
             
+            self.spatial_index = self.rate_data.sindex 
+
             if self.rate_data.crs and self.rate_data.crs.to_epsg() != 4326:
                 self.rate_data = self.rate_data.to_crs(epsg=4326)
             self.rate_default = self.cfg.get("VRA_RATE_DEFAULT", 99.0)
@@ -36,8 +38,68 @@ class VRAManager:
         except Exception as e:
             print(f"[VRA ERROR]: Failed to parse Shapefile: {e}")
             return False
-
     def get_target_rate(self, lon, lat):
+        # 1. Захист: якщо карта не завантажена, віддаємо дефолт
+        if self.rate_data is None:
+            return self.rate_default
+
+        from shapely.geometry import Point
+        point = Point(lon, lat)
+        
+        try:
+            # 2. Перевіряємо, чи створено індекс (sindex)
+            spatial_index = getattr(self, 'spatial_index', None)
+            
+            if spatial_index is not None:
+                # Швидкий C++ пошук через Bounding Box точки
+                possible_idx = spatial_index.query(point)
+                
+                if len(possible_idx) > 0:
+                    # Працюємо через суворий системний метод .iloc для зрізів
+                    possible_matches = self.rate_data.iloc[possible_idx]
+                    matched_zones = possible_matches[possible_matches.geometry.contains(point)]
+                    
+                    if not matched_zones.empty:
+                        # Дістаємо значення колонки 'rate' без збою індексів таблиці
+                        return float(matched_zones['rate'].values[0])
+            
+            # 3. НАДІЙНИЙ ФОЛБЕК: Якщо індекс збоїть або мовчить,
+            # виконується ваш ОРИГІНАЛЬНИЙ, перевірений часом код:
+            matched_zones = self.rate_data[self.rate_data.geometry.contains(point)]
+            if not matched_zones.empty:
+                return float(matched_zones.iloc[0]['rate'])
+                
+        except Exception as e:
+            print(f"[VRA Error] Помилка індексу пошуку карти: {e}")
+            
+        return self.rate_default
+
+    def get_target_rate_0(self, lon, lat):
+        if self.rate_data is None or getattr(self, 'spatial_index', None) is None:
+            return self.rate_default
+
+        from shapely.geometry import Point
+        point = Point(lon, lat)
+        
+        # 1. Индекс за микросекунды находит ID только тех зон, которые находятся прямо под точкой
+        possible_matches_idx = self.spatial_index.query(point)
+        
+        if len(possible_matches_idx) == 0:
+            return self.rate_default
+            
+        # 2. Берем из таблицы только эти найденные зоны (обычно это 1 зона)
+        possible_matches = self.rate_data.iloc[possible_matches_idx]
+        
+        # 3. Ваша родная точная проверка входжения точки
+        matched_zones = possible_matches[possible_matches.geometry.contains(point)]
+
+        if not matched_zones.empty:
+            return float(matched_zones.iloc.get('rate', self.rate_default))
+            
+        return self.rate_default
+
+
+    def get_target_rate_1(self, lon, lat):
         """
         Принимает текущую GPS-координату секции/форсунки.
         Возвращает норму внесения из Shapefile.
@@ -64,7 +126,7 @@ class VRAManager:
         # Если трактор/опрыскиватель выехал за пределы карты поля
         return self.rate_default
     
-    def get_target_rate_1(self, lon, lat):
+    def get_target_rate_2(self, lon, lat):
         """
         Принимает текущую GPS-координату секции/форсунки.
         Возвращает норму внесения из Shapefile.
@@ -210,6 +272,7 @@ class VRAManager:
         Рушій геометрії автоматично перейде на rate_default.
         """
         self.rate_data = None
+        self.spatial_index = None  # Очищення ОЗУ
         print("[VRA INFO]: Карта завдань успішно вивантажена з пам'яті.")
 
     def activate_existing_map(self, zip_filename):

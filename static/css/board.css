@@ -1,0 +1,908 @@
+:root {
+    --neon-green: #2ecc71;
+    --neon-red: #e74c3c;
+    --bg-dark: #0a0a0b;
+    --panel-bg: rgba(20, 20, 22, 0.9);
+}
+
+body {
+    margin: 0;
+    background: var(--bg-dark);
+    color: white;
+    font-family: 'Segoe UI', Roboto, sans-serif;
+    overflow: hidden;
+    touch-action: none;
+}
+
+/* Главная панель управления */
+#ui {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: var(--panel-bg);
+    padding: 5px;
+    border: 1px solid #333;
+    border-radius: 12px;
+    z-index: 100;
+    width: 200px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.value-box {
+    margin-bottom: 10px;
+}
+
+.label {
+    font-size: 10px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.value {
+    font-size: 28px;
+    font-weight: bold;
+    color: var(--neon-green);
+    font-family: monospace;
+}
+
+.unit {
+    font-size: 14px;
+    color: #555;
+}
+
+/* RTK и Скорость в ряд */
+.status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    background: #1a1a1c;
+    padding: 8px;
+    border-radius: 6px;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.rtk-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+/* Секции (Лампочки) */
+#sections {
+    display: flex;
+    gap: 4px;
+    margin: 15px 0;
+}
+
+.lamp {
+    flex: 1;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid #000;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5);
+    transition: 0.2s;
+}
+
+/* Кнопка Master */
+.m-btn {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    margin-bottom: 10px;
+    transition: 0.3s;
+}
+
+/* Ручные режимы секций */
+.mode-grid {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+}
+
+.mode-item {
+    flex: 1;
+    text-align: center;
+}
+
+.mode-sel {
+    width: 100%;
+    background: #222;
+    color: #fff;
+    border: 1px solid #444;
+    padding: 5px 0;
+    font-size: 11px;
+    border-radius: 4px;
+    outline: none;
+}
+
+/* Нижние кнопки */
+.bottom-tools {
+    display: flex;
+    gap: 5px;
+    margin-top: 15px;
+}
+
+/*.tool-btn {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    background: #333;
+    color: white;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 12px;
+}*/
+
+canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+/* Компас */
+#compass {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    z-index: 100;
+    transition: 0.2s;
+}
+
+#needle {
+    transition: transform 0.2s ease-out;
+    /* Плавний поворот стрілки */
+    transform-origin: 50% 50%;
+    /* Обертання чітко навколо центру */
+}
+
+#emulator {
+    position: fixed;
+    /* Фиксируем относительно экрана */
+    bottom: 20px;
+    /* Отступ снизу */
+    left: 20px;
+    /* Отступ справа */
+    width: 200px;
+    /* Фиксированная ширина */
+    height: auto;
+    /* ВЫСОТА ПО СОДЕРЖИМОМУ — это решит твою проблему */
+    background: rgba(20, 20, 20, 0.9);
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid #444;
+    z-index: 1000;
+    display: flex;
+    /* Вертикальный стек элементов */
+    flex-direction: column;
+    gap: 10px;
+    /* Расстояние между строками */
+}
+
+/* Оформление строк, чтобы кнопка и слайдер были в ряд */
+.emu-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.emu-row input[type="range"] {
+    flex: 1;
+    /* Слайдер растягивается на весь остаток строки */
+}
+
+
+.btn-small {
+    width: 60px;
+    height: 30px;
+    background: #444;
+    border: none;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.btn-small:hover {
+    background: #555;
+}
+
+.label-min {
+    font-size: 12px;
+    margin-bottom: 2px;
+}
+
+/* Фиксированные панели */
+/* Инфо панель */
+.top-left-panel {
+    position: fixed;
+    top: 10px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid #333;
+    padding: 10px 10px;
+    border-radius: 12px;
+    min-width: 240px;
+}
+
+.panel-main-row {
+    display: flex;
+    align-items: center;
+    /* Центрируем по вертикали */
+    justify-content: space-between;
+    /* Разносим лево и право */
+}
+
+
+/* Контейнер для всех секций */
+#manual_ctrl {
+    display: flex;
+    flex-direction: row;
+    /* Выстраиваем в ряд */
+    justify-content: center;
+    /* Центрируем */
+    gap: 10px;
+    /* РАССТОЯНИЕ МЕЖДУ СЕКЦИЯМИ */
+    padding: 0px;
+    background: transparent;
+}
+
+/* Колонка одной секции */
+.section-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    /* Расстояние между лампой, текстом и кнопкой */
+    width: 60px;
+    /* Фиксированная ширина колонки */
+}
+
+/* Кнопка режима */
+.mode-btn {
+    width: 100%;
+    /* Занимает всю ширину колонки (70px) */
+    height: 45px;
+    /* Высота, которую мы обсуждали */
+    background: #222;
+    border: 1px solid #333;
+    border-radius: 8px;
+    /* Скругление */
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+
+.bottom-controls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    /* Центрируем по горизонтали */
+    background: rgba(0, 0, 0, 0.8);
+    padding: 5px;
+    border-radius: 15px;
+    border: 1px solid #444;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: center;
+}
+
+.zoom-panel {
+    position: fixed;
+    right: 20px;
+    top: 120px;
+    /* или bottom: 100px, если хочешь снизу */
+    display: flex;
+    flex-direction: column;
+    /* Выстраивает кнопки в колонку */
+    gap: 20px;
+    /* Расстояние между кнопками */
+    align-items: center;
+}
+
+.left-panel {
+    position: fixed !important;
+    /* !important допоможе перевірити, чи не перебивається стиль іншим кодом */
+    left: 20px !important;
+    top: 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: center;
+    z-index: 9998;
+    /* Виводить на передній план */
+}
+
+
+
+/* Элементы внутри */
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.area-block .value {
+    font-size: 24px;
+    color: #2ecc71;
+    font-weight: bold;
+}
+
+.panel-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    border-top: 1px solid #333;
+    padding-top: 10px;
+}
+
+.icon-btn {
+    background: #333;
+    border: none;
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.icon-btn:hover {
+    background: #444;
+}
+
+.master-btn {
+    width: 100%;
+    padding: 12px;
+    font-weight: bold;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    transition: 0.3s;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #999;
+    display: inline-block;
+    margin-right: 5px;
+}
+
+.top-left-panel,
+.bottom-controls,
+.zoom-panel,
+#emulator {
+    z-index: 9998 !important;
+    /* Максимальный приоритет */
+    pointer-events: auto;
+    /* Разрешаем клики */
+}
+
+/* На всякий случай убедись, что канвас не перехватывает клики */
+canvas {
+    z-index: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.tool-btn-old,
+.master-btn-old {
+    width: 60px;
+    height: 60px;
+    border-radius: 20%;
+    /* Робимо кнопку круглою */
+    border: 3px solid #333;
+    background: #1a1a1a;
+    color: #e74c3c;
+    /* Колір іконки за замовчуванням */
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+}
+
+.tool-btn,
+.master-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    /* Скругление как на фото */
+    border: 2px solid #333;
+    background: #1a1a1a;
+    color: #7d7dff;
+    /* Цвет символов + и - */
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.master-btn svg {
+    width: 40px;
+    height: 40px;
+}
+
+/* Стан "УВІМКНЕНО" (Зелений) */
+.master-on {
+    color: #2ecc71;
+    border-color: #2ecc71;
+    background: #0d2115;
+    box-shadow: 0 0 20px rgba(46, 204, 113, 0.4);
+}
+
+/* Стан "ВИМКНЕНО" (Червоний) */
+.master-off {
+    color: #e74c3c;
+    border-color: #e74c3c;
+    background: #210d0d;
+    box-shadow: 0 0 20px rgba(231, 76, 60, 0.4);
+}
+
+.master-btn:active {
+    transform: scale(0.92);
+    /* Ефект натискання */
+}
+
+/* ***************************************************************************************** */
+/* Контейнер для всех секций */
+#manual_ctrl {
+    display: flex;
+    gap: 1px;
+    padding: 1px;
+}
+
+.section-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.section-label {
+    font-size: 12px;
+    color: #666;
+    /*font-weight: bold;*/
+}
+
+/* Группа кнопок управления */
+.mode-group {
+    display: flex;
+    flex-direction: column;
+    /* Кнопки друг под другом, чтобы было удобнее попадать */
+    gap: 2px;
+    width: 45px;
+}
+
+/* Базовий стиль для всіх кнопок режимів */
+.mode-btn {
+    background: #222;
+    color: #555;
+    border: 1px solid #333;
+    padding: 5px 0;
+    width: 45px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+/* Колір для АВТО (Зелений) */
+.mode-btn[data-mode="AUTO"].active {
+    background: #2ecc71 !important;
+    color: #000 !important;
+    border-color: #2ecc71;
+    box-shadow: 0 0 10px rgba(46, 204, 113, 0.6);
+}
+
+/* Колір для ВКЛ (Жовтий) */
+.mode-btn[data-mode="ON"].active {
+    background: #f1c40f !important;
+    color: #000 !important;
+    border-color: #f1c40f;
+    box-shadow: 0 0 10px rgba(241, 196, 15, 0.6);
+}
+
+/* Колір для ВИКЛ (Червоний) */
+.mode-btn[data-mode="OFF"].active {
+    background: #e74c3c !important;
+    color: #fff !important;
+    border-color: #e74c3c;
+    box-shadow: 0 0 10px rgba(231, 76, 60, 0.6);
+}
+
+.lamp-indicator {
+    width: 45px;
+    height: 12px;
+    background: #333;
+    /* Цвет по умолчанию (серый) */
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+/* Цвет РЕАЛЬНОГО полива (когда секция льет) */
+.lamp-on {
+    background: #2ecc71 !important;
+    box-shadow: 0 0 10px #2ecc71;
+}
+
+/* Цвет ПАУЗЫ (когда секция закрыта) */
+.lamp-off {
+    background: #e74c3c !important;
+    box-shadow: 0 0 5px rgba(231, 76, 60, 0.5);
+}
+
+/* ***************************************************** */
+/* Контейнер навігації зверху по центру */
+.guidance-container {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9998;
+
+    /* Главное изменение: в один ряд */
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    /* Расстояние между кнопками и шкалой */
+
+    background: rgba(0, 0, 0, 0.8);
+    padding: 8px 10px;
+    border-radius: 12px;
+    border: 1px solid #333;
+    backdrop-filter: blur(8px);
+}
+
+/* Секция в центре: шкала + текст под ней */
+.lightbar-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 200px;
+}
+
+.lightbar {
+    width: 100%;
+    /* Занимает всю ширину секции */
+    height: 12px;
+    margin-top: 15px;
+    /* Небольшой отступ сверху, чтобы вказівник не перекрывал текст */
+    background: #111;
+    border-radius: 6px;
+    position: relative;
+    border: 1px solid #444;
+    margin-bottom: 5px;
+    /* Отступ до текста */
+}
+
+#lb_pointer {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    /* Початкова позиція в центрі */
+    width: 14px;
+    height: 30px;
+    background: #2ecc71;
+    /* Зелений за замовчуванням */
+    border-radius: 4px;
+    transform: translateX(-50%);
+    box-shadow: 0 0 15px rgba(46, 204, 113, 0.6);
+    transition: left 0.15s ease-out, background 0.2s;
+    /* Плавність руху */
+    z-index: 2;
+}
+
+/* Кнопки теперь просто элементы флекс-контейнера */
+.tool-btn {
+    width: 60px;
+    height: 60px;
+    font-size: 22px;
+    font-weight: bold;
+    border-radius: 12px;
+    background: #1a1a1a;
+    border: 2px solid #444;
+    color: white;
+    cursor: pointer;
+    flex-shrink: 0;
+    /* Чтобы кнопки не сжимались */
+}
+
+.tool-btn:active {
+    background: #333;
+    transform: scale(0.95);
+}
+
+/* Текст теперь компактнее */
+#lb_text {
+    margin-bottom: -5px;
+    /* Отрицательный отступ подтянет слайдер к тексту */
+    top: -2px;
+    /* Дополнительно смещаем сам текст чуть выше */
+    letter-spacing: 2px;
+    /* Разрядка букв добавит стиля «приборки» */
+    margin-bottom: -5px;
+    position: relative;
+    top: -2px;
+    /* Дополнительно смещаем сам текст чуть выше */
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 18px;
+    /* Немного уменьшил, чтобы не выбивался */
+    font-weight: bold;
+    color: #2ecc71;
+    text-transform: uppercase;
+}
+
+/* ***************************************************** */
+/* Окно петери связи */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    /* Вся ширина вьюпорта */
+    height: 100vh;
+    /* Вся высота вьюпорта */
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(5px);
+    display: none;
+    /* Переключаем на 'flex' через JS */
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    /* Самый высокий индекс, чтобы быть над кнопками AUTO и трактором */
+    pointer-events: auto;
+    /* Запрещаем клики сквозь это окно */
+}
+
+.modal-content {
+    background: #1a1a1a;
+    /* Темный фон как у твоих панелей */
+    border: 2px solid #e74c3c;
+    /* Красная рамка для внимания */
+    border-radius: 15px;
+    padding: 30px;
+    text-align: center;
+    color: white;
+    font-family: sans-serif;
+    box-shadow: 0 0 20px rgba(231, 76, 60, 0.3);
+    /* Красное свечение */
+    max-width: 300px;
+    pointer-events: auto;
+}
+
+.modal-icon {
+    font-size: 40px;
+    margin-bottom: 10px;
+}
+
+.modal-btn {
+    background: #e74c3c;
+    border: none;
+    color: white;
+    padding: 10px 25px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 15px;
+    transition: 0.3s;
+}
+
+.modal-btn:hover {
+    background: #c0392b;
+    box-shadow: 0 0 10px #e74c3c;
+}
+
+/* Инфопанель плоцадь скорость GPS */
+.top-left-panel {
+    position: fixed;
+    top: 10px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid #333;
+    padding: 10px 10px;
+    border-radius: 12px;
+    min-width: 240px;
+}
+
+.panel-main-row {
+    display: flex;
+    align-items: center;
+    /* Центрируем по вертикали */
+    justify-content: space-between;
+    /* Разносим лево и право */
+}
+
+/* ЛЕВАЯ СТОРОНА (0.0 ha) */
+.area-block {
+    font-size: 32px;
+    /* Крупно, как на рисунке */
+    color: #2ecc71;
+    font-weight: bold;
+    font-family: monospace;
+}
+
+.area-block small {
+    font-size: 18px;
+    margin-left: 4px;
+}
+
+/* ПРАВАЯ СТОРОНА (Стек данных) */
+.right-info {
+    display: flex;
+    flex-direction: column;
+    /* Ставим скорость над GPS */
+    gap: 4px;
+    /* Расстояние между ними */
+    align-items: flex-end;
+    /* Прижимаем к правому краю */
+    border-left: 1px solid #333;
+    /* Тонкая линия-разделитель */
+    padding-left: 15px;
+}
+
+.stat-item.speed {
+    font-weight: bold;
+    font-size: 16px;
+    color: white;
+}
+
+.stat-item.gps {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+/* ***************************************************** */
+/*  EDIT AB */
+/* Основной контейнер меню */
+.ab-menu-container {
+    display: none;
+    flex-direction: column;
+    position: absolute;
+    /* ПОЗИЦИОНИРОВАНИЕ ОТНОСИТЕЛЬНО ПАНЕЛИ */
+    top: 100%;
+    /* Сразу под нижней границей панели */
+    right: 0;
+    /* Выровнять по правому краю панели */
+    margin-top: 10px;
+    /* Небольшой зазор */
+    width: 220px;
+    background: #1e1e1e;
+    border: 2px solid #444;
+    border-radius: 15px;
+    padding: 15px;
+    z-index: 5000;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+    /* Анімація */
+    animation: abSlideIn 0.25s ease-out;
+    transform-origin: top right;
+    /* Точка, з якої "росте" вікно */
+    backdrop-filter: blur(10px);
+}
+
+@keyframes abSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.ab-menu-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 25px 25px;
+    margin-bottom: 0px;
+}
+
+/* Общий стиль для кнопок внутри меню */
+.ab-btn-item {
+    height: 85px;
+    /* Крупные кнопки для пальцев */
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 15px;
+    color: white;
+    font-size: 28px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+}
+
+.ab-btn-item:active {
+    background: #555;
+}
+
+/* Цвета для спец-кнопок */
+.ab-btn-danger {
+    color: #ff4757;
+}
+
+.ab-btn-warning {
+    color: #ffa502;
+}
+
+/* Кнопка ЗАКРЫТЬ на всю ширину */
+.ab-btn-close {
+    width: 100%;
+    height: 70px;
+    background: #2ecc71;
+    color: #000;
+    border: none;
+    border-radius: 12px;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.ab-btn-close:active {
+    background: #27ae60;
+}
+
+.ab-tab-btn {
+    flex: 1;
+    height: 45px;
+    background: #333;
+    color: #888;
+    border: 1px solid #444;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+.ab-tab-btn.active {
+    background: #3498db;
+    /* Синій під колір координат */
+    color: white;
+    border-color: #5dade2;
+}
+
+.ab-btn-item:active {
+    transform: scale(0.96);
+    filter: brightness(1.2);
+}

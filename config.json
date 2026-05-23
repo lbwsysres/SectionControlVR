@@ -1,7 +1,12 @@
 {
     "UDP_PORT": 9999,
     "SECTION_WIDTHS": [
-        6.0
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
     ],
     "DRAW_OFF_SECTIONS": true,
     "LOOK_AHEAD": 0.6,
@@ -10,6 +15,11 @@
     "OFFSET_BACK": 0.0,
     "MASTER_SW": true,
     "SECTION_MODES": [
+        "AUTO",
+        "AUTO",
+        "AUTO",
+        "AUTO",
+        "AUTO",
         "AUTO"
     ],
     "SAVE_FILE": "coverage.wkb",
