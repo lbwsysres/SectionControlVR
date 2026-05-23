@@ -23,6 +23,10 @@ class SectionControl:
         self.prev_percents = None
         self.current_wkb_filename = "current_session.wkb"
 
+        # НАШ ФЕН-ШУЙ БУФЕР: збирає нові полігони для дозапису
+        self.buffer_to_disk = [] 
+
+
         # Завантаження збереженої геометрії поля
         # Міняємо розширення на .wkb, щоб не плутатися
         # save_file = cfg.get("SAVE_FILE", "coverage.wkb")
@@ -317,7 +321,7 @@ class SectionControl:
 
         # 5. Запис історії для відмальовки сліду на Canvas
         #self.path_history.append([lat, lon, heading_deg, list(res_states)])
-        
+
         self.path_history.append([lat, lon, heading_deg, list(res_states), list(widths)])
         if len(self.path_history) > 10000:
             self.path_history.pop(0)
@@ -325,16 +329,25 @@ class SectionControl:
         # 6. Оновлення бінарної карти покриття WKB
         if polys_to_save:
             try:
+                # НАПОВНЮЄМО НАШ БУФЕР ДОЗАПИСУ СВІЖИМИ ПОЛІГОНАМИ
+                if not hasattr(self, 'buffer_to_disk'):
+                    self.buffer_to_disk = []
+                for p in polys_to_save:
+                    if p.is_valid and not p.is_empty:
+                        self.buffer_to_disk.append(p)
+
+                # Ваша рідна монолітна математика для ОЗУ (залишається без змін)
+                from shapely.ops import unary_union
                 self.covered_area = self.covered_area.union(unary_union(polys_to_save))
 
-                # Спрощуємо геометрію та пишемо на диск раз на 150 кроків для розвантаження флешки
+                # Кожні 150 кроків викликаємо наш новий моментальний append
                 if len(self.path_history) % 150 == 0:
-                    self.covered_area = self.covered_area.simplify(
-                        0.05, preserve_topology=True
-                    )
+                    self.covered_area = self.covered_area.simplify(0.05, preserve_topology=True)
                     self.save_to_disk()
+                    print(f"Оновлення бінарної карти покриття WKB")
             except Exception as e:
                 print(f"Помилка обробки карти у Shapely: {e}")
+
 
         self.last_x, self.last_y = ux, uy
         self.last_p1_list, self.last_p2_list = curr_p1, curr_p2
@@ -345,9 +358,71 @@ class SectionControl:
             return 0.0
         return round(self.covered_area.area / 10000.0, 4)
 
-        # --- БЕЗПЕЧНЕ ТА ШВИДКЕ БІНАРНЕ ЗБЕРЕЖЕННЯ ---
-
     def save_to_disk(self):
+        """
+        ФИНТ УШАМИ: Моментальний append нових полігонів у кінець файлу.
+        Записує геометрію як окремий ешелон (пакет) у бінарний потік.
+        """
+        # Якщо за останні 150 кроків нічого не налили — писати нічого
+        if not hasattr(self, 'buffer_to_disk') or not self.buffer_to_disk:
+            return
+
+        import os
+        import dump_manager
+        from shapely import wkb
+        from shapely.ops import unary_union
+
+        wkb_path = os.path.join(dump_manager.DUMP_DIR, self.current_wkb_filename)
+        
+        try:
+            # Зшиваємо тільки свіжі полігони, накопичені за 150 кроків
+            chunk_union = unary_union(self.buffer_to_disk)
+            
+            if chunk_union and not chunk_union.is_empty:
+                # ВІДКРИВАЄМО В РЕЖИМІ "ab" (Append Binary)
+                with open(wkb_path, "ab") as f:
+                    # ВАЖЛИВО: wkb.dump (БЕЗ літери s) пише об'єкт у потік із суворим бінарним маркером довжини
+                    wkb.dump(chunk_union, f, hex=False)
+                
+                # Очищаємо ОЗУ-буфер, пакет пішов на диск
+                self.buffer_to_disk = []
+                # print(f"[SectionControl Append] Геометричний ешелон успішно дописано в кінець файлу.")
+        except Exception as e:
+            print(f"[SectionControl Append] Помилка append WKB: {e}")
+
+ 
+        # --- БЕЗПЕЧНЕ ТА ШВИДКЕ БІНАРНЕ ЗБЕРЕЖЕННЯ ---
+    def save_to_disk_00(self):
+        """
+        ФИНТ УШАМИ: Легкий і моментальний append нових полігонів у кінець файлу.
+        Працює за 1 мілісекунду, не навантажуючи флешку eMMC.
+        """
+        if not self.buffer_to_disk:
+            return
+
+        import os
+        import dump_manager
+        from shapely import wkb
+        from shapely.ops import unary_union
+
+        wkb_path = os.path.join(dump_manager.DUMP_DIR, self.current_wkb_filename)
+        
+        try:
+            # Склеюємо тільки ті полігони, які наїздили за останні 150 кроків
+            chunk_union = unary_union(self.buffer_to_disk)
+            wkb_bytes = wkb.dumps(chunk_union, hex=False)
+            
+            # СУВОРИЙ РЕЖИМ ДОЗАПИСУ "ab" (Append Binary) — штовхаємо байти в кінець
+            with open(wkb_path, "ab") as f:
+                f.write(wkb_bytes)
+                
+            # Очищаємо проміжний ОЗУ-буфер, він уже на диску
+            self.buffer_to_disk = []
+            print("[SectionControl] Новий геометричний блок успішно дозаписано.")
+        except Exception as e:
+            print(f"[SectionControl] Помилка аappend WKB: {e}")
+
+    def save_to_disk_0(self):
         """
         ФЕН-ШУЙ СОХРАНЕНИЕ: Пишет геометрию одновременно в файл поля
         и в резервный файл текущей сессии.
@@ -381,46 +456,6 @@ class SectionControl:
         except Exception as e:
             print(f"[SectionControl] Помилка подвійного збереження WKB: {e}")
 
-    def save_to_disk_0(self):
-        """
-        Сохраняет бинарный слепок карты покрытия под индивидуальным именем поля.
-        """
-        import os
-        import dump_manager
-        from shapely import wkb
-
-        # Строим жесткий путь к нашему индивидуальному файлу геометрии
-        wkb_path = os.path.join(dump_manager.DUMP_DIR, self.current_wkb_filename)
-
-        try:
-            with open(wkb_path, "wb") as f:
-                f.write(wkb.dumps(self.covered_area, hex=False))
-            print(f"[SectionControl] Геометрия сохранена в: {wkb_path}")
-        except Exception as e:
-            print(f"[SectionControl] Ошибка записи WKB на диск: {e}")
-
-    def save_to_disk_1(self):
-        """Безпечне асинхронне збереження WKB геометрії поля"""
-        if self.covered_area.is_empty:
-            return
-
-        try:
-            save_file = self.cfg.get("SAVE_FILE", "coverage.wkb")
-            tmp_file = save_file + ".tmp"
-
-            # Записуємо геометрію в байтах. Працює моментально.
-            with open(tmp_file, "wb") as f:  # "wb" — Запис бінарного файлу
-                # hex=False означає чистий бінарник.
-                # (Якщо поставити True, він зробить текст із шістнадцяткових символів, нам це не потрібно)
-                f.write(wkb.dumps(self.covered_area, hex=False))
-
-            # Атомарна заміна файлу для захисту від раптового вимкнення живлення
-            os.replace(tmp_file, save_file)
-
-        except Exception as e:
-            print(f"Помилка атомарного збереження WKB: {e}")
-            if "tmp_file" in locals() and os.path.exists(tmp_file):
-                os.remove(tmp_file)
 
     def reset(self):
         """Скидання поточної карти поля"""

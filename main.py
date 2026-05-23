@@ -80,33 +80,38 @@ def main_calculation_loop():
                 if cmd == "reset" or cmd == "reset_area":
                     sc.current_wkb_filename = "current_session.wkb"
                     state.current_file = "NEW"
-                    
+
                     vra = getattr(state, "vra_manager", None)
                     if vra:
                         vra.reset_manager()
                     # ПРАВИЛЬНЫЙ ФЕН-ШУЙ: Записываем в маркер, что мы в чистом поле
                     try:
-                        with open(os.path.join(dump_manager.DUMP_DIR, "last_field.txt"), "w") as f:
+                        with open(
+                            os.path.join(dump_manager.DUMP_DIR, "last_field.txt"), "w"
+                        ) as f:
                             f.write("current_session")
-                    except: pass
-                    
+                    except:
+                        pass
+
                     state.reset_flag = True
 
                 # if cmd == "reset":
                 #     state.reset_flag = True
                 elif cmd == "reload_config":
                     # config_manager у нас на кеші, тому просто релоадимо
-                    config_manager._cached_config = None 
+                    config_manager._cached_config = None
                     active_cfg = config_manager.load_config()
                     sc.cfg = active_cfg
                     # ЖЕСТКИЙ ФЕН-ШУЙ ФИКС: Сбрасываем память штанги!
-                    # Когда Master Switch щелкает (Вкл/Выкл), геометрия ОБЯЗАНА забыть 
+                    # Когда Master Switch щелкает (Вкл/Выкл), геометрия ОБЯЗАНА забыть
                     # предыдущие координаты, чтобы не строить полигоны-телепорты через пол поля.
                     sc.last_p1_list = []
                     sc.last_p2_list = []
                     sc.last_x = None
                     sc.last_y = None
-                    print("[Main_Engine] Переключатель Master Switch изменен. Координаты штанги синхронизированы.")
+                    print(
+                        "[Main_Engine] Переключатель Master Switch изменен. Координаты штанги синхронизированы."
+                    )
 
                 elif cmd == "reset_area":
                     vra = getattr(state, "vra_manager", None)
@@ -127,28 +132,28 @@ def main_calculation_loop():
                     state.emu_hdg = cmd_data["hdg"]
                     state.emu_speed = cmd_data["spd"]
                     state.emu_enabled = cmd_data["enabled"]
-                
+
                 # elif cmd == "load_field":
                 #     import os
                 #     import shutil
                 #     from shapely import wkb
-                    
+
                 #     base_name = os.path.basename(cmd_data["filename"])  # Наприклад: "1.json"
                 #     name_without_ext, _ = os.path.splitext(base_name)   # "1"
-                    
+
                 #     # Шляхи до архівних файлів поля, яке ми хочемо відкрити
                 #     archive_json_path = os.path.join(dump_manager.DUMP_DIR, base_name)
                 #     archive_wkb_path = os.path.join(dump_manager.DUMP_DIR, f"{name_without_ext}.wkb")
-                    
+
                 #     if os.path.exists(archive_json_path):
                 #         print(f"[Main_Engine] АКТИВАЦІЯ ПОЛЯ: {name_without_ext}")
-                        
+
                 #         # --- ГОЛОВНИЙ ФЕН-ШУЙ ФІКС ---
                 #         # Копіюємо вибране поле поверх поточної робочої сесії,
                 #         # щоб при перезапуску сервера завантажувалося саме ВОНО!
                 #         current_json_path = os.path.join(dump_manager.DUMP_DIR, "current_session.json")
                 #         current_wkb_path = os.path.join(dump_manager.DUMP_DIR, "current_session.wkb")
-                        
+
                 #         try:
                 #             shutil.copyfile(archive_json_path, current_json_path)
                 #             if os.path.exists(archive_wkb_path):
@@ -162,7 +167,7 @@ def main_calculation_loop():
 
                 #         # 1. Завантажуємо історію точок (для Canvas)
                 #         dump_manager.load_session_dump(state, sc, filename=archive_json_path)
-                        
+
                 #         # 2. Завантажуємо бінарну геометрию
                 #         if os.path.exists(archive_wkb_path):
                 #             try:
@@ -177,57 +182,106 @@ def main_calculation_loop():
                 elif cmd == "load_field":
                     import os
                     from shapely import wkb
-                    
+
                     base_name = os.path.basename(cmd_data["filename"])  # "1.json"
-                    name_without_ext, _ = os.path.splitext(base_name)   # "1"
-                    
+                    name_without_ext, _ = os.path.splitext(base_name)  # "1"
+
                     archive_json_path = os.path.join(dump_manager.DUMP_DIR, base_name)
-                    archive_wkb_path = os.path.join(dump_manager.DUMP_DIR, f"{name_without_ext}.wkb")
-                    
-                    if os.path.exists(archive_json_path):
-                        print(f"[Main_Engine] АКТИВАЦІЯ ПОЛЯ: {name_without_ext}")
-                        
-                        # ПРАВИЛЬНЫЙ ФЕН-ШУЙ: Запоминаем имя активного поля в маркер!
+                    archive_wkb_path = os.path.join(
+                        dump_manager.DUMP_DIR, f"{name_without_ext}.wkb"
+                    )
+
+                         # --- ПОТОКОВЕ ЗАВАНТАЖЕННЯ АРХІВНОГО ПОЛЯ ЧЕРЕЗ ЕШЕЛОНИ ---
+                    if os.path.exists(archive_wkb_path):
                         try:
-                            with open(os.path.join(dump_manager.DUMP_DIR, "last_field.txt"), "w") as f:
-                                f.write(name_without_ext)
-                        except: pass
-
-                        sc.current_wkb_filename = f"{name_without_ext}.wkb"
-                        state.current_file = name_without_ext
-
-                        dump_manager.load_session_dump(state, sc, filename=archive_json_path)
-                        
-                        if os.path.exists(archive_wkb_path):
+                            all_chunks = []
                             with open(archive_wkb_path, "rb") as f:
-                                sc.covered_area = wkb.loads(f.read())
+                                while True:
+                                    try:
+                                        chunk = wkb.load(f)
+                                        if chunk and not chunk.is_empty:
+                                            all_chunks.append(chunk)
+                                    except EOFError:
+                                        break
+                                    except:
+                                        break
+                            if all_chunks:
+                                sc.covered_area = unary_union(all_chunks)
+                                print(f"[Main_Engine] Геометрія поля '{name_without_ext}' успішно відновлена з {len(all_chunks)} ешелонів WKB!")
+                            else:
+                                from shapely.geometry import MultiPolygon
+                                sc.covered_area = MultiPolygon()
+                        except Exception as e:
+                            print(f"[Main_Engine] Помилка потокового читання WKB поля {name_without_ext}: {e}")
+                    else:
+                        from shapely.geometry import MultiPolygon
+                        sc.covered_area = MultiPolygon()
+                        print(f"[Main_Engine] Попередження: Файл {name_without_ext}.wkb не знайдено. Карта чиста.")
 
+                    # if os.path.exists(archive_json_path):
+                    #     print(f"[Main_Engine] АКТИВАЦІЯ ПОЛЯ: {name_without_ext}")
+
+                    #     # ПРАВИЛЬНЫЙ ФЕН-ШУЙ: Запоминаем имя активного поля в маркер!
+                    #     try:
+                    #         with open(os.path.join(dump_manager.DUMP_DIR, "last_field.txt"), "w") as f:
+                    #             f.write(name_without_ext)
+                    #     except: pass
+
+                    #     sc.current_wkb_filename = f"{name_without_ext}.wkb"
+                    #     state.current_file = name_without_ext
+
+                    #     dump_manager.load_session_dump(state, sc, filename=archive_json_path)
+
+                    #     if os.path.exists(archive_wkb_path):
+                    #         with open(archive_wkb_path, "rb") as f:
+                    #             sc.covered_area = wkb.loads(f.read())
 
                 # elif cmd == "save_field":
                 #     import os
                 #     base_name = os.path.basename(cmd_data["filename"]) # Например: "Люцерна_2026.json"
                 #     name_without_ext, _ = os.path.splitext(base_name)
-                    
+
                 #     # Формируем фен-шуйное имя для WKB-файла
                 #     wkb_name = f"{name_without_ext}.wkb"
-                    
+
                 #     # Присваиваем новые имена файлов в движок расчетов
                 #     sc.current_wkb_filename = wkb_name
                 #     state.current_file = name_without_ext
-                    
+
                 #     # 1. Сохраняем текстовый JSON через ваш дамп-менеджер
                 #     json_full_path = os.path.join(dump_manager.DUMP_DIR, base_name)
                 #     dump_manager.save_session_dump(state, sc, filename=json_full_path)
-                    
+
                 #     # 2. Сразу же принудительно сохраняем бинарный WKB-файл геометрии!
                 #     sc.save_to_disk()
-                #     print(f"[Main_Engine] Поле успешно сохранено: {name_without_ext}.json + {wkb_name}")                
+                #     print(f"[Main_Engine] Поле успешно сохранено: {name_without_ext}.json + {wkb_name}")
+                # elif cmd == "save_field":
+                #     import os
+
+                #     base_name = os.path.basename(cmd_data["filename"])  # "1.json"
+                #     name_without_ext, _ = os.path.splitext(base_name)  # "1"
+
+                #     # ПРАВИЛЬНЫЙ ФЕН-ШУЙ: Запоминаем имя созданного поля в маркер!
+                #     try:
+                #         with open(
+                #             os.path.join(dump_manager.DUMP_DIR, "last_field.txt"), "w"
+                #         ) as f:
+                #             f.write(name_without_ext)
+                #     except:
+                #         pass
+
+                #     sc.current_wkb_filename = f"{name_without_ext}.wkb"
+                #     state.current_file = name_without_ext
+
+                #     json_full_path = os.path.join(dump_manager.DUMP_DIR, base_name)
+                #     dump_manager.save_session_dump(state, sc, filename=json_full_path)
+                #     sc.save_to_disk()
                 elif cmd == "save_field":
                     import os
-                    base_name = os.path.basename(cmd_data["filename"])  # "1.json"
-                    name_without_ext, _ = os.path.splitext(base_name)   # "1"
+                    from shapely import wkb
+                    base_name = os.path.basename(cmd_data["filename"]) # "1.json"
+                    name_without_ext, _ = os.path.splitext(base_name)  # "1"
                     
-                    # ПРАВИЛЬНЫЙ ФЕН-ШУЙ: Запоминаем имя созданного поля в маркер!
                     try:
                         with open(os.path.join(dump_manager.DUMP_DIR, "last_field.txt"), "w") as f:
                             f.write(name_without_ext)
@@ -238,8 +292,19 @@ def main_calculation_loop():
                     
                     json_full_path = os.path.join(dump_manager.DUMP_DIR, base_name)
                     dump_manager.save_session_dump(state, sc, filename=json_full_path)
-                    sc.save_to_disk()
-                
+                    
+                    # ПРИМУСОВИЙ СКИД ВСІЄЇ КАРТИ ПРИ СТВОРЕННІ НОВОГО ФАЙЛУ FIELD
+                    # 2. Зберігаємо чистий базовий ешелон геометрії у файл поля
+                    wkb_full_path = os.path.join(dump_manager.DUMP_DIR, f"{name_without_ext}.wkb")
+                    try:
+                        # Записуємо через потоковий dump у режимі "wb" (створення бази)
+                        with open(wkb_full_path, "wb") as f:
+                            wkb.dump(sc.covered_area, f, hex=False)
+                        print(f"[Main_Engine] Поле успішно створено: {name_without_ext}.json + {name_without_ext}.wkb")
+                    except Exception as e:
+                        print(f"[Main_Engine] Не вдалося створити базу WKB: {e}")
+
+
                 elif cmd == "set_point":
                     label = cmd_data["label"]
                     if label == "a":
@@ -524,7 +589,10 @@ def main_calculation_loop():
             current_file_name = getattr(state, "current_file", "NEW")
             if current_file_name != "NEW":
                 import os
-                field_json_path = os.path.join(dump_manager.DUMP_DIR, f"{current_file_name}.json")
+
+                field_json_path = os.path.join(
+                    dump_manager.DUMP_DIR, f"{current_file_name}.json"
+                )
                 dump_manager.save_session_dump(state, sc, filename=field_json_path)
         else:
             # =======================================================================
@@ -578,8 +646,11 @@ def main_calculation_loop():
             pass
 
         time.sleep(0.25)  # Суворі 4 Гц розрахунків
+
+
 def start_flask_process(d_queue, c_queue):
     import logging
+
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
     import os
@@ -595,32 +666,42 @@ def start_flask_process(d_queue, c_queue):
         try:
             with open(marker_path, "r", encoding="utf-8") as f:
                 saved_name = f.read().strip()
-                if saved_name: active_field_name = saved_name
-        except: pass
+                if saved_name:
+                    active_field_name = saved_name
+        except:
+            pass
 
     target_json_path = os.path.join(dump_manager.DUMP_DIR, f"{active_field_name}.json")
-    
+
     if os.path.exists(target_json_path):
         try:
             with open(target_json_path, "r", encoding="utf-8") as f:
                 dump_data = json.load(f)
                 history = dump_data.get("path_history", [])
-                
+
                 web_server.WEB_CACHE["new_points"] = history
                 web_server.WEB_CACHE["total_count"] = len(history)
                 web_server.WEB_CACHE["area"] = dump_data.get("area", 0.0)
-                web_server.WEB_CACHE["current_file"] = dump_data.get("current_file", "NEW")
-                web_server.WEB_CACHE["active_vra_file"] = dump_data.get("active_vra_file", None)
-                print(f"[Web_Server Autoload] УСПЕХ: Загружен трек поля '{active_field_name}' ({len(history)} точек).")
+                web_server.WEB_CACHE["current_file"] = dump_data.get(
+                    "current_file", "NEW"
+                )
+                web_server.WEB_CACHE["active_vra_file"] = dump_data.get(
+                    "active_vra_file", None
+                )
+                print(
+                    f"[Web_Server Autoload] УСПЕХ: Загружен трек поля '{active_field_name}' ({len(history)} точек)."
+                )
         except Exception as e:
             print(f"[Web_Server Autoload] Ошибка предзагрузки кеша: {e}")
 
     app = web_server.create_app(d_queue, c_queue)
     app.run(host="0.0.0.0", port=80, debug=False, use_reloader=False)
 
+
 def start_flask_process_0(d_queue, c_queue):
     """Кастомна функція-ініціатор для ізольованого запуску Flask"""
     import logging
+
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
     # --- ФЕН-ШУЙ ФИКС ХОЛОДНОГО СТАРТА ДЛЯ КАНВАСА ---
@@ -638,15 +719,21 @@ def start_flask_process_0(d_queue, c_queue):
                 dump_data = json.load(f)
                 # Достаем сохраненный массив path_history из дампа
                 history = dump_data.get("path_history", [])
-                
+
                 # Забиваем историю в локальный ОЗУ-кеш этого процесса Flask
                 web_server.WEB_CACHE["new_points"] = history
                 web_server.WEB_CACHE["total_count"] = len(history)
                 web_server.WEB_CACHE["area"] = dump_data.get("area", 0.0)
-                web_server.WEB_CACHE["current_file"] = dump_data.get("current_file", "NEW")
-                web_server.WEB_CACHE["active_vra_file"] = dump_data.get("active_vra_file", None)
-                
-                print(f"[Web_Server Autoload] УСПЕХ: {len(history)} точек истории загружено в веб-кеш для Canvas.")
+                web_server.WEB_CACHE["current_file"] = dump_data.get(
+                    "current_file", "NEW"
+                )
+                web_server.WEB_CACHE["active_vra_file"] = dump_data.get(
+                    "active_vra_file", None
+                )
+
+                print(
+                    f"[Web_Server Autoload] УСПЕХ: {len(history)} точек истории загружено в веб-кеш для Canvas."
+                )
         except Exception as e:
             print(f"[Web_Server Autoload] Не удалось предзагрузить JSON трек: {e}")
 
@@ -654,10 +741,12 @@ def start_flask_process_0(d_queue, c_queue):
     app = web_server.create_app(d_queue, c_queue)
     app.run(host="0.0.0.0", port=80, debug=False, use_reloader=False)
 
+
 def start_flask_process_1(d_queue, c_queue):
     """Кастомна функція-ініціатор для ізольованого запуску Flask"""
     # Створюємо чистий екземпляр програми всередині нового ядра CPU
     import logging
+
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
     app = web_server.create_app(d_queue, c_queue)
     app.run(host="0.0.0.0", port=80, debug=False, use_reloader=False)
@@ -666,45 +755,14 @@ def start_flask_process_1(d_queue, c_queue):
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn", force=True)
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
-    # dump_manager.load_session_dump(state, sc)
-
-    # #************************************************************************************
-    # # 2. АВТОМАТИЧНЕ ВІДНОВЛЕННЯ ГЕОМЕТРІЇ (ФІКС СЛІПОТИ ПРИ СТАРТІ)
-    # import os
-    # from shapely import wkb
-    # from shapely.geometry import MultiPolygon
-
-    # # Перевіряємо, під яким ім'ям збереглася остання робоча геометрія сесії.
-    # # За замовчуванням це "current_session.wkb" або "covered_area.wkb" у папці дампу.
-    # # Дивимося, яке ім'я зараз у sc.current_wkb_filename
-    # wkb_name = getattr(sc, "current_wkb_filename", "current_session.wkb")
-    # wkb_path = os.path.join(dump_manager.DUMP_DIR, wkb_name)
-
-    # # Якщо раптом файл не знайшовся в dump_fields, перевіримо корінь проекту (про всяк випадок)
-    # if not os.path.exists(wkb_path):
-    #     wkb_path = os.path.join(dump_manager.DUMP_DIR, "covered_area.wkb")
-    # if not os.path.exists(wkb_path):
-    #     wkb_path = "covered_area.wkb"
-
-    # if os.path.exists(wkb_path):
-    #     try:
-    #         with open(wkb_path, "rb") as f:
-    #             sc.covered_area = wkb.loads(f.read())
-    #         print(f"[Main_Engine Autoload] УСПІХ: Геометрію перекриттів відновлено з WKB! Шлях: {wkb_path}")
-    #     except Exception as e:
-    #         sc.covered_area = MultiPolygon()
-    #         print(f"[Main_Engine Autoload] Помилка читання WKB файлу сесії: {e}")
-    # else:
-    #     sc.covered_area = MultiPolygon()
-    #     print(f"[Main_Engine Autoload] Попередження: Файл геометрії сесії не знайдено за шляхом: {wkb_path}. Створено порожнє поле.")
-    # #************************************************************************************
+   
     import os
     from shapely import wkb
     from shapely.geometry import MultiPolygon
 
     # 1. ОПРЕДЕЛЯЕМ ИМЯ ПОСЛЕДНЕГО АКТИВНОГО ФАЙЛА ПО МАРКЕРУ
     marker_path = os.path.join(dump_manager.DUMP_DIR, "last_field.txt")
-    active_field_name = "current_session" # Дефолт, если маркер пустой
+    active_field_name = "current_session"  # Дефолт, если маркер пустой
 
     if os.path.exists(marker_path):
         try:
@@ -718,7 +776,7 @@ if __name__ == "__main__":
     # Формируем правильные пути к файлам на основе маркера
     target_json_name = f"{active_field_name}.json"
     target_wkb_name = f"{active_field_name}.wkb"
-    
+
     json_path = os.path.join(dump_manager.DUMP_DIR, target_json_name)
     wkb_path = os.path.join(dump_manager.DUMP_DIR, target_wkb_name)
 
@@ -733,25 +791,69 @@ if __name__ == "__main__":
     # 2. ЗАГРУЖАЕМ ПРАВИЛЬНЫЙ ТЕКСТОВЫЙ ТРЕК JSON
     if os.path.exists(json_path):
         dump_manager.load_session_dump(state, sc, filename=json_path)
-        print(f"[DumpManager Autoload] УСПЕХ: Состояние восстановлено из активного поля: {target_json_name}")
+        print(
+            f"[DumpManager Autoload] УСПЕХ: Состояние восстановлено из активного поля: {target_json_name}"
+        )
     else:
         # Если файл поля почему-то пропал, откатываемся на резерв
         dump_manager.load_session_dump(state, sc)
         print("[DumpManager Autoload] Файл поля не найден, загружена резервная сессия.")
 
-    # 3. ЗАГРУЖАЕМ РОДНУЮ БИНАРНУЮ ГЕОМЕТРИЮ WKB
+    # # 3. ЗАГРУЖАЕМ РОДНУЮ БИНАРНУЮ ГЕОМЕТРИЮ WKB
+    # if os.path.exists(wkb_path):
+    #     try:
+    #         with open(wkb_path, "rb") as f:
+    #             sc.covered_area = wkb.loads(f.read())
+    #         print(
+    #             f"[Main_Engine Autoload] УСПЕХ: Геометрия поля восстановлена из WKB! Шлях: {wkb_path}"
+    #         )
+    #     except Exception as e:
+    #         sc.covered_area = MultiPolygon()
+    #         print(f"[Main_Engine Autoload] Ошибка парсинга WKB: {e}")
+    # else:
+    #     sc.covered_area = MultiPolygon()
+    #     print(
+    #         f"[Main_Engine Autoload] Предупреждение: WKB-файл {target_wkb_name} не найден. Карта чистая."
+    #     )
+        # =================================================================================
+    # 3. ПОТОКОВИЙ ВІДНОВЛЮВАЧ ГЕОМЕТРІЇ ПРИ СТАРТІ (ЧИТАННЯ ЕШЕЛОНІВ)
+    # =================================================================================
     if os.path.exists(wkb_path):
         try:
+            from shapely import wkb
+            from shapely.ops import unary_union
+            from shapely.geometry import MultiPolygon
+            
+            all_chunks = []
+            # Відкриваємо двійковий файл на послідовне зчитування
             with open(wkb_path, "rb") as f:
-                sc.covered_area = wkb.loads(f.read())
-            print(f"[Main_Engine Autoload] УСПЕХ: Геометрия поля восстановлена из WKB! Шлях: {wkb_path}")
+                while True:
+                    try:
+                        # Метод wkb.load (без s) зчитує ОДИН пакет і автоматично зсуває вказівник далі
+                        chunk = wkb.load(f)
+                        if chunk and not chunk.is_empty:
+                            all_chunks.append(chunk)
+                    except EOFError:
+                        # Ловимо чистий кінець файлу (End Of File) — Delphi стиль!
+                        break
+                    except Exception as parse_err:
+                        # Захист на випадок мікро-бітих байт у самому кінці файлу
+                        break
+            
+            if all_chunks:
+                # Зшиваємо всі знайдені пакети в один MultiPolygon в ОЗУ математики
+                sc.covered_area = unary_union(all_chunks)
+                print(f"[Main_Engine Autoload] УСПІХ: Потоковий WKB зібрано. Відновлено {len(all_chunks)} ешелонів роботи.")
+            else:
+                sc.covered_area = MultiPolygon()
+                print("[Main_Engine Autoload] Файл геометрії порожній.")
+                
         except Exception as e:
             sc.covered_area = MultiPolygon()
-            print(f"[Main_Engine Autoload] Ошибка парсинга WKB: {e}")
+            print(f"[Main_Engine Autoload] Критична помилка відновлення WKB: {e}")
     else:
         sc.covered_area = MultiPolygon()
-        print(f"[Main_Engine Autoload] Предупреждение: WKB-файл {target_wkb_name} не найден. Карта чистая.")
-
+        print(f"[Main_Engine Autoload] Попередження: WKB-файл {target_wkb_name} не знайдено. Карта чиста.")
 
     # Инициализируем менеджер карт-предписаний
     vra_manager = VRAManager(cfg)
@@ -790,7 +892,7 @@ if __name__ == "__main__":
     emulator_logic.start()
 
     # 3. Запуск розрахункового циклу геометрії поля
-    #threading.Thread(target=main_calculation_loop, daemon=True).start()
+    # threading.Thread(target=main_calculation_loop, daemon=True).start()
 
     # 1. Запуск математичного ядра як звичайного потоку (має прямий доступ до пам'яті state)
     import threading
@@ -803,9 +905,7 @@ if __name__ == "__main__":
     # 2. А ось Flask ми запускаємо у СПРАВЖНЬОМУ ОКРЕМУ ПРОЦЕСІ на іншому ядрі CPU
     # Передаємо туди тільки безпечні черги зв'язку
     flask_process = multiprocessing.Process(
-        target=start_flask_process,
-        args=(data_queue, cmd_queue),
-        daemon=True
+        target=start_flask_process, args=(data_queue, cmd_queue), daemon=True
     )
     flask_process.start()
 
