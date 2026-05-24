@@ -284,15 +284,49 @@ def create_app(data_queue, cmd_queue):
         cmd_queue.put({"cmd": "load_field", "filename": filename})
         return {"status": "success"}, 200
 
+    # @app.route("/api/delete_field", methods=["POST"])
+    # def api_delete_field():
+    #     data = request.get_json() or {}
+    #     filename = os.path.basename(data.get("filename", ""))
+    #     target_path = os.path.join(dump_manager.DUMP_DIR, filename)
+    #     if os.path.exists(target_path):
+    #         os.remove(target_path)
+    #         return {"status": "success"}, 200
+    #     return {"error": "Файл не знайдено"}, 404
     @app.route("/api/delete_field", methods=["POST"])
     def api_delete_field():
         data = request.get_json() or {}
-        filename = os.path.basename(data.get("filename", ""))
-        target_path = os.path.join(dump_manager.DUMP_DIR, filename)
-        if os.path.exists(target_path):
-            os.remove(target_path)
-            return {"status": "success"}, 200
-        return {"error": "Файл не знайдено"}, 404
+        raw_filename = os.path.basename(data.get("filename", ""))
+        
+        if not raw_filename:
+            return {"error": "Не вказано ім'я файлу"}, 400
+
+        # --- ЗАХИСТ ВІД РОЗШИРЕНЬ ---
+        # Витягуємо чисте базове ім'я поля (наприклад, з "field_1.json" робимо "field_1")
+        field_base_name = raw_filename.replace(".json", "").replace(".txt", "").replace(".wkb", "").strip()
+
+        # Формуємо шляхи до всієї трійки файлів цього поля
+        target_json = os.path.join(dump_manager.DUMP_DIR, f"{field_base_name}.json")
+        target_txt = os.path.join(dump_manager.DUMP_DIR, f"{field_base_name}.txt")
+        target_wkb = os.path.join(dump_manager.DUMP_DIR, f"{field_base_name}.wkb")
+
+        deleted_any = False
+        errors = []
+
+        # Зачищаємо всі три хвости на eMMC
+        for file_path in [target_json, target_txt, target_wkb]:
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                    deleted_any = True
+                except Exception as e:
+                    errors.append(f"Не вдалося видалити {os.path.basename(file_path)}: {e}")
+
+        if deleted_any:
+            print(f"[Web_Server] Повне видалення архівного поля '{field_base_name}' (JSON+TXT+WKB) виконано.")
+            return {"status": "success", "removed_field": field_base_name, "errors": errors}, 200
+            
+        return {"error": f"Файли поля '{field_base_name}' не знайдено на диску"}, 404
 
     @app.route("/api/status", methods=["GET"])
     def get_status():

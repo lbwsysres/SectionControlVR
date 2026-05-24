@@ -6,6 +6,8 @@
         1.0,
         1.0,
         1.0,
+        1.0,
+        1.0,
         1.0
     ],
     "DRAW_OFF_SECTIONS": true,
@@ -15,6 +17,8 @@
     "OFFSET_BACK": 0.0,
     "MASTER_SW": true,
     "SECTION_MODES": [
+        "AUTO",
+        "AUTO",
         "AUTO",
         "AUTO",
         "AUTO",
