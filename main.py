@@ -191,7 +191,7 @@ def main_calculation_loop():
                         dump_manager.DUMP_DIR, f"{name_without_ext}.wkb"
                     )
 
-                         # --- ПОТОКОВЕ ЗАВАНТАЖЕННЯ АРХІВНОГО ПОЛЯ ЧЕРЕЗ ЕШЕЛОНИ ---
+                    # --- ПОТОКОВЕ ЗАВАНТАЖЕННЯ АРХІВНОГО ПОЛЯ ЧЕРЕЗ ЕШЕЛОНИ ---
                     if os.path.exists(archive_wkb_path):
                         try:
                             all_chunks = []
@@ -207,16 +207,24 @@ def main_calculation_loop():
                                         break
                             if all_chunks:
                                 sc.covered_area = unary_union(all_chunks)
-                                print(f"[Main_Engine] Геометрія поля '{name_without_ext}' успішно відновлена з {len(all_chunks)} ешелонів WKB!")
+                                print(
+                                    f"[Main_Engine] Геометрія поля '{name_without_ext}' успішно відновлена з {len(all_chunks)} ешелонів WKB!"
+                                )
                             else:
                                 from shapely.geometry import MultiPolygon
+
                                 sc.covered_area = MultiPolygon()
                         except Exception as e:
-                            print(f"[Main_Engine] Помилка потокового читання WKB поля {name_without_ext}: {e}")
+                            print(
+                                f"[Main_Engine] Помилка потокового читання WKB поля {name_without_ext}: {e}"
+                            )
                     else:
                         from shapely.geometry import MultiPolygon
+
                         sc.covered_area = MultiPolygon()
-                        print(f"[Main_Engine] Попередження: Файл {name_without_ext}.wkb не знайдено. Карта чиста.")
+                        print(
+                            f"[Main_Engine] Попередження: Файл {name_without_ext}.wkb не знайдено. Карта чиста."
+                        )
 
                     # if os.path.exists(archive_json_path):
                     #     print(f"[Main_Engine] АКТИВАЦІЯ ПОЛЯ: {name_without_ext}")
@@ -279,34 +287,44 @@ def main_calculation_loop():
                 elif cmd == "save_field":
                     import os
                     from shapely import wkb
-                    base_name = os.path.basename(cmd_data["filename"]) # "1.json"
+
+                    base_name = os.path.basename(cmd_data["filename"])  # "1.json"
                     name_without_ext, _ = os.path.splitext(base_name)  # "1"
-                    
+
                     try:
-                        with open(os.path.join(dump_manager.DUMP_DIR, "last_field.txt"), "w") as f:
+                        with open(
+                            os.path.join(dump_manager.DUMP_DIR, "last_field.txt"), "w"
+                        ) as f:
                             f.write(name_without_ext)
-                    except: pass
+                    except:
+                        pass
 
                     sc.current_wkb_filename = f"{name_without_ext}.wkb"
                     state.current_file = name_without_ext
-                    
+
                     json_full_path = os.path.join(dump_manager.DUMP_DIR, base_name)
                     dump_manager.save_session_dump(state, sc, filename=json_full_path)
-                    
+
                     # ПРИМУСОВИЙ СКИД ВСІЄЇ КАРТИ ПРИ СТВОРЕННІ НОВОГО ФАЙЛУ FIELD
                     # 2. Зберігаємо чистий базовий ешелон геометрії у файл поля
-                    wkb_full_path = os.path.join(dump_manager.DUMP_DIR, f"{name_without_ext}.wkb")
+                    wkb_full_path = os.path.join(
+                        dump_manager.DUMP_DIR, f"{name_without_ext}.wkb"
+                    )
                     try:
                         # Записуємо через потоковий dump у режимі "wb" (створення бази)
                         with open(wkb_full_path, "wb") as f:
                             wkb.dump(sc.covered_area, f, hex=False)
-                        print(f"[Main_Engine] Поле успішно створено: {name_without_ext}.json + {name_without_ext}.wkb")
+                        print(
+                            f"[Main_Engine] Поле успішно створено: {name_without_ext}.json + {name_without_ext}.wkb"
+                        )
                     except Exception as e:
                         print(f"[Main_Engine] Не вдалося створити базу WKB: {e}")
 
-
                 elif cmd == "set_point":
                     label = cmd_data["label"]
+                    print(
+                        f"[Main_Engine] set_point: {label} lat:{sc.last_x} lon:{ sc.last_y}"
+                    )
                     if label == "a":
                         state.point_a = (sc.last_x, sc.last_y)
                     elif label == "b":
@@ -549,26 +567,30 @@ def main_calculation_loop():
                             last_track_x, last_track_y = tx, ty
 
                 # Розрахунок ліній паралельного водіння А-Б (потрібен у режимах 1 та 2)
-                if state.point_a and state.point_b:
-                    if sc.transformer_to_m is None:
-                        zone = int((state.last_lon + 180) / 6) + 1
-                        sc.transformer_to_m = pyproj.Transformer.from_crs(
-                            "epsg:4326", f"epsg:326{zone}", always_xy=True
+                if state.point_a and state.point_b and state.last_lon is not None:
+                    try:
+                        if sc.transformer_to_m is None:
+                            zone = int((state.last_lon + 180) / 6) + 1
+                            sc.transformer_to_m = pyproj.Transformer.from_crs(
+                                "epsg:4326", f"epsg:326{zone}", always_xy=True
+                            )
+
+                        tx, ty = sc.transformer_to_m.transform(
+                            state.last_lon, state.last_lat
                         )
 
-                    tx, ty = sc.transformer_to_m.transform(
-                        state.last_lon, state.last_lat
-                    )
-                    ax, ay = state.point_a
-                    bx, by = state.point_b
+                        ax, ay = state.point_a
+                        bx, by = state.point_b
 
-                    num = (by - ay) * tx - (bx - ax) * ty + bx * ay - by * ax
-                    den = math.sqrt((by - ay) ** 2 + (bx - ax) ** 2)
-                    if den > 0:
-                        dist_to_ab = num / den
-                        sw = sum(active_cfg["SECTION_WIDTHS"])
-                        pass_num = round(dist_to_ab / sw)
-                        state.guidance_error = dist_to_ab - (pass_num * sw)
+                        num = (by - ay) * tx - (bx - ax) * ty + bx * ay - by * ax
+                        den = math.sqrt((by - ay) ** 2 + (bx - ax) ** 2)
+                        if den > 0:
+                            dist_to_ab = num / den
+                            sw = sum(active_cfg["SECTION_WIDTHS"])
+                            pass_num = round(dist_to_ab / sw)
+                            state.guidance_error = dist_to_ab - (pass_num * sw)
+                    except Exception as e:
+                        print(f"[Main_Engine]  {e}")
 
             else:
                 # =======================================================================
@@ -632,6 +654,8 @@ def main_calculation_loop():
             "esp_pressure": getattr(state, "esp_pressure", 0.0),
             "esp_pwm": getattr(state, "esp_pwm", 0),
             "active_vra_file": getattr(state, "active_vra_file", None),
+            "ux": sc.last_x,
+            "uy": sc.last_y,
         }
 
         # Очищаємо чергу перед записом, щоб Flask завжди бачив тільки найсвіжіший кадр
@@ -755,7 +779,7 @@ def start_flask_process_1(d_queue, c_queue):
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn", force=True)
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
-   
+
     import os
     from shapely import wkb
     from shapely.geometry import MultiPolygon
@@ -815,7 +839,7 @@ if __name__ == "__main__":
     #     print(
     #         f"[Main_Engine Autoload] Предупреждение: WKB-файл {target_wkb_name} не найден. Карта чистая."
     #     )
-        # =================================================================================
+    # =================================================================================
     # 3. ПОТОКОВИЙ ВІДНОВЛЮВАЧ ГЕОМЕТРІЇ ПРИ СТАРТІ (ЧИТАННЯ ЕШЕЛОНІВ)
     # =================================================================================
     if os.path.exists(wkb_path):
@@ -823,7 +847,7 @@ if __name__ == "__main__":
             from shapely import wkb
             from shapely.ops import unary_union
             from shapely.geometry import MultiPolygon
-            
+
             all_chunks = []
             # Відкриваємо двійковий файл на послідовне зчитування
             with open(wkb_path, "rb") as f:
@@ -839,21 +863,25 @@ if __name__ == "__main__":
                     except Exception as parse_err:
                         # Захист на випадок мікро-бітих байт у самому кінці файлу
                         break
-            
+
             if all_chunks:
                 # Зшиваємо всі знайдені пакети в один MultiPolygon в ОЗУ математики
                 sc.covered_area = unary_union(all_chunks)
-                print(f"[Main_Engine Autoload] УСПІХ: Потоковий WKB зібрано. Відновлено {len(all_chunks)} ешелонів роботи.")
+                print(
+                    f"[Main_Engine Autoload] УСПІХ: Потоковий WKB зібрано. Відновлено {len(all_chunks)} ешелонів роботи."
+                )
             else:
                 sc.covered_area = MultiPolygon()
                 print("[Main_Engine Autoload] Файл геометрії порожній.")
-                
+
         except Exception as e:
             sc.covered_area = MultiPolygon()
             print(f"[Main_Engine Autoload] Критична помилка відновлення WKB: {e}")
     else:
         sc.covered_area = MultiPolygon()
-        print(f"[Main_Engine Autoload] Попередження: WKB-файл {target_wkb_name} не знайдено. Карта чиста.")
+        print(
+            f"[Main_Engine Autoload] Попередження: WKB-файл {target_wkb_name} не знайдено. Карта чиста."
+        )
 
     # Инициализируем менеджер карт-предписаний
     vra_manager = VRAManager(cfg)

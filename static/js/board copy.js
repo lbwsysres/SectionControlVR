@@ -613,7 +613,7 @@ function drawABLines_1(data, zoom) {
     const [bx, by] = data.ab_line.b;
     const tx = data.ux; // Поточний X трактора в метрах з сервера
     const ty = data.uy; // Поточний Y трактора в метрах з сервера
-
+    
     const dx = bx - ax;
     const dy = by - ay;
     const angleAB = Math.atan2(dy, dx);
@@ -624,7 +624,7 @@ function drawABLines_1(data, zoom) {
 
     // Рахуємо відстань від трактора до базової лінії А-В
     const distToAB = ((by - ay) * tx - (bx - ax) * ty + bx * ay - by * ax) / Math.sqrt(dx * dx + dy * dy);
-
+    
     // Номер проходу, на якому ЗАРАЗ стоїть трактор
     const currentPassNum = Math.round(distToAB / fullWidth);
     _abLineNum = currentPassNum > 0 ? `(+${currentPassNum})` : `(${currentPassNum})`;
@@ -669,14 +669,14 @@ function drawABLines_2(data, zoom) {
 
     const [ax, ay] = data.ab_line.a;
     const [bx, by] = data.ab_line.b;
-
+    
     // =================================================================================
     // ЖЕСТКИЙ ФЕН-ШУЙ ФИКС: Считаем текущие метры трактора прямо здесь (как в функции draw)
     // Это полностью защищает от путаницы градусов и метров с сервера!
     // =================================================================================
     const tx = (data.pos[1] - refLon) * 111320 * Math.cos(refLat * Math.PI / 180);
     const ty = -(data.pos[0] - refLat) * 111320;
-
+    
     const dx = bx - ax;
     const dy = by - ay;
     const angleAB = Math.atan2(dy, dx);
@@ -687,7 +687,7 @@ function drawABLines_2(data, zoom) {
 
     // Теперь расчет расстояния будет абсолютно точным (метры к метрам)
     const distToAB = ((by - ay) * tx - (bx - ax) * ty + bx * ay - by * ax) / Math.sqrt(dx * dx + dy * dy);
-
+    
     // Номер текущего гона
     const currentPassNum = Math.round(distToAB / fullWidth);
     _abLineNum = currentPassNum > 0 ? `(+${currentPassNum})` : `(${currentPassNum})`;
@@ -726,6 +726,7 @@ function drawABLines_2(data, zoom) {
         bgCtx.stroke();
     }
 }
+
 function drawABLines(data, zoom) {
     if (!data.ab_line || !data.ab_line.a || !data.ab_line.b || data.ab_line.error === undefined) return;
 
@@ -735,15 +736,15 @@ function drawABLines(data, zoom) {
 
     const [ax, ay] = data.ab_line.a;
     const [bx, by] = data.ab_line.b;
-
+    
     // Вычисляем угол линии А-В в радианах относительно поля
     const dx = bx - ax;
     const dy = by - ay;
-    const angleAB = Math.atan2(dy, dx);
+    const angleAB = Math.atan2(dy, dx); 
 
     // Текущий курс трактора от сервера
     const tractorRad = (data.hdg || 0) * Math.PI / 180;
-
+    
     // Относительный угол наклона линии на экране (трактор смотрит строго ВВЕРХ)
     const relativeAngle = angleAB - tractorRad + Math.PI / 2;
 
@@ -752,7 +753,7 @@ function drawABLines(data, zoom) {
 
     // Масштабируем ошибку отклонения с сервера в экранные пиксели
     // Умножаем на 10, так как ваш базовый масштаб карты fCenterX/fCenterY завязан на 10 пикс/метр!
-    const baseOffsetX = -data.ab_line.error * zoom * 10;
+    const baseOffsetX = -data.ab_line.error * zoom * 10; 
 
     // Рисуем центральный гон и 3 соседних прохода слева и справа
     for (let i = -3; i <= 3; i++) {
@@ -760,14 +761,14 @@ function drawABLines(data, zoom) {
         const offset = i * fullWidth * zoom * 10;
 
         bgCtx.save();
-
+        
         // =================================================================================
         // ФЕН-ШУЙ ФИКС: Сначала переносим начало координат в ЦЕНТР ЭКРАНА (к трактору)
         // А уже потом смещаем на ошибку курса и шаг параллельного гона!
         // =================================================================================
-        bgCtx.translate(cx, cy);
+        bgCtx.translate(cx, cy); 
         bgCtx.translate(baseOffsetX + offset, 0);
-
+        
         // Поворачиваем линию вокруг локальной точки трактора
         bgCtx.rotate(relativeAngle);
 
@@ -784,22 +785,41 @@ function drawABLines(data, zoom) {
         bgCtx.moveTo(0, -length);
         bgCtx.lineTo(0, length);
         bgCtx.stroke();
-
+        
         bgCtx.restore();
     }
 }
+
+
+
+function drawABLines_Test_Circle(data, zoom) {
+    // ВРЕМЕННЫЙ ТЕСТ-КРУГ: Рисуем прямо в центре экрана трактора
+    bgCtx.save();
+    bgCtx.setTransform(1, 0, 0, 1, 0, 0); // Сбрасываем все повороты в пиксели экрана
+    
+    bgCtx.beginPath();
+    bgCtx.arc(bgCanvas.width / 2, bgCanvas.height / 2, 50, 0, 2 * Math.PI);
+    bgCtx.fillStyle = "rgba(231, 76, 60, 0.8)"; // Ярко-красный
+    bgCtx.fill();
+    bgCtx.strokeStyle = "white";
+    bgCtx.lineWidth = 3;
+    bgCtx.stroke();
+    
+    bgCtx.restore();
+}
+
 // =================================================================================
 // 3. ФУНКЦІЯ МАЛЮВАННЯ ПІДТЛАДКИ (КАРТА VRA + СЛІД ТРАКТОРУ)
 // =================================================================================
 function drawFieldMap(tx_m, ty_m, hdg, zoom) {
     bgCtx.save();
-
+    
     // Переносимо центр матриці в центр екрану планшета
     bgCtx.translate(bgCanvas.width / 2, bgCanvas.height / 2);
-
+    
     // Обертаємо всю землю під трактором
     bgCtx.rotate(-hdg * Math.PI / 180);
-
+    
     // Розраховуємо масштаб відносно нашого буфера (10 пікс/метр)
     const scaleFactor = zoom / 10;
     bgCtx.scale(scaleFactor, scaleFactor);
@@ -811,7 +831,7 @@ function drawFieldMap(tx_m, ty_m, hdg, zoom) {
 
     // ШАР 2: Буфер проходів обприскувача (слід малюється ПОВЕРХ карти VRA)
     bgCtx.drawImage(fieldCanvas, -(tx_m * 10 + fCenterX), -(ty_m * 10 + fCenterY));
-
+    
     bgCtx.restore(); // Повертаємо матрицю назад
 }
 // =================================================================================
@@ -820,17 +840,17 @@ function drawFieldMap(tx_m, ty_m, hdg, zoom) {
 function drawTractorBoom(cx, cy, totalW, data, vScale) {
     fgCtx.save();
     fgCtx.translate(cx, cy);
-
+    
     const bDist = (cfg.OFFSET_BACK || 0) * zoom * vScale;
     let sX = -(totalW / 2) * zoom * vScale;
 
     // Малюємо рамки та заливаємо кольором активні секції штанги
     data.states.forEach((active, i) => {
         const sw = cfg.SECTION_WIDTHS[i] * zoom * vScale;
-
+        
         fgCtx.strokeStyle = "rgba(255, 255, 255, 0.8)";
         fgCtx.strokeRect(sX, bDist, sw, 8);
-
+        
         if (active) {
             fgCtx.fillStyle = "rgba(46, 204, 113, 0.9)";
             fgCtx.fillRect(sX, bDist, sw, 8);
@@ -842,16 +862,16 @@ function drawTractorBoom(cx, cy, totalW, data, vScale) {
     fgCtx.globalAlpha = data.master ? 1.0 : 0.4;
     fgCtx.fillStyle = "#f1c40f";
     fgCtx.beginPath();
-    fgCtx.moveTo(0, -25);
-    fgCtx.lineTo(12, 5);
+    fgCtx.moveTo(0, -25); 
+    fgCtx.lineTo(12, 5); 
     fgCtx.lineTo(-12, 5);
-    fgCtx.closePath();
+    fgCtx.closePath(); 
     fgCtx.fill();
-
-    fgCtx.strokeStyle = "white";
-    fgCtx.lineWidth = 2;
+    
+    fgCtx.strokeStyle = "white"; 
+    fgCtx.lineWidth = 2; 
     fgCtx.stroke();
-
+    
     fgCtx.restore();
 }
 // =================================================================================
@@ -860,18 +880,18 @@ function drawTractorBoom(cx, cy, totalW, data, vScale) {
 function drawSystemMonitor(start, padding = 20, lineHeight = 20) {
     bgCtx.save();
     bgCtx.setTransform(1, 0, 0, 1, 0, 0); // Скидаємо матрицю в абсолютні пікселі екрана
-
+    
     bgCtx.fillStyle = "white";
     bgCtx.font = "14px monospace";
     bgCtx.textAlign = "right";
-
+    
     const x = bgCanvas.width - padding;
     const y = bgCanvas.height - padding;
     const end = performance.now();
 
     bgCtx.fillText(`Read: ${_timeRead.toFixed(3)} ms`, x, y - lineHeight);
     bgCtx.fillText(`Draw: ${(end - start).toFixed(3)} ms`, x, y - lineHeight * 2);
-
+    
     bgCtx.restore();
 }
 // =================================================================================
@@ -979,131 +999,59 @@ function draw(data) {
 
     bgCtx.restore(); // Повертаємо контекст назад, очищуючи матрицю для ліній А-В
 
-    // // *************************************************************************************** //
-    // // --- 2. МАЛЮЄМО ДИНАМІЧНІ ЛІНІЇ А-В (КРУТЯТЬСЯ І СЛІДУЮТЬ ЗА ТРАКТОРОМ) ---
-    // if (data.ab_line && data.ab_line.a && data.ab_line.b && data.ux !== null && data.uy !== null) {
-
-    //     const [ax, ay] = data.ab_line.a;
-    //     const [bx, by] = data.ab_line.b;
-    //     const tx = data.ux; // Поточний X трактора в метрах з сервера
-    //     const ty = data.uy; // Поточний Y трактора в метрах з сервера
-    //     const dx = bx - ax;
-    //     const dy = by - ay;
-    //     const angleAB = Math.atan2(dy, dx);
-    //     // Загальна ширина штанги оприскувача з конфігу
-    //     const fullWidth = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
-    //     const length = 2000; // Довжина ліній (2 км)
-    //     // ------------------------------------------------------------------------
-    //     // ГОЛОВНА МАТЕМАТИКА ЗМІЩЕННЯ:
-    //     // Рахуємо відстань від трактора (tx, ty) до базової лінії А-В (ax, ay)
-    //     const distToAB = ((by - ay) * tx - (bx - ax) * ty + bx * ay - by * ax) / Math.sqrt(dx * dx + dy * dy);
-
-    //      //console.log(distToAB);
-
-    //     // Визначаємо точний номер проходу, на якому ЗАРАЗ стоїть трактор (округлюємо до найближчого)
-    //     const currentPassNum = Math.round(distToAB / fullWidth);
-    //     if (currentPassNum > 0) {
-    //         _abLineNum = `(+${currentPassNum})`;
-    //     } else {
-    //         _abLineNum = `(${currentPassNum})`; // Для 0 та від'ємних знак підставиться сам
-    //     }
-    //     // ------------------------------------------------------------------------
-    //     // Малюємо сітку ліній навколо ТРАКТОРА (по 10 проходів вліво і вправо від поточного)
-    //     for (let i = -3; i <= 3; i++) {
-    //         // Абсолютний номер проходу на полі (базовий номер + зміщення циклу)
-    //         const absolutePass = currentPassNum + i;
-    //         // Відступ конкретної лінії в метрах від оригінальної осі А-В (i=0)
-    //         const offset = absolutePass * fullWidth;
-    //         // Світові координати цієї лінії на полі
-    //         const offsetX = ax + offset * Math.sin(angleAB);
-    //         const offsetY = ay - offset * Math.cos(angleAB);
-    //         // Переклад у координати екрана відносно трактора (в метрах) з масштабуванням
-    //         const screenX = (offsetX - tx) * zoom;
-    //         const screenY = -(offsetY - ty) * zoom;
-    //         bgCtx.beginPath();
-    //         // Якщо absolutePass === 0 — це оригінальна (найперша) лінія А-В
-    //         // Якщо i === 0 — це ПОТОЧНА ГОЛОВНА ЛІНІЯ, до якої зараз найближче трактор
-    //         if (i === 0) {
-    //             bgCtx.lineWidth = 20 / zoom; // Робимо поточний прохід найтовстішим
-    //             bgCtx.strokeStyle = "rgba(255, 255, 255, 0.9)"; // Яскраво-білий колір
-    //         } else {
-    //             bgCtx.lineWidth = 10 / zoom;
-    //             // Кожну п'яту лінію підсвічуємо трохи яскравіше для зручності орієнтування
-    //             bgCtx.strokeStyle = (absolutePass % 5 === 0) ? "rgba(100, 220, 255, 0.6)" : "rgba(100, 200, 255, 0.25)";
-    //         }
-    //         // Малюємо лінію проходу
-    //         bgCtx.moveTo(
-    //             screenX - Math.cos(angleAB) * length * zoom,
-    //             screenY + Math.sin(angleAB) * length * zoom
-    //         );
-    //         bgCtx.lineTo(
-    //             screenX + Math.cos(angleAB) * length * zoom,
-    //             screenY - Math.sin(angleAB) * length * zoom
-    //         );
-    //         bgCtx.stroke();
-    //     }
-    // }
-    // bgCtx.restore();
     // *************************************************************************************** //
     // --- 2. МАЛЮЄМО ДИНАМІЧНІ ЛІНІЇ А-В (КРУТЯТЬСЯ І СЛІДУЮТЬ ЗА ТРАКТОРОМ) ---
-
     if (data.ab_line && data.ab_line.a && data.ab_line.b && data.ux !== null && data.uy !== null) {
+       
         const [ax, ay] = data.ab_line.a;
         const [bx, by] = data.ab_line.b;
-        const tx = data.ux; // Поточний X трактора в метрах
-        const ty = data.uy; // Поточний Y трактора в метрах
+        const tx = data.ux; // Поточний X трактора в метрах з сервера
+        const ty = data.uy; // Поточний Y трактора в метрах з сервера
         const dx = bx - ax;
         const dy = by - ay;
         const angleAB = Math.atan2(dy, dx);
-
-        // Загальна ширина штанги
+        // Загальна ширина штанги оприскувача з конфігу
         const fullWidth = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
         const length = 2000; // Довжина ліній (2 км)
-
-        // ГОЛОВНА МАТЕМАТИКА ЗМІЩЕННЯ
+        // ------------------------------------------------------------------------
+        // ГОЛОВНА МАТЕМАТИКА ЗМІЩЕННЯ:
+        // Рахуємо відстань від трактора (tx, ty) до базової лінії А-В (ax, ay)
         const distToAB = ((by - ay) * tx - (bx - ax) * ty + bx * ay - by * ax) / Math.sqrt(dx * dx + dy * dy);
 
-        // Номер поточного проходу
+         //console.log(distToAB);
+
+        // Визначаємо точний номер проходу, на якому ЗАРАЗ стоїть трактор (округлюємо до найближчого)
         const currentPassNum = Math.round(distToAB / fullWidth);
         if (currentPassNum > 0) {
             _abLineNum = `(+${currentPassNum})`;
         } else {
-            _abLineNum = `(${currentPassNum})`;
+            _abLineNum = `(${currentPassNum})`; // Для 0 та від'ємних знак підставиться сам
         }
-
-        // --- МАГІЯ ТРАНСФОРМАЦІЇ ДЛЯ ЛІНІЙ А-В ---
-        bgCtx.save();
-        // 1. Прив'язуємося до центру екрана (де «прибитий» трактор)
-        bgCtx.translate(bgCanvas.width / 2, bgCanvas.height / 2);
-        // 2. Повертаємо систему координат проти курсу трактора (щоб лінії крутилися навколо нього)
-        bgCtx.rotate(-data.hdg * Math.PI / 180);
-
-        // Малюємо сітку ліній навколо ТРАКТОРА (по 3 проходи вліво і вправо)
+        // ------------------------------------------------------------------------
+        // Малюємо сітку ліній навколо ТРАКТОРА (по 10 проходів вліво і вправо від поточного)
         for (let i = -3; i <= 3; i++) {
+            // Абсолютний номер проходу на полі (базовий номер + зміщення циклу)
             const absolutePass = currentPassNum + i;
+            // Відступ конкретної лінії в метрах від оригінальної осі А-В (i=0)
             const offset = absolutePass * fullWidth;
-
             // Світові координати цієї лінії на полі
             const offsetX = ax + offset * Math.sin(angleAB);
             const offsetY = ay - offset * Math.cos(angleAB);
-
-            // ТЕПЕР це чисті зміщення в метрах відносно трактора, помножені на zoom.
-            // Оскільки Canvas вже повернуто і зміщено в центр, 
-            // ці координати відпрацюють ідеально!
+            // Переклад у координати екрана відносно трактора (в метрах) з масштабуванням
             const screenX = (offsetX - tx) * zoom;
             const screenY = -(offsetY - ty) * zoom;
-
             bgCtx.beginPath();
-
+            // Якщо absolutePass === 0 — це оригінальна (найперша) лінія А-В
+            // Якщо i === 0 — це ПОТОЧНА ГОЛОВНА ЛІНІЯ, до якої зараз найближче трактор
             if (i === 0) {
-                bgCtx.lineWidth = 20 / zoom; // Поточний прохід найтовстіший
-                bgCtx.strokeStyle = "rgba(255, 255, 255, 0.9)"; // Яскраво-білий
+                bgCtx.lineWidth = 20 / zoom; // Робимо поточний прохід найтовстішим
+                bgCtx.strokeStyle = "rgba(255, 255, 255, 0.9)"; // Яскраво-білий колір
             } else {
                 bgCtx.lineWidth = 10 / zoom;
+                // Кожну п'яту лінію підсвічуємо трохи яскравіше для зручності орієнтування
                 bgCtx.strokeStyle = (absolutePass % 5 === 0) ? "rgba(100, 220, 255, 0.6)" : "rgba(100, 200, 255, 0.25)";
             }
-
-            // Малюємо лінію проходу з урахуванням кута самої лінії angleAB
+            // Малюємо лінію проходу
             bgCtx.moveTo(
                 screenX - Math.cos(angleAB) * length * zoom,
                 screenY + Math.sin(angleAB) * length * zoom
@@ -1114,11 +1062,8 @@ function draw(data) {
             );
             bgCtx.stroke();
         }
-
-        bgCtx.restore(); // Повертаємо контекст у початковий стан
     }
-    // *************************************************************************************** //
-
+    bgCtx.restore();
     // *************************************************************************************** //
     // 3. ТРАКТОР И ВИРТУАЛЬНАЯ ШТАНГА (на переднем плане)
     fgCtx.save();
@@ -1189,13 +1134,13 @@ function updateCameraFilter(targetX, targetY, targetHdg) {
 
     // Коефіцієнт 0.15 означає, що за 1 кадр монітора карта наздоганяє ціль на 15%
     const K = 0.15;
-
+    
     renderCamX += (targetX - renderCamX) * K;
     renderCamY += (targetY - renderCamY) * K;
 
     // Плавний фільтр кута курсу (нормалізація розвороту через 0/360 градусів)
     let diffHdg = targetHdg - renderCamHdg;
-    if (diffHdg > 180) diffHdg -= 360;
+    if (diffHdg > 180)  diffHdg -= 360;
     if (diffHdg < -180) diffHdg += 360;
     renderCamHdg += diffHdg * K;
 }

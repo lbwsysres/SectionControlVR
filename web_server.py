@@ -42,6 +42,8 @@ WEB_CACHE = {
     "active_vra_file": None,
     # ОБО'В'ЯЗКОВО ДОДАЄМО ЦЕЙ КЛЮЧ (Він викликав KeyError у /api/status)
     "emu_enabled": False,
+    "ux": 0.0,
+    "uy": 0.0,
 }
 
 
@@ -151,8 +153,8 @@ def create_app(data_queue, cmd_queue):
                     "b": WEB_CACHE["point_b"],
                     "error": WEB_CACHE["guidance_error"],
                 },
-                "ux": WEB_CACHE["pos"][1],  # Заглушка, фронтенд использует pos
-                "uy": WEB_CACHE["pos"][0],
+                "ux": WEB_CACHE["ux"],  # Заглушка, фронтенд использует pos
+                "uy": WEB_CACHE["uy"],
                 "new_points": new_points,
                 "total_count": WEB_CACHE["total_count"],
                 "gps_mode": WEB_CACHE["gps_mode"],
@@ -413,28 +415,31 @@ def create_app(data_queue, cmd_queue):
         active_file = WEB_CACHE.get("active_vra_file")
         cfg = config_manager.load_config()
         rate_default = cfg.get("VRA_RATE_DEFAULT", 0.0)
-        
+
         if not active_file:
             return jsonify({"status": "no_map"})
 
         try:
             # 2. Швидке ОЗУ-кешування сліду карти, щоб не мучити процесор читанням ZIP-файлу при кожному оновленні
-            if not hasattr(app, '_vra_polygons_cache') or getattr(app, '_last_polys_file', None) != active_file:
+            if (
+                not hasattr(app, "_vra_polygons_cache")
+                or getattr(app, "_last_polys_file", None) != active_file
+            ):
                 upload_dir = os.path.join(os.getcwd(), "geodata")
                 file_path = os.path.join(upload_dir, active_file)
-                
+
                 if not os.path.exists(file_path):
                     return jsonify({"status": "no_map"})
-                    
+
                 # Зчитуємо Shapefile силами процесу веб-сервера
                 uri = f"zip://{file_path.replace(os.sep, '/')}"
                 rate_data = gpd.read_file(uri)
-                
+
                 if rate_data.empty:
                     return jsonify({"status": "no_map"})
 
                 polygons_list = []
-                rate_column = "rate" # Стандарт вашого Shapefile
+                rate_column = "rate"  # Стандарт вашого Shapefile
 
                 # =======================================================================
                 # ВАША РІДНА ЛОГІКА ПАРСИНГУ КООРДИНАТ ДЛЯ CANVAS (ОДИН В ОДИН)
@@ -443,30 +448,27 @@ def create_app(data_queue, cmd_queue):
                     try:
                         raw_val = float(row[rate_column])
                     except (ValueError, TypeError):
-                        raw_val = float('nan')
+                        raw_val = float("nan")
 
                     # Фікс №1: Якщо NaN — ставимо 0.0, інакше — залишаємо значення
                     rate_val = 0.0 if math.isnan(raw_val) else raw_val
-                    geom = row['geometry']
-                    
+                    geom = row["geometry"]
+
                     if geom is None:
                         continue
-                    elif geom.geom_type == 'Polygon':
+                    elif geom.geom_type == "Polygon":
                         coords = list(geom.exterior.coords)
-                    elif geom.geom_type == 'MultiPolygon':
+                    elif geom.geom_type == "MultiPolygon":
                         coords = []
                         for poly in geom.geoms:
                             coords.extend(list(poly.exterior.coords))
                     else:
-                        continue # Пропускаємо лінії або точки
-                    
+                        continue  # Пропускаємо лінії або точки
+
                     # Зміна порядку з (Lon, Lat) на [Lat, Lon] для Canvas
                     formatted_coords = [[pt[1], pt[0]] for pt in coords]
-                    
-                    polygons_list.append({
-                        "rate": rate_val,
-                        "points": formatted_coords
-                    })
+
+                    polygons_list.append({"rate": rate_val, "points": formatted_coords})
 
                 # Фікс №2: Безпечний розрахунок мінімуму і максимума без NaN
                 clean_rates = rate_data[rate_column].dropna()
@@ -488,7 +490,7 @@ def create_app(data_queue, cmd_queue):
                     "min_rate": min_rate,
                     "max_rate": max_rate,
                     "rate_default": rate_default,
-                    "polygons": polygons_list
+                    "polygons": polygons_list,
                 }
                 app._last_polys_file = active_file
 
