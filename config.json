@@ -1,31 +1,24 @@
 {
     "UDP_PORT": 9999,
     "SECTION_WIDTHS": [
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0
+        3.0,
+        3.0,
+        3.0,
+        3.0
     ],
     "DRAW_OFF_SECTIONS": true,
     "LOOK_AHEAD": 0.6,
     "MIN_SPEED": 1.0,
     "VISUAL_SCALE": 1.0,
-    "OFFSET_BACK": 0.0,
+    "OFFSET_BACK": 1.5,
     "MASTER_SW": true,
     "SECTION_MODES": [
         "AUTO",
         "AUTO",
         "AUTO",
-        "AUTO",
-        "AUTO",
-        "AUTO",
-        "AUTO",
         "AUTO"
     ],
+    "IMPLEMENT_TYPE": "mounted",
     "SAVE_FILE": "coverage.wkb",
     "HISTORY_FILE": "history.json",
     "LOOK_AHEAD_TIME": 0.6,
@@ -50,8 +43,11 @@
     "SMART_TURN_ENABLED": false,
     "LOOK_AHEAD_ON_TIME": 0.8,
     "LOOK_AHEAD_OFF_TIME": 0.3,
-    "VRA_RATE_DEFAULT": 100.0,
+    "VRA_RATE_DEFAULT": 200.0,
     "VRA_CALC_MODE": "sections",
     "CONTROL_BOARD_TYPE": "udp",
-    "CONTROL_BOARD_PORT_NUM": 5005
+    "CONTROL_BOARD_PORT_NUM": 5005,
+    "ACTIVE_IMPLEMENT_ID": "impl_1779809714090",
+    "TARGET_RATE_DEFAULT": 200.0,
+    "ACTIVE_TASKMAP_FILE": "1_Shapefile.zip"
 }

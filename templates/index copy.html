@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Pixi.js Агронавігатор (Локальний)</title>
+    <!-- ПІДКЛЮЧЕННЯ ЛОКАЛЬНОГО ФАЙЛУ (Без інтернету) -->
+    <!--script src="pixi.min.js"></script-->
+    <script src="{{ url_for('static', filename='js/pixi.min.js') }}"></script>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            font-family: monospace;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ui-panel">
+        <div>Площа: <span id="area">0.0000</span> га</div>
+        <div>Статус: <span id="lb_gps_mode_text">Очікування...</span></div>
+    </div>
+
+    <!-- Фіксуємо конфіг з Flask перед запуском Pixi -->
+    <script>
+        const cfg = {{ cfg | tojson }};
+    </script>
+
+    <script>
+        // ==========================================
+        // 1. ІНІЦІАЛІЗАЦІЯ ТА СТВОРЕННЯ СЦЕНИ PIXI
+        // ==========================================
+
+        let zoom = 10; // Пікселів на 1 метр поля
+        let refLat = null;
+        let refLon = null;
+        let lastReceivedIndex = 0;
+        const metersPerDegree = 111320;
+
+        // Храним последнюю позицию, чтобы чинить карту при изменении экрана
+        let lastLatForCamera = null;
+        let lastLonForCamera = null;
+        let lastHdgForCamera = null;
+
+
+        let pointsQueue = [];
+        let isProcessingQueue = false;
+        let lastPointFromPreviousFetch = null;
+        let prevSectionsCoords = []; // Історія країв кожної секції
+
+        // Створюємо додаток Pixi.js v7
+        // const app = new PIXI.Application({
+        //     width: window.innerWidth,
+        //     height: window.innerHeight,
+        //     backgroundColor: 0x141414,
+        //     antialias: true,
+        //     resolution: window.devicePixelRatio || 1,
+        //     autoDensity: true
+        // });
+        const app = new PIXI.Application({
+            width: window.innerWidth,
+            height: window.innerHeight,
+            backgroundColor: 0x141414,
+            antialias: true,              // Згладжування ліній треку та А-В
+            resolution: window.devicePixelRatio || 1,
+            autoDensity: true,
+            powerPreference: "high-performance", // Вимагаємо від Android максимальної графічної потужності
+            preserveDrawingBuffer: false,        // Звільняємо пам'ять мобільного GPU після кожного кадру
+            clearBeforeRender: true              // Захист від "артефактів" та накладання кадрів
+        });
+        document.body.appendChild(app.view);
+
+        // Шари (Контейнери)
+        const world = new PIXI.Container();
+        //const world = new PIXI.projection.Container2d();
+        const uiLayer = new PIXI.Container();
+
+        app.stage.addChild(world);
+        app.stage.addChild(uiLayer);
+
+        world.position.set(app.screen.width / 2, app.screen.height / 2);
+
+        // Графічні об'єкти
+        const trackGraphics = new PIXI.Graphics();
+        const abLinesGraphics = new PIXI.Graphics();
+        const tractorGraphics = new PIXI.Graphics();
+        const boomGraphics = new PIXI.Graphics();     // Для динамической штанги
+        const gridContainer = new PIXI.Container();
+
+        world.addChild(gridContainer);
+        world.addChild(trackGraphics);
+        world.addChild(abLinesGraphics);
+        uiLayer.addChild(tractorGraphics);
+        world.addChild(boomGraphics);      // Штанга на поле (зумится вместе со следом)
+
+        tractorGraphics.position.set(app.screen.width / 2, app.screen.height / 2);
+        // *********************************************************************************
+        // 1. Створюємо малюнок одного квадратика сітки в пам'яті (без файлів картинок!)
+        const gridCanvas = document.createElement('canvas');
+        gridCanvas.width = 150;  // Розмір одного квадрата сітки в пікселях
+        gridCanvas.height = 150;
+        const gCtx = gridCanvas.getContext('2d');
+        gCtx.strokeStyle = 'rgba(255, 255, 255, 0.08)'; // Дуже тонка і тьмяна сіра лінія
+        gCtx.lineWidth = 1;
+        gCtx.strokeRect(0, 0, 150, 150);
+
+        // 2. Перетворюємо цей холст на текстуру Pixi.js
+        const gridTexture = PIXI.Texture.from(gridCanvas);
+
+        // 3. Створюємо нескінченне полотно сітки розміром на весь екран
+        const backgroundGrid = new PIXI.TilingSprite(
+            gridTexture,
+            4000, // Фіксована ширина з гігантським запасом
+            4000  // Фіксована висота
+        );
+        backgroundGrid.anchor.set(0.5);
+        gridContainer.addChild(backgroundGrid);
+        // const backgroundGrid = new PIXI.TilingSprite(
+        //     gridTexture,
+        //     window.innerWidth * 2, // Беремо з запасом під повороти карти
+        //     window.innerHeight * 2
+        // );
+
+        // // Встановлюємо центр сітки в її середину
+        // backgroundGrid.anchor.set(0.5);
+
+        // // Кладемо сітку на НАЙНИЖЧИЙ шар рухомого світу (під шлейф)
+        // gridContainer.addChild(backgroundGrid);
+
+        // ==========================================
+        // 2. ДИНАМІЧНИЙ ТРАКТОР ТА ШТАНГА
+        // ==========================================
+        function redrawTractorVehicle(states, isMaster, lat, lon, heading) {
+            // 1. РИСУЕМ ЖЕЛТЫЙ ТРЕУГОЛЬНИК (Один раз в центре экрана, масштаб фиксирован)
+            tractorGraphics.clear();
+            tractorGraphics.lineStyle(2, 0xffffff, 1.0);
+            tractorGraphics.beginFill(0xf1c40f, isMaster ? 1.0 : 0.4);
+            tractorGraphics.drawPolygon([
+                0, -25,   // Нос
+                12, 5,    // Правое крыло
+                -12, 5    // Левое крыло
+            ]);
+            tractorGraphics.endFill();
+
+            // 2. РИСУЕМ ШТАНГУ НА ПОЛЕ (Она привязана к метрам поля)
+            boomGraphics.clear();
+            if (refLat === null) return;
+
+            // Рассчитываем, где сейчас физически находится штанга в метрах поля
+            let cx = (lon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
+            let cy = -(lat - refLat) * metersPerDegree;
+
+            // Переводим метры в базовые пиксели Pixi (умножаем на наш фиксированный zoom=10)
+            // ВНИМАНИЕ: Здесь МЫ НЕ ИСПОЛЬЗУЕМ vScale, так как штанга должна быть один в один со шлейфом!
+            let totalWidthMeters = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
+            let bDistPixels = (cfg.OFFSET_BACK || 0) * zoom;
+            let currentStartX = -(totalWidthMeters / 2) * zoom;
+
+            states.forEach((active, i) => {
+                if (i >= cfg.SECTION_WIDTHS.length) return;
+                const sw = cfg.SECTION_WIDTHS[i] * zoom;
+
+                boomGraphics.lineStyle(1, 0xffffff, 0.8);
+                if (active) {
+                    boomGraphics.beginFill(0x2ecc71, 0.9); // Зеленый
+                } else {
+                    boomGraphics.beginFill(0x1a1a1a, 0.5); // Темный
+                }
+
+                // Рисуем рамку секции в локальных координатах штанги
+                boomGraphics.drawRect(currentStartX, bDistPixels, sw, 8);
+                boomGraphics.endFill();
+
+                currentStartX += sw;
+            });
+
+            // Перемещаем и крутим штангу на поле вслед за трактором
+            boomGraphics.position.set(cx * zoom, cy * zoom);
+            boomGraphics.rotation = heading * Math.PI / 180;
+        }
+
+        // ==========================================
+        // 3. МАТЕМАТИКА ПРОЕКЦІЇ ТА ШЛЕЙФУ
+        // ==========================================
+        function getGlobalCoordsPixi(lat, lon, heading, sectionIdx, isRightSide, customWidths) {
+            let cx = (lon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
+            let cy = -(lat - refLat) * metersPerDegree;
+
+            let widths = customWidths || cfg.SECTION_WIDTHS;
+            const backOffset = cfg.OFFSET_BACK || 0;
+
+            let offsetMeters = 0;
+            for (let i = 0; i < sectionIdx; i++) {
+                if (i < widths.length) offsetMeters += widths[i];
+            }
+            if (isRightSide && sectionIdx < widths.length) {
+                offsetMeters += widths[sectionIdx];
+            }
+
+            let totalWidth = widths.reduce((a, b) => a + b, 0);
+            offsetMeters -= totalWidth / 2;
+
+            let rad = (heading * Math.PI / 180);
+
+            // Чистая тригонометрия без vScale
+            let rx = cx + offsetMeters * Math.cos(rad) - backOffset * Math.sin(rad);
+            let ry = cy + offsetMeters * Math.sin(rad) + backOffset * Math.cos(rad);
+
+            return { x: rx * zoom, y: ry * zoom };
+        }
+
+
+        function appendTrackSegmentPixi(lat, lon, heading, states, customWidths) {
+            if (refLat === null || !states || !Array.isArray(states)) return;
+
+            trackGraphics.lineStyle(0);
+            const drawOff = cfg.DRAW_OFF_SECTIONS;
+
+            states.forEach((isActive, i) => {
+                if (!isActive && drawOff === false) {
+                    prevSectionsCoords[i] = null;
+                    return;
+                }
+
+                // Рахуємо поточні краї секції
+                const cL = getGlobalCoordsPixi(lat, lon, heading, i, false, customWidths);
+                const cR = getGlobalCoordsPixi(lat, lon, heading, i, true, customWidths);
+
+                // Якщо є попередня точка — робимо жорстку перевірку на "лінії до старту"
+                if (prevSectionsCoords[i]) {
+                    const prev = prevSectionsCoords[i];
+
+                    // 🔥 ЗАХИСТ ВІД БАГУ АНДРОЇДА:
+                    // Рахуємо відстань між старою лівою точкою штанги і новою лівою точкою в пікселях.
+                    // Оскільки zoom = 10 (1 метр = 10 пікселів), то 50 пікселів — це 5 метрів.
+                    // Якщо відстань більша за 5 метрів, значить це стрибок до старту або розрив GPS!
+                    const dx = cL.x - prev.cL.x;
+                    const dy = cL.y - prev.cL.y;
+                    const distancePixels = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distancePixels > 50) {
+                        // Стрибок виявлено! Обнуляємо історію для цієї секції і не малюємо брудний полігон
+                        prevSectionsCoords[i] = { cL: cL, cR: cR };
+                        return;
+                    }
+
+                    // Якщо все добре (відстань маленька) — малюємо нормальний крок шлейфу
+                    trackGraphics.beginFill(isActive ? 0x2ecc71 : 0xe74c3c, isActive ? 0.7 : 0.5);
+                    trackGraphics.drawPolygon([
+                        prev.cL.x, prev.cL.y,
+                        cL.x, cL.y,
+                        cR.x, cR.y,
+                        prev.cR.x, prev.cR.y
+                    ]);
+                    trackGraphics.endFill();
+                }
+
+                // Зберігаємо поточний крок як старий
+                prevSectionsCoords[i] = { cL: cL, cR: cR };
+            });
+        }
+
+        function appendTrackSegmentPixi_win(lat, lon, heading, states, customWidths) {
+            if (refLat === null || !states || !Array.isArray(states)) return;
+
+            trackGraphics.lineStyle(0);
+
+            states.forEach((isActive, i) => {
+                if (!isActive && cfg.DRAW_OFF_SECTIONS === false) {
+                    prevSectionsCoords[i] = null;
+                    return;
+                }
+
+                const cL = getGlobalCoordsPixi(lat, lon, heading, i, false, customWidths);
+                const cR = getGlobalCoordsPixi(lat, lon, heading, i, true, customWidths);
+
+                if (prevSectionsCoords[i]) {
+                    const prev = prevSectionsCoords[i];
+
+                    // Якщо секція активна — зелений шлейф, якщо ні — червона зона перекриття
+                    trackGraphics.beginFill(isActive ? 0x2ecc71 : 0xe74c3c, isActive ? 0.7 : 0.5);
+
+                    trackGraphics.drawPolygon([
+                        prev.cL.x, prev.cL.y,
+                        cL.x, cL.y,
+                        cR.x, cR.y,
+                        prev.cR.x, prev.cR.y
+                    ]);
+                    trackGraphics.endFill();
+                }
+                prevSectionsCoords[i] = { cL: cL, cR: cR };
+            });
+        }
+
+        function updateFieldMapPixi(newPoints) {
+            if (!newPoints || newPoints.length === 0) return;
+
+            if (refLat === null) {
+                const firstPoint = newPoints[0];
+                refLat = firstPoint[0];
+                refLon = firstPoint[1];
+                prevSectionsCoords = [];
+                console.log(`Базу поля ініціалізовано конфігом Jinja2: ${refLat}, ${refLon}`);
+            }
+
+            pointsQueue.push(...newPoints);
+
+            if (isProcessingQueue) return;
+            isProcessingQueue = true;
+
+            const CHUNK_SIZE = 1000;
+
+            function processNextChunk() {
+                if (pointsQueue.length === 0) {
+                    isProcessingQueue = false;
+                    return;
+                }
+
+                const chunk = pointsQueue.splice(0, CHUNK_SIZE);
+
+                chunk.forEach((pt) => {
+                    if (!pt || pt.length < 4) return;
+
+                    const lat = pt[0];
+                    const lon = pt[1];
+                    const hdg = pt[2];
+                    const states = pt[3];
+                    const widths = pt[4] || null;
+
+                    appendTrackSegmentPixi(lat, lon, hdg, states, widths);
+                });
+
+                setTimeout(processNextChunk, 1);
+            }
+
+            processNextChunk();
+        }
+
+
+        function updateCamera(lat, lon, heading) {
+            if (refLat === null) return;
+
+            lastLatForCamera = lat;
+            lastLonForCamera = lon;
+            lastHdgForCamera = heading;
+
+            let currentX = (lon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
+            let currentY = -(lat - refLat) * metersPerDegree;
+
+            // Створюємо змінні в пікселях, які потрібні і для Pivot, і для сітки
+            let worldX = currentX * zoom;
+            let worldY = currentY * zoom;
+
+            // Зсуваємо центр трансформацій поля ровно в метри трактора
+            world.pivot.x = worldX;
+            world.pivot.y = worldY;
+
+            // Крутимо карту на відеокарті навколо трактора
+            world.rotation = -heading * Math.PI / 180;
+
+            // Намертво приклеюємо цю точку до центру екрана планшета
+            world.position.x = app.screen.width / 2;
+            world.position.y = app.screen.height / 2;
+
+            // МАГІЯ НЕСКІНЧЕННОЇ СІТКИ (Тепер змінні worldX та worldY існують!)
+            if (backgroundGrid) {
+                backgroundGrid.tilePosition.x = -worldX;
+                backgroundGrid.tilePosition.y = -worldY;
+            }
+        }
+
+        function drawABLines(data) {
+            abLinesGraphics.clear();
+
+            // Проверяем наличие плоских метров и координат трактора, как в вашем оригинале
+            if (!data || !data.ab_line || !data.ab_line.a || !data.ab_line.b || data.ux === null || data.uy === null) return;
+            if (refLat === null) return; // Защита, если база поля еще не создана треком
+
+            // 1. Распаковываем плоские метры из JSON
+            const [ax, ay] = data.ab_line.a;
+            const [bx, by] = data.ab_line.b;
+            const tx = data.ux; // Текущий X трактора в метрах на сервере
+            const ty = data.uy; // Текущий Y трактора в метрах на сервере
+
+            const dx = bx - ax;
+            const dy = by - ay;
+            const angleAB = Math.atan2(dy, dx);
+
+            // Общая ширина штанги опрыскивателя
+            const fullWidth = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
+            const length = 2000; // Длина навигационных линий (2 км)
+
+            // 2. ГЛАВНАЯ МАТЕМАТИКА СМЕЩЕНИЯ (Ваша оригинальная формула)
+            const distToAB = ((by - ay) * tx - (bx - ax) * ty + bx * ay - by * ax) / Math.sqrt(dx * dx + dy * dy);
+
+            // Номер текущего прохода (гона)
+            const currentPassNum = Math.round(distToAB / fullWidth);
+
+            // Обновляем текст номера гона на UI (если у вас есть такой элемент)
+            const labelNum = currentPassNum > 0 ? `(+${currentPassNum})` : `(${currentPassNum})`;
+            // Если на вашей панели есть плашка для вывода гона, раскомментируйте:
+            // document.getElementById('pass_number_ui').innerText = labelNum;
+
+            // 3. СТРОИМ СЕТКУ ЛИНИЙ НА КАРТЕ (по 3 прохода влево и вправо)
+            for (let i = -3; i <= 3; i++) {
+                const absolutePass = currentPassNum + i;
+                const offset = absolutePass * fullWidth;
+
+                // Мировые координаты этой линии в метрах на сервере
+                const offsetX = ax + offset * Math.sin(angleAB);
+                const offsetY = ay - offset * Math.cos(angleAB);
+
+                // ПЕРЕВОДИМ В ЛОКАЛЬНЫЕ МЕТРЫ PIXI (Вычитаем координаты базовой точки поля)
+                // Чтобы совместить плоские UTM метры сервера с нашей refLat/refLon, 
+                // нам нужно просто узнать, где стоял трактор в самый первый тик:
+                // Для этого мы вычисляем смещение линии относительно текущего трактора, 
+                // и привязываем её к текущему положению в контейнере world.
+
+                // Позиция центра этой линии относительно нашего refLat/refLon нуля поля в метрах:
+                // (Формула синхронизации плоских метров сервера с GPS координатами Pixi)
+                let localLineX = (offsetX - tx) + (lastLonForCamera - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
+                let localLineY = -(offsetY - ty) - (lastLatForCamera - refLat) * metersPerDegree;
+
+                // 4. НАСТРАИВАЕМ СТИЛЬ ЛИНИИ (В Pixi.js толщина всегда фиксированная на GPU)
+                // Чтобы линии не превращались в жирные бревна при зуме, задаем толщину в пикселях экрана
+                // Делим толщину на текущий масштаб мира, чтобы она визуально оставалась тонкой и аккуратной!
+                const currentWorldScale = world.scale.x || 1.0;
+
+                if (i === 0) {
+                    // Текущий гон — жирный белый
+                    abLinesGraphics.lineStyle(2 / currentWorldScale, 0xffffff, 0.5);
+                } else {
+                    // Остальные гоны — сине-голубые (каждый 5-й гон ярче, как у вас)
+                    //if (absolutePass % 5 === 0) {
+                    //    abLinesGraphics.lineStyle(2 / currentWorldScale, 0x64dcff, 0.6); // Ярко-голубой
+                    //} else {
+                    abLinesGraphics.lineStyle(1 / currentWorldScale, 0x64c8ff, 0.25); // Полупрозрачный синий
+                    //}
+                }
+
+                // 5. РАССЧИТЫВАЕМ КРАЙНИЕ ТОЧКИ ЛИНИИ В ПИКСЕЛЯХ И РИСУЕМ (Длина 2 км)
+                let startX = (localLineX - Math.cos(angleAB) * length) * zoom;
+                let startY = (localLineY + Math.sin(angleAB) * length) * zoom;
+
+                let endX = (localLineX + Math.cos(angleAB) * length) * zoom;
+                let endY = (localLineY - Math.sin(angleAB) * length) * zoom;
+
+                abLinesGraphics.moveTo(startX, startY);
+                abLinesGraphics.lineTo(endX, endY);
+            }
+        }
+
+        // ==========================================
+        // 4. ЦИКЛ ОТРИМАННЯ ДАННИХ
+        // ==========================================
+
+        setInterval(() => {
+            fetch(`/map_data?last=${lastReceivedIndex}`)
+                .then(response => {
+                    if (!response.ok) throw new Error(`Помилка сервера: ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data || !data.new_points || data.new_points.length === 0) return;
+
+                    updateFieldMapPixi(data.new_points);
+
+                    const lastPointArray = data.new_points[data.new_points.length - 1];
+                    const lastLat = lastPointArray[0];
+                    const lastLon = lastPointArray[1];
+                    const lastHdg = lastPointArray[2];
+                    const lastStates = lastPointArray[3];
+
+                    updateCamera(lastLat, lastLon, lastHdg);
+                    //redrawTractorVehicle(lastStates, data.master !== undefined ? data.master : true);
+                    redrawTractorVehicle(
+                        lastStates,
+                        data.master !== undefined ? data.master : true,
+                        lastLat,
+                        lastLon,
+                        lastHdg
+                    );
+
+                    if (document.getElementById('area') && data.area !== undefined) {
+                        document.getElementById('area').innerText = data.area.toFixed(4);
+                    }
+                    if (document.getElementById('lb_gps_mode_text') && data.gps_mode !== undefined) {
+                        document.getElementById('lb_gps_mode_text').innerText = data.gps_mode;
+                    }
+
+                    if (data.last_index !== undefined) {
+                        lastReceivedIndex = data.last_index;
+                    } else {
+                        lastReceivedIndex += data.new_points.length;
+                    }
+                    drawABLines(data);
+                })
+                .catch(err => {
+                    console.warn("Агронавігатор не відповідає. Перевірте Flask.", err);
+                });
+        }, 200);
+
+        console.log("Двигун Pixi.js успішно запущено з конфігурацією Flask!");
+
+        window.addEventListener('resize', () => {
+            // 1. Меняем размер холста под новое окно
+            app.renderer.resize(window.innerWidth, window.innerHeight);
+
+            // 2. Центрируем трактор в каюте
+            if (tractorGraphics) {
+                tractorGraphics.position.set(app.screen.width / 2, app.screen.height / 2);
+            }
+
+            // 3. ПРИНУДИТЕЛЬНО возвращаем карту на место из памяти!
+            if (lastLatForCamera !== null) {
+                updateCamera(lastLatForCamera, lastLonForCamera, lastHdgForCamera);
+            }
+            //backgroundGrid.width = window.innerWidth * 2;
+            //backgroundGrid.height = window.innerHeight * 2;
+        });
+
+        window.addEventListener('wheel', (e) => {
+            let scaleFactor = (e.deltaY < 0 ? 1.1 : 0.9);
+            world.scale.x *= scaleFactor;
+            world.scale.y *= scaleFactor;
+
+            // Ограничение оптического приближения видеокарты
+            world.scale.x = Math.max(0.1, Math.min(8, world.scale.x));
+            world.scale.y = world.scale.x;
+
+            // Моментально обновляем камеру
+            if (lastLatForCamera !== null) {
+                updateCamera(lastLatForCamera, lastLonForCamera, lastHdgForCamera);
+            }
+        }, { passive: true });
+
+
+
+    </script>
+
+
+    <!-- <script>
+        // ==========================================
+        // ЧАСТЬ 1: КОНФИГУРАЦИЯ И ИНИЦИАЛИЗАЦИЯ PIXI
+        // ==========================================
+
+        // Конфигурация (синхронизировано с вашим Flask-сервером)
+        const cfg = {
+            SECTION_WIDTHS: [3.0, 3.0, 3.0, .0], // 6 секций по 2 метра (измените под свои)
+            OFFSET_BACK: 1.5,   // Сдвиг штанги назад в метрах
+            VISUAL_SCALE: 1.0,  // Масштаб отображения элементов каюты
+            DRAW_OFF_SECTIONS: true // Рисовать ли выключенные секции красным
+        };
+
+        // Глобальные переменные навигации
+        let zoom = 15; // Пикселей на один метр поля
+        let refLat = null;
+        let refLon = null;
+        let lastReceivedIndex = 0;
+
+        const metersPerDegree = 111320; // Константа перевода координат
+
+        // 1. Создаем графический движок Pixi.js (WebGL/WebGPU)
+        const app = new PIXI.Application({
+            width: window.innerWidth,
+            height: window.innerHeight,
+            backgroundColor: 0x141414, // Цвет чистого необработанного поля (темно-серый)
+            antialias: true,            // Сглаживание краев геометрии
+            resolution: window.devicePixelRatio || 1,
+            autoDensity: true
+        });
+        document.body.appendChild(app.view);
+
+        // 2. Слоевая архитектура (Контейнеры)
+        const world = new PIXI.Container();  // Рухоме поле під трактором (шлейф, линии А-В)
+        const uiLayer = new PIXI.Container(); // Нерухомый слой каюты (трактор, приборы)
+
+        app.stage.addChild(world);
+        app.stage.addChild(uiLayer);
+
+        // Центрируем точку сборки камеры на экране планшета
+        world.position.set(app.screen.width / 2, app.screen.height / 2);
+
+        // 3. Создаем векторные графические объекты
+        const trackGraphics = new PIXI.Graphics();     // Объект для всего шлейфа поля
+        const abLinesGraphics = new PIXI.Graphics();   // Слой линий А-В
+        const tractorGraphics = new PIXI.Graphics();   // Сам трактор и виртуальная штанга
+
+        // Раскладываем объекты по нужным слоям (Z-Index)
+        world.addChild(trackGraphics);
+        world.addChild(abLinesGraphics);
+        uiLayer.addChild(tractorGraphics);
+
+        // Ставим трактор ровно по центру экрана (он всегда неподвижен)
+        tractorGraphics.position.set(app.screen.width / 2, app.screen.height / 2);
+
+        // 4. Обработка событий изменения экрана и зума
+        window.addEventListener('resize', () => {
+            app.renderer.resize(window.innerWidth, window.innerHeight);
+            world.position.set(app.screen.width / 2, app.screen.height / 2);
+            tractorGraphics.position.set(app.screen.width / 2, app.screen.height / 2);
+        });
+
+        window.addEventListener('wheel', (e) => {
+            zoom *= (e.deltaY < 0 ? 1.1 : 0.9);
+            zoom = Math.max(2, Math.min(50, zoom)); // Ограничение зума (от 2 до 50 пикс/метр)
+        }, { passive: true });
+
+        console.log("Часть 1 готова: Слои и объекты Pixi.js инициализированы.");
+        // ==========================================
+        // ЧАСТЬ 2: МАТЕМАТИКА И ДИНАМИЧЕСКИЙ ТРАКТОР
+        // ==========================================
+
+        let pointsQueue = [];
+        let isProcessingQueue = false;
+        let lastPointFromPreviousFetch = null;
+        let prevSectionsCoords = []; // Хранилище истории краев для каждой секции штанги
+
+        // 1. Динамическая отрисовка трактора и виртуальной штанги (с учетом vScale)
+        function redrawTractorVehicle(states, isMaster) {
+            tractorGraphics.clear();
+
+            // Берём масштаб (vScale), как в вашем оригинальном коде
+            const vScale = cfg.VISUAL_SCALE || 1.0;
+
+            let totalWidthMeters = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
+
+            let bDistPixels = (cfg.OFFSET_BACK || 0) * zoom * vScale;
+
+            // ВАЖНО: Рассчитываем точную стартовую левую точку штанги относительно центра (0)
+            let currentStartX = -(totalWidthMeters / 2) * zoom * vScale;
+
+            // Рисуем каждую секцию отдельно
+            states.forEach((active, i) => {
+                const sw = cfg.SECTION_WIDTHS[i] * zoom * vScale;
+
+                // Белая полупрозрачная рамка секции
+                tractorGraphics.lineStyle(1, 0xffffff, 0.8);
+
+                if (active) {
+                    tractorGraphics.beginFill(0x2ecc71, 0.9); // Зеленый (активна)
+                } else {
+                    tractorGraphics.beginFill(0x1a1a1a, 0.5); // Темный (выключена)
+                }
+
+                // Рисуем прямоугольник секции строго по цепочке слева направо
+                tractorGraphics.drawRect(currentStartX, bDistPixels, sw, 8);
+                tractorGraphics.endFill();
+
+                // Сдвигаем координату X для следующего прямоугольника
+                currentStartX += sw;
+            });
+
+            // Рисуем желтый треугольник трактора (#f1c40f) строго по центру (0,0)
+            tractorGraphics.lineStyle(2, 0xffffff, 1.0);
+            tractorGraphics.beginFill(0xf1c40f, isMaster ? 1.0 : 0.4);
+
+            // Нос (-25), крылья (12 и -12) — треугольник будет идеально симметричен относительно нуля
+            tractorGraphics.drawPolygon([
+                0, -25,   // Нос
+                12, 5,    // Правое крыло
+                -12, 5    // Левое крыло
+            ]);
+            tractorGraphics.endFill();
+        }
+
+        function redrawTractorVehicle_1(states, isMaster) {
+            tractorGraphics.clear();
+
+            const vScale = cfg.VISUAL_SCALE || 1.0;
+            let totalWidthMeters = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
+
+            // Сдвиг штанги назад и начальная левая точка штанги в пикселях с учетом зума и масштаба
+            let bDistPixels = (cfg.OFFSET_BACK || 0) * zoom * vScale;
+            let sX = -(totalWidthMeters / 2) * zoom * vScale;
+
+            // Рисуем каждую секцию отдельно
+            states.forEach((active, i) => {
+                const sw = cfg.SECTION_WIDTHS[i] * zoom * vScale;
+
+                // Белая полупрозрачная рамка секции
+                tractorGraphics.lineStyle(1, 0xffffff, 0.8);
+
+                if (active) {
+                    tractorGraphics.beginFill(0x2ecc71, 0.9); // Зеленый (активна)
+                } else {
+                    tractorGraphics.beginFill(0x1a1a1a, 0.5); // Темный (выключена)
+                }
+
+                // Рисуем прямоугольник секции (высота 8 пикселей, как в вашем коде)
+                tractorGraphics.drawRect(sX, bDistPixels, sw, 8);
+                tractorGraphics.endFill();
+
+                sX += sw;
+            });
+
+            // Рисуем желтый треугольник трактора (#f1c40f)
+            tractorGraphics.lineStyle(2, 0xffffff, 1.0);
+            tractorGraphics.beginFill(0xf1c40f, isMaster ? 1.0 : 0.4);
+
+            tractorGraphics.drawPolygon([
+                0, -25,   // Нос
+                12, 5,    // Правое крыло
+                -12, 5    // Левое крыло
+            ]);
+            tractorGraphics.endFill();
+        }
+
+        // 2. Расчет глобальных координат краев секции штанги в пикселях поля
+        function getGlobalCoordsPixi(lat, lon, heading, sectionIdx, isRightSide, customWidths) {
+            let cx = (lon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
+            let cy = -(lat - refLat) * metersPerDegree;
+
+            let widths = customWidths || cfg.SECTION_WIDTHS;
+            const vScale = cfg.VISUAL_SCALE || 1.0; // Добавляем тот же масштаб, что и у трактора
+
+            let offsetMeters = 0;
+            for (let i = 0; i < sectionIdx; i++) {
+                offsetMeters += widths[i];
+            }
+            if (isRightSide) {
+                offsetMeters += widths[sectionIdx];
+            }
+
+            let totalWidth = widths.reduce((a, b) => a + b, 0);
+            offsetMeters -= totalWidth / 2;
+
+            let backOffset = cfg.OFFSET_BACK || 0;
+            let rad = (heading * Math.PI / 180);
+
+            // Применяем vScale к метрам перед переводом в пиксели зума
+            let rx = cx + (offsetMeters * vScale) * Math.cos(rad) - (backOffset * vScale) * Math.sin(rad);
+            let ry = cy + (offsetMeters * vScale) * Math.sin(rad) + (backOffset * vScale) * Math.cos(rad);
+
+            return {
+                x: rx * zoom,
+                y: ry * zoom
+            };
+        }
+
+        function getGlobalCoordsPixi_1(lat, lon, heading, sectionIdx, isRightSide, customWidths) {
+            let cx = (lon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
+            let cy = -(lat - refLat) * metersPerDegree;
+
+            let widths = customWidths || cfg.SECTION_WIDTHS;
+
+            // Считаем отступ до текущей секции от левого края штанги
+            let offsetMeters = 0;
+            for (let i = 0; i < sectionIdx; i++) {
+                offsetMeters += widths[i];
+            }
+            if (isRightSide) {
+                offsetMeters += widths[sectionIdx];
+            }
+
+            // Центрируем штангу относительно центра трактора
+            let totalWidth = widths.reduce((a, b) => a + b, 0);
+            offsetMeters -= totalWidth / 2;
+
+            let backOffset = cfg.OFFSET_BACK || 0;
+            let rad = (heading * Math.PI / 180);
+
+            // Ваша оригинальная рабочая тригонометрия проекции штанги
+            let rx = cx + offsetMeters * Math.cos(rad) - backOffset * Math.sin(rad);
+            let ry = cy + offsetMeters * Math.sin(rad) + backOffset * Math.cos(rad);
+
+            return {
+                x: rx * zoom,
+                y: ry * zoom
+            };
+        }
+
+        // 3. Функция отрисовки линий А-В
+        function drawABLines(abData) {
+            abLinesGraphics.clear();
+            if (!abData || !abData.A || !abData.B) return;
+
+            let ax = (abData.A.lon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
+            let ay = -(abData.A.lat - refLat) * metersPerDegree;
+            let bx = (abData.B.lon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
+            let by = -(abData.B.lat - refLat) * metersPerDegree;
+
+            abLinesGraphics.lineStyle(2, 0x007bff, 0.8); // Синяя линия А-В
+            abLinesGraphics.moveTo(ax * zoom, ay * zoom);
+            abLinesGraphics.lineTo(bx * zoom, by * zoom);
+        }
+
+        console.log("Часть 2 готова: Математика проекции и динамический трактор загружены.");
+        // ==========================================
+        // ЧАСТЬ 3: ДВИЖОК ШЛЕЙФА, КАМЕРА И ЗАПРОСЫ
+        // ==========================================
+
+        // 1. Посекционная отрисовка одного шага шлейфа (полигоны покрытия)
+        function appendTrackSegmentPixi(lat, lon, heading, states, customWidths) {
+            if (refLat === null) return;
+            if (!states || !Array.isArray(states)) return;
+
+            trackGraphics.lineStyle(0); // Отключаем контуры для максимальной скорости GPU
+
+            states.forEach((isActive, i) => {
+                if (!isActive && cfg.DRAW_OFF_SECTIONS === false) {
+                    prevSectionsCoords[i] = null; // Прерываем шлейф для выключенной секции
+                    return;
+                }
+
+                // Считаем текущие края секции штанги
+                const cL = getGlobalCoordsPixi(lat, lon, heading, i, false, customWidths);
+                const cR = getGlobalCoordsPixi(lat, lon, heading, i, true, customWidths);
+
+                // Если у этой секции есть предыдущий шаг — соединяем их в четырехугольник покрытия
+                if (prevSectionsCoords[i]) {
+                    const prev = prevSectionsCoords[i];
+
+                    if (isActive) {
+                        trackGraphics.beginFill(0x2ecc71, 0.7); // Зеленый (Активна)
+                    } else {
+                        trackGraphics.beginFill(0xe74c3c, 0.5); // Красный (Выключена/Перекрытие)
+                    }
+
+                    // Рисуем полигон секции на видеокарте
+                    trackGraphics.drawPolygon([
+                        prev.cL.x, prev.cL.y,
+                        cL.x, cL.y,
+                        cR.x, cR.y,
+                        prev.cR.x, prev.cR.y
+                    ]);
+                    trackGraphics.endFill();
+                }
+
+                // Сохраняем текущий шаг как старый для следующей точки
+                prevSectionsCoords[i] = { cL: cL, cR: cR };
+            });
+        }
+
+        // 2. Главная функция обработки чанков (мгновенная загрузка истории без зависаний)
+        function updateFieldMapPixi(newPoints) {
+            if (!newPoints || newPoints.length === 0) return;
+
+            // Инициализируем базовую точку поля по САМОЙ ПЕРВОЙ точке из истории (last=0)
+            if (refLat === null) {
+                const firstPoint = newPoints[0];
+                refLat = firstPoint[0]; // 0 - широта
+                refLon = firstPoint[1]; // 1 - долгота
+                console.log(`Базовая точка успешно инициализирована историей: ${refLat}, ${refLon}`);
+            }
+
+            pointsQueue.push(...newPoints);
+
+            if (isProcessingQueue) return;
+            isProcessingQueue = true;
+
+            const CHUNK_SIZE = 1000; // Большой чанк для моментального выплескивания истории на GPU
+
+            function processNextChunk() {
+                if (pointsQueue.length === 0) {
+                    isProcessingQueue = false;
+                    return;
+                }
+
+                const chunk = pointsQueue.splice(0, CHUNK_SIZE);
+
+                chunk.forEach((pt) => {
+                    if (!pt || pt.length < 4) return;
+
+                    // Распаковка по вашим точным индексам массива
+                    const lat = pt[0];
+                    const lon = pt[1];
+                    const hdg = pt[2];
+                    const states = pt[3];
+                    const widths = pt[4] || null;
+
+                    appendTrackSegmentPixi(lat, lon, hdg, states, widths);
+                });
+
+                // Микропауза 1 мс, чтобы поток браузера оставался отзывчивым
+                setTimeout(processNextChunk, 1);
+            }
+
+            processNextChunk();
+        }
+
+        // 3. Управление камерой Pixi.js (карта плавно крутится под трактором)
+        function updateCamera(lat, lon, heading) {
+            if (refLat === null) return;
+
+            let currentX = (lon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
+            let currentY = -(lat - refLat) * metersPerDegree;
+
+            const screenCenterX = app.screen.width / 2;
+            const screenCenterY = app.screen.height / 2;
+
+            let pixelX = currentX * zoom;
+            let pixelY = currentY * zoom;
+
+            let angleRad = -heading * Math.PI / 180; // Перевод курса в радианы
+            world.rotation = angleRad;
+
+            // Формула удержания трактора строго по центру экрана
+            world.position.x = screenCenterX - (pixelX * Math.cos(angleRad) - pixelY * Math.sin(angleRad));
+            world.position.y = screenCenterY - (pixelX * Math.sin(angleRad) + pixelY * Math.cos(angleRad));
+        }
+
+        // ==========================================
+        // 4. ЦИКЛ СЕТЕВЫХ ЗАПРОСОВ К FLASK (127.0.0.1)
+        // ==========================================
+
+        setInterval(() => {
+            fetch(`/map_data?last=${lastReceivedIndex}`)
+                .then(response => {
+                    if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data || !data.new_points || data.new_points.length === 0) return;
+
+                    // 1. Отправляем пачку точек в движок истории и шлейфа
+                    updateFieldMapPixi(data.new_points);
+
+                    // 2. Берем самую последнюю точку для позиционирования камеры и трактора
+                    const lastPointArray = data.new_points[data.new_points.length - 1];
+                    const lastLat = lastPointArray[0];
+                    const lastLon = lastPointArray[1];
+                    const lastHdg = lastPointArray[2];
+                    const lastStates = lastPointArray[3];
+
+                    // Обновляем камеру и перерисовываем штангу трактора (с учетом vScale из Части 2)
+                    updateCamera(lastLat, lastLon, lastHdg);
+                    redrawTractorVehicle(lastStates, data.master !== undefined ? data.master : true);
+
+                    // 3. Обновляем текстовые индикаторы UI панели
+                    if (document.getElementById('area') && data.total_area !== undefined) {
+                        document.getElementById('area').innerText = data.total_area.toFixed(4);
+                    }
+                    if (document.getElementById('lb_gps_mode_text') && data.gps_mode !== undefined) {
+                        document.getElementById('lb_gps_mode_text').innerText = data.gps_mode;
+                    }
+
+                    // 4. Сдвигаем индекс для следующего инкрементального запроса
+                    if (data.last_index !== undefined) {
+                        lastReceivedIndex = data.last_index;
+                    } else {
+                        lastReceivedIndex += data.new_points.length;
+                    }
+
+                    // 5. Отрисовываем линии А-В, если они пришли в ответе
+                    if (data.ab_lines) {
+                        drawABLines(data.ab_lines);
+                    }
+                })
+                .catch(err => {
+                    console.warn("Агронавигатор не отвечает. Проверьте Flask на 127.0.0.1", err);
+                });
+        }, 200); // Опрос каждые 200 мс, как в вашем оригинале
+
+        console.log("Часть 3 готова: Сборка завершена. Система полностью запущена.");
+
+    </script> -->
+
+</body>
+
+</html>

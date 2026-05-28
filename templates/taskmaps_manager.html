@@ -1,0 +1,550 @@
+<!-- templates/taskmaps_manager.html (ЧАСТЬ 1 ИЗ 2) -->
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Керування картами завдань VRA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+    <style>
+        .manager-layout {
+            display: flex;
+            gap: 25px;
+            height: calc(100vh - 150px);
+            margin-bottom: 20px;
+        }
+
+        .sidebar-panel {
+            flex: 0 0 35%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .workspace-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .map-card-btn {
+            width: 100%;
+            padding: 22px;
+            background: #1e1e1e;
+            border: 2px solid var(--border);
+            color: var(--text);
+            border-radius: 12px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .map-card-btn.active {
+            border-color: var(--accent);
+            background: #1a2a1f;
+            color: var(--accent);
+        }
+
+        .list-container {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .placeholder-text {
+            text-align: center;
+            color: #555;
+            font-size: 1.6rem;
+            margin-top: 150px;
+            font-weight: bold;
+        }
+
+        /* Стилі для великого спливаючого тач-вікна Canvas */
+        #previewModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #previewModal.show {
+            display: flex;
+        }
+
+        .preview-container {
+            width: 92%;
+            height: 90%;
+            background: #111;
+            border: 2px solid #333;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .preview-header {
+            padding: 15px 25px;
+            background: #161616;
+            border-bottom: 1px solid #222;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .preview-body {
+            flex: 1;
+            position: relative;
+            background: #0b0b0b;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #previewCanvas {
+            background: #000;
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        /* Прогрес-бар завантаження */
+        .loader-overlay {
+            display: none;
+            text-align: center;
+            color: var(--accent);
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-top: 100px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="manager-layout">
+
+        <!-- ЛЕВАЯ ПАНЕЛЬ: СПИСОК ФАЙЛІВ КАРТ НА eMMC -->
+        <div class="sidebar-panel">
+            <h2>📋 Карти завдань (TaskMaps)</h2>
+            <div class="list-container" id="maps-list-container">
+                <!-- Сюда JS нарендерит плитки файлов -->
+            </div>
+
+            <!-- Прихований системний інпут для тач-завантаження -->
+            <input type="file" id="file-uploader-input" accept=".zip" style="display: none;"
+                onchange="handleFileSelected()">
+
+            <button type="button" onclick="document.getElementById('file-uploader-input').click()"
+                style="width:100%; height: 75px; background:transparent; color:var(--accent); border:2px dashed var(--accent); border-radius:12px; font-weight:bold; font-size:1.3rem; cursor:pointer;">
+                ➕ ЗАВАНТАЖИТИ ZIP КАРТУ
+            </button>
+        </div>
+
+        <!-- ПРАВАЯ ПАНЕЛЬ: ИНСПЕКТОР И ПРЕВЬЮ -->
+        <div class="workspace-panel">
+
+            <div id="editor-placeholder" class="placeholder-text">
+                ◀ Виберіть карту зі списку агронома<br>для інспекції або видалення
+            </div>
+
+            <div id="loader-status" class="loader-overlay">
+                ⏳ Обробка Shapefile системою Geopandas...<br><small style="color:#555;">Будь ласка, зачекайте</small>
+            </div>
+
+            <div id="editor-workspace" style="display: none;">
+                <div class="card" style="margin-bottom: 20px;">
+                    <h2>Назва файлу завдання</h2>
+                    <h3 id="INSPECT_FILENAME"
+                        style="color:var(--accent); font-size:1.6rem; margin:10px 0 0 0; word-break:break-all;">-</h3>
+                </div>
+
+                <div class="card">
+                    <h2>Параметри диференційованого виливу</h2>
+                    <div style="display:flex; flex-direction:column; gap:15px; margin-top:15px;">
+                        <div class="touch-row" style="border-bottom:1px solid #222; padding-bottom:15px;">
+                            <span class="label-main">Мінімальна доза в карті:</span>
+                            <b id="INSPECT_MIN_RATE" style="font-size:1.6rem; color:#2ecc71;">0.00 л/га</b>
+                        </div>
+                        <div class="touch-row" style="border-bottom:1px solid #222; padding-bottom:15px;">
+                            <span class="label-main">Максимальна доза в карті:</span>
+                            <b id="INSPECT_MAX_RATE" style="font-size:1.6rem; color:#e74c3c;">0.00 л/га</b>
+                        </div>
+                        <div class="touch-row">
+                            <span class="label-main">Всього аплікаційних зон:</span>
+                            <b id="INSPECT_TOTAL_ZONES" style="font-size:1.6rem; color:var(--text);">0</b>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Велика тач-кнопка виклику прев'ю полігонів -->
+                <button type="button" onclick="openInteractivePreview()"
+                    style="width:100%; height:85px; background:#1e1e1e; border:2px solid var(--accent); color:var(--accent); border-radius:15px; font-size:1.4rem; font-weight:bold; margin-top:25px; cursor:pointer;">
+                    👁️👁️ ПЕРЕГЛЯНУТИ ЖИВУ КАРТУ ПОЛІГОНІВ
+                </button>
+            </div>
+
+        </div>
+    </div>
+    <!-- НИЖНЯ ДОК-ПАНЕЛЬ МЕНЕДЖЕРА КАРТ -->
+    <div class="bottom-dock">
+        <button type="button" class="btn-dock-action" onclick="handleGoBack()"
+            style="background: #2c2c2c; color: #fff; border: 2px solid #444;">
+            НАЗАД В ХАБ
+        </button>
+        <div id="action-buttons-group"
+            style="display: flex; gap: 20px; width: 60%; justify-content: flex-end; opacity: 0.3; pointer-events: none;">
+            <button type="button" class="btn-dock-action" onclick="handleDeleteMap()"
+                style="background: var(--danger); color: #fff; border: none; width: 250px;">
+                ВИДАЛИТИ КАРТУ
+            </button>
+        </div>
+    </div>
+
+    <!-- ВЕЛИКЕ СПЛИВАЮЧЕ ТАЧ-ВІКНО ДЛЯ ЖИВОГО CANVAS-ПРЕВ'Ю -->
+    <div id="previewModal">
+        <div class="preview-container">
+            <div class="preview-header">
+                <h2 id="modal-map-title" style="margin:0; font-size:1.4rem; color:var(--text);">Перегляд карти полігонів
+                </h2>
+                <button type="button" onclick="closeInteractivePreview()"
+                    style="background:var(--danger); color:white; border:none; padding:10px 25px; font-weight:bold; font-size:1.1rem; border-radius:8px; cursor:pointer;">
+                    ❌ ЗАКРИТИ
+                </button>
+            </div>
+            <div class="preview-body">
+                <canvas id="previewCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- ТВОЯ СИСТЕМНА МОДАЛКА ASKUSER -->
+    <div id="customModal">
+        <div class="modal-card" id="modalCard">
+            <h3 id="modalText"
+                style="margin: 0 0 40px 0; font-size: 24px; color: white; font-weight: bold; line-height: 1.4;"></h3>
+            <div style="display: flex; gap: 30px; justify-content: center;">
+                <button type="button" id="modalCancelBtn"
+                    style="flex:1; background:#444; height:70px; font-size:18px; border-radius:12px; border:none; color:white; font-weight:bold; cursor:pointer;">
+                    СКАСУВАТИ
+                </button>
+                <button type="button" id="modalConfirmBtn"
+                    style="flex:1; height:70px; font-size:18px; border-radius:12px; border:none; color:white; font-weight:bold; cursor:pointer;">
+                    ТАК
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSelectedFilename = null;
+        let currentMapDataCache = null; // Зберігаємо полігони в ОЗУ для малювання Canvas
+
+        // --- 1. ЗАВАНТАЖЕННЯ СПИСКУ ZIP-КАРТ З eMMC ---
+        function loadMapsList(selectFilenameAfterLoad = null) {
+            fetch('/api/taskmaps/list')
+                .then(r => r.json())
+                .then(data => {
+                    const container = document.getElementById('maps-list-container');
+                    container.innerHTML = '';
+
+                    if (data.status !== 'ok' || data.maps.length === 0) {
+                        container.innerHTML = '<div style="color:#555; text-align:center; padding:20px;">База карт порожня</div>';
+                        return;
+                    }
+
+                    data.maps.forEach(m => {
+                        let btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'map-card-btn';
+                        btn.id = `btn-${m.filename.replace(/\./g, '_')}`;
+                        btn.innerHTML = `
+                    <span style="word-break:break-all;">${m.filename}</span>
+                    <small style="color:#666; margin-top:5px;">📅 Завантажено: ${m.created}</small>
+                `;
+                        btn.onclick = () => selectMapForInspection(m.filename);
+                        container.appendChild(btn);
+                    });
+
+                    if (selectFilenameAfterLoad) {
+                        selectMapForInspection(selectFilenameAfterLoad);
+                    }
+                });
+        }
+
+        // --- 2. ВИБІР КАРТИ ТА ВІДОБРАЖЕННЯ МЕТАДАНИХ ---
+        function selectMapForInspection(filename) {
+            currentSelectedFilename = filename;
+            currentMapDataCache = null;
+
+            document.querySelectorAll('.map-card-btn').forEach(b => b.classList.remove('active'));
+            const activeBtn = document.getElementById(`btn-${filename.replace(/\./g, '_')}`);
+            if (activeBtn) activeBtn.classList.add('active');
+
+            document.getElementById('editor-placeholder').style.display = 'none';
+            document.getElementById('editor-workspace').style.display = 'none';
+            document.getElementById('loader-status').style.display = 'block';
+
+            fetch(`/api/taskmaps/preview?filename=${encodeURIComponent(filename)}`)
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('loader-status').style.display = 'none';
+                    if (data.status !== 'success') {
+                        askUser(`Збій читання карти:<br><small>${data.message}</small>`, 'danger', 'ОК');
+                        return;
+                    }
+
+                    currentMapDataCache = data;
+
+                    document.getElementById('editor-workspace').style.display = 'block';
+                    document.getElementById('INSPECT_FILENAME').innerText = data.filename;
+                    document.getElementById('INSPECT_MIN_RATE').innerText = data.min_rate.toFixed(1) + ' л/га';
+                    document.getElementById('INSPECT_MAX_RATE').innerText = data.max_rate.toFixed(1) + ' л/га';
+                    document.getElementById('INSPECT_TOTAL_ZONES').innerText = data.polygons.length;
+
+                    const dockGroup = document.getElementById('action-buttons-group');
+                    dockGroup.style.opacity = '1.0';
+                    dockGroup.style.pointerEvents = 'auto';
+                })
+                .catch(() => {
+                    document.getElementById('loader-status').style.display = 'none';
+                    askUser('Помилка зчитування файлу з eMMC!', 'danger', 'ОК');
+                });
+        }
+        // --- 3. АСИНХРОННЕ ЗАВАНТАЖЕННЯ ZIP З ФЛЕШКИ ---
+        function handleFileSelected() {
+            const input = document.getElementById('file-uploader-input');
+            if (input.files.length === 0) return;
+
+            const file = input.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            document.getElementById('editor-placeholder').style.display = 'none';
+            document.getElementById('editor-workspace').style.display = 'none';
+            document.getElementById('loader-status').style.display = 'block';
+
+            fetch('/api/taskmaps/upload', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    input.value = ''; // Скидаємо інпут
+                    if (data.status === 'ok') {
+                        loadMapsList(data.filename); // Перемальовуємо список та відкриваємо нову карту
+                    } else {
+                        document.getElementById('loader-status').style.display = 'none';
+                        document.getElementById('editor-placeholder').style.display = 'block';
+                        askUser(`Помилка завантаження:<br><small>${data.message}</small>`, 'danger', 'ОК');
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('loader-status').style.display = 'none';
+                    askUser('Мережева помилка завантаження файла!', 'danger', 'ОК');
+                });
+        }
+
+        // --- 4. ІНТЕРАКТИВНИЙ CANVAS-РЕНДЕРИНГ ОДИН В ОДИН ЯК У ХАБІ ---
+        function openInteractivePreview() {
+            if (!currentMapDataCache) return;
+
+            const modal = document.getElementById('previewModal');
+            document.getElementById('modal-map-title').innerText = `Карта припису: ${currentMapDataCache.filename}`;
+            modal.classList.add('show');
+
+            const canvas = document.getElementById('previewCanvas');
+            const ctx = canvas.getContext('2d');
+
+            const container = canvas.parentNode;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+
+            const polys = currentMapDataCache.polygons;
+            if (polys.length === 0) return;
+
+            // ВАША РІДНА ЛОГІКА РОЗРАХУНКУ ГРАДІЄНТУ КОЛЬОРУ ОДИН В ОДИН
+            const minR = currentMapDataCache.min_rate;
+            const maxR = currentMapDataCache.max_rate;
+            const rateRange = maxR - minR;
+
+            function getColorForRate(rate) {
+                if (rate <= minR) return "rgba(46, 204, 113, 0.45)";
+                if (rate >= maxR) return "rgba(231, 76, 60, 0.45)";
+                if (rateRange <= 0) return "rgba(46, 204, 113, 0.45)";
+                const percent = (rate - minR) / rateRange;
+                if (percent < 0.5) {
+                    const factor = percent * 2;
+                    const r = Math.round(46 + (241 - 46) * factor);
+                    const g = Math.round(204 + (196 - 204) * factor);
+                    const b = Math.round(113 + (15 - 113) * factor);
+                    return `rgba(${r}, ${g}, ${b}, 0.45)`;
+                } else {
+                    const factor = (percent - 0.5) * 2;
+                    const r = Math.round(241 + (231 - 241) * factor);
+                    const g = Math.round(196 + (76 - 196) * factor);
+                    const b = Math.round(15 + (60 - 15) * factor);
+                    return `rgba(${r}, ${g}, ${b}, 0.45)`;
+                }
+            }
+
+            // 1. АВТО-МАСШТАБУВАННЯ: Знаходимо глобальні межі поля (Bounding Box) в градусах WGS84
+            let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+            polys.forEach(p => {
+                p.points.forEach(pt => {
+                    if (pt[0] < minLat) minLat = pt[0];
+                    if (pt[0] > maxLat) maxLat = pt[0];
+                    if (pt[1] < minLon) minLon = pt[1];
+                    if (pt[1] > maxLon) maxLon = pt[1];
+                });
+            });
+
+            const centerLat = (minLat + maxLat) / 2;
+            const centerLon = (minLon + maxLon) / 2;
+            const cosLat = Math.cos(centerLat * Math.PI / 180);
+            const metersPerDegree = 111320;
+
+            // Переводимо межі в локальні метри від центру, щоб вписати в екран
+            let pointsInMeters = polys.map(p => {
+                return {
+                    rate: p.rate,
+                    pts: p.points.map(pt => ({
+                        x: (pt[1] - centerLon) * metersPerDegree * cosLat,
+                        y: (pt[0] - centerLat) * metersPerDegree
+                    }))
+                };
+            });
+
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            pointsInMeters.forEach(p => {
+                p.pts.forEach(pt => {
+                    if (pt.x < minX) minX = pt.x;
+                    if (pt.x > maxX) maxX = pt.x;
+                    if (pt.y < minY) minY = pt.y;
+                    if (pt.y > maxY) maxY = pt.y;
+                });
+            });
+
+            const fieldW = maxX - minX;
+            const fieldH = maxY - minY;
+
+            const scaleX = (canvas.width - 80) / (fieldW || 1);
+            const scaleY = (canvas.height - 80) / (fieldH || 1);
+            const scale = Math.min(scaleX, scaleY);
+
+            const offsetX = canvas.width / 2 - ((minX + maxX) / 2) * scale;
+            const offsetY = canvas.height / 2 + ((minY + maxY) / 2) * scale;
+
+            // 3. САМ ЦИКЛ ОТРИСОВКИ ПОЛІГОНІВ
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+            ctx.lineWidth = 1;
+
+            pointsInMeters.forEach(p => {
+                if (p.pts.length < 3) return;
+
+                ctx.fillStyle = getColorForRate(p.rate);
+                ctx.beginPath();
+
+                let startX = offsetX + p.pts[0].x * scale;
+                let startY = offsetY - p.pts[0].y * scale;
+
+                ctx.moveTo(startX, startY);
+                for (let i = 1; i < p.pts.length; i++) {
+                    let px = offsetX + p.pts[i].x * scale;
+                    let py = offsetY - p.pts[i].y * scale;
+                    ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            });
+        }
+
+        function closeInteractivePreview() {
+            document.getElementById('previewModal').classList.remove('show');
+        }
+
+        // --- 5. ВИДАЛЕННЯ ФАЙЛУ З eMMC ---
+        function handleDeleteMap() {
+            if (!currentSelectedFilename) return;
+
+            askUser(`УВАГА! Повністю видалити карту припису?<br><b>"${currentSelectedFilename}"</b>`, 'danger', 'ВИДАЛИТИ', () => {
+                fetch('/api/taskmaps/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: currentSelectedFilename })
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            currentSelectedFilename = null;
+                            currentMapDataCache = null;
+                            document.getElementById('editor-workspace').style.display = 'none';
+                            document.getElementById('editor-placeholder').style.display = 'block';
+                            document.getElementById('action-buttons-group').style.pointerEvents = 'none';
+                            document.getElementById('action-buttons-group').style.opacity = '0.3';
+                            loadMapsList();
+                        }
+                    });
+            });
+        }
+
+        // --- 6. МОДАЛКА ASKUSER (АНІМАЦІЯ ВІДБИТТЯ) ---
+        function askUser(text, theme, confirmText, onConfirm = null) {
+            const modal = document.getElementById('customModal');
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            const cancelBtn = document.getElementById('modalCancelBtn');
+
+            if (modal.classList.contains('show')) {
+                modal.classList.remove('show');
+                setTimeout(() => { askUser(text, theme, confirmText, onConfirm); }, 200);
+                return;
+            }
+
+            document.getElementById('modalText').innerHTML = text;
+            confirmBtn.innerText = confirmText;
+            confirmBtn.style.background = (theme === 'danger') ? '#c0392b' : '#2ecc71';
+            cancelBtn.style.display = (onConfirm === null) ? 'none' : 'inline-block';
+
+            modal.classList.add('show');
+
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+            const closeModal = () => { modal.classList.remove('show'); };
+
+            newConfirmBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (typeof onConfirm === 'function') onConfirm();
+                closeModal();
+            }, { once: true });
+
+            cancelBtn.onclick = (e) => { e.preventDefault(); closeModal(); };
+        }
+
+        function handleGoBack() {
+            window.location.href = '/';
+        }
+
+        document.addEventListener("DOMContentLoaded", () => { loadMapsList(); });
+    </script>
+</body>
+
+</html>

@@ -16,7 +16,7 @@ class VRAManager:
         """
         try:
             root_dir = os.getcwd()
-            absolute_zip_path = os.path.join(root_dir, "geodata", zip_filename)
+            absolute_zip_path = os.path.join(root_dir, "taskmaps", zip_filename)
             
             print(f"[VRA INFO]: Looking for map at: {absolute_zip_path}")
             

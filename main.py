@@ -1,5 +1,5 @@
 # =======================================================================
-# main.py --- ЧАСТИНА 1 З 2 (ЧИСТИЙ СТАРТ БЕЗ ПЕРЕЗАВАНТАЖЕНЬ І ДАМПІВ)
+#                                   main.py
 # =======================================================================
 import threading
 import time
@@ -11,8 +11,8 @@ import pyproj
 import os
 import json
 import multiprocessing
-import shutil        # <-- Перенесіть сюди з блоків save/load
-import dump_manager  # <-- ГЛОБАЛЬНИЙ ІМПОРТ ТУТ!
+import shutil
+import dump_manager
 
 # ІМПОРТ ВСІХ НАШИХ ІЗОЛЬОВАНИХ ЮНІТІВ-ВОРКЕРІВ
 from gps_worker import GPSWorker
@@ -63,6 +63,7 @@ sc.path_history = state.path_history
 
 data_queue = multiprocessing.Queue(maxsize=2)
 cmd_queue = multiprocessing.Queue()
+iteration_counter = 0
 
 
 def main_calculation_loop():
@@ -79,32 +80,435 @@ def main_calculation_loop():
         while not cmd_queue.empty():
             try:
                 cmd_data = cmd_queue.get_nowait()
-                cmd = cmd_data.get("cmd")
 
+                cmd = cmd_data.get("cmd")
                 if cmd == "reset" or cmd == "reset_area":
+                    # === АВТОМАТИЧНЕ ОНОВЛЕННЯ АРХІВУ ПЕРЕД RESET ===
+                    old_file = getattr(state, "current_file", "NEW")
+
+                    # Якщо ми працювали в реальному іменованому полі — оновлюємо його оригінальні файли
+                    if old_file and old_file != "NEW" and old_file != "current_session":
+                        print(
+                            f"[Main_Engine] Розумне оновлення поля '{old_file}' перед RESET..."
+                        )
+                        sc.save_to_disk()
+                        if sc.track_buffer_to_disk:
+                            dump_manager.append_batch_to_track_file(
+                                sc.track_buffer_to_disk
+                            )
+                            sc.track_buffer_to_disk = []
+                        dump_manager.save_lightweight_json(state)
+
+                        # Перезаписуємо поверх оригінального архіву, без створення дублікатів
+                        try:
+                            shutil.copy2(
+                                dump_manager.CURRENT_SESSION_FILE,
+                                os.path.join(dump_manager.DUMP_DIR, f"{old_file}.json"),
+                            )
+                            shutil.copy2(
+                                dump_manager.CURRENT_TRACK_FILE,
+                                os.path.join(dump_manager.DUMP_DIR, f"{old_file}.txt"),
+                            )
+                            old_wkb = os.path.join(
+                                dump_manager.DUMP_DIR, sc.current_wkb_filename
+                            )
+                            if os.path.exists(old_wkb):
+                                shutil.copy2(
+                                    old_wkb,
+                                    os.path.join(
+                                        dump_manager.DUMP_DIR, f"{old_file}.wkb"
+                                    ),
+                                )
+                        except Exception as e:
+                            print(f"[Main_Engine Save-on-Reset Error] {e}")
+
+                    # Тепер повністю вичищаємо робочу сесію current_session з диска та ОЗУ
                     state.current_file = "NEW"
-                    
-                    # 🟢 ВОРУЖАЄМО ЗАХИСТ: Повністю видаляємо файли поточної сесії з диска!
-                    #import dump_manager
                     dump_manager.clear_current_dump()
-                    
-                    # Видаляємо також сам файл робочої карти WKB, щоб наступне поле писалося в чистий файл
-                    wkb_path = os.path.join(dump_manager.DUMP_DIR, sc.current_wkb_filename)
+
+                    wkb_path = os.path.join(
+                        dump_manager.DUMP_DIR, sc.current_wkb_filename
+                    )
                     if os.path.exists(wkb_path):
                         try:
                             os.remove(wkb_path)
-                            print("[Main_Engine] Робочий бінарний файл WKB успішно видалено з диска.")
-                        except Exception as e:
-                            print(f"[Main_Engine] Не вдалося видалити робочий WKB: {e}")
-                    
-                    # Скидаємо карту завдань (VRA)
+                        except:
+                            pass
+
                     vra = getattr(state, "vra_manager", None)
                     if vra:
                         vra.reset_manager()
-                        
                     state.reset_flag = True
-                    print("[Main_Engine] Команда RESET виконана: ОЗУ та дискова сесія повністю очищені!")
+                    state.point_a = state.point_b = None
+                    print(
+                        "[Main_Engine] Команда RESET виконана. Робоча сесія видалена, ОЗУ чисте."
+                    )
 
+                elif cmd == "save_field":
+                    raw_name = cmd_data.get("filename", f"field_{int(time.time())}")
+                    field_name = (
+                        raw_name.replace(".json", "")
+                        .replace(".txt", "")
+                        .replace(".wkb", "")
+                        .strip()
+                    )
+
+                    print(
+                        f"[Main_Engine] Ручне збереження поля під іменем: {field_name}"
+                    )
+
+                    sc.save_to_disk()
+                    if sc.track_buffer_to_disk:
+                        dump_manager.append_batch_to_track_file(sc.track_buffer_to_disk)
+                        sc.track_buffer_to_disk = []
+                    dump_manager.save_lightweight_json(state)
+
+                    try:
+                        shutil.copy2(
+                            dump_manager.CURRENT_SESSION_FILE,
+                            os.path.join(dump_manager.DUMP_DIR, f"{field_name}.json"),
+                        )
+                        shutil.copy2(
+                            dump_manager.CURRENT_TRACK_FILE,
+                            os.path.join(dump_manager.DUMP_DIR, f"{field_name}.txt"),
+                        )
+                        old_wkb = os.path.join(
+                            dump_manager.DUMP_DIR, sc.current_wkb_filename
+                        )
+                        if os.path.exists(old_wkb):
+                            shutil.copy2(
+                                old_wkb,
+                                os.path.join(
+                                    dump_manager.DUMP_DIR, f"{field_name}.wkb"
+                                ),
+                            )
+
+                        state.current_file = field_name
+                        print(f"[Main_Engine] УСПІХ: Поле '{field_name}' збережено!")
+                    except Exception as copy_err:
+                        print(
+                            f"[Main_Engine] Помилка копіювання файлів поля: {copy_err}"
+                        )
+
+                elif cmd == "load_field":
+                    raw_name = cmd_data.get("filename")
+                    if raw_name:
+                        field_name = (
+                            raw_name.replace(".json", "")
+                            .replace(".txt", "")
+                            .replace(".wkb", "")
+                            .strip()
+                        )
+
+                        # === АВТОМАТИЧНЕ ОНОВЛЕННЯ МИНУЛОГО ПОЛЯ ПРИ ЗМІНІ ===
+                        old_file = getattr(state, "current_file", "NEW")
+
+                        # Якщо ми перемикаємося з одного архівного поля на інше — оновлюємо перше поверх його файлів
+                        if (
+                            old_file
+                            and old_file != "NEW"
+                            and old_file != "current_session"
+                            and old_file != field_name
+                        ):
+                            print(
+                                f"[Main_Engine] Розумне оновлення минулого поля перед перемиканням: {old_file}"
+                            )
+                            sc.save_to_disk()
+                            if sc.track_buffer_to_disk:
+                                dump_manager.append_batch_to_track_file(
+                                    sc.track_buffer_to_disk
+                                )
+                                sc.track_buffer_to_disk = []
+                            dump_manager.save_lightweight_json(state)
+                            try:
+                                shutil.copy2(
+                                    dump_manager.CURRENT_SESSION_FILE,
+                                    os.path.join(
+                                        dump_manager.DUMP_DIR, f"{old_file}.json"
+                                    ),
+                                )
+                                shutil.copy2(
+                                    dump_manager.CURRENT_TRACK_FILE,
+                                    os.path.join(
+                                        dump_manager.DUMP_DIR, f"{old_file}.txt"
+                                    ),
+                                )
+                                old_wkb = os.path.join(
+                                    dump_manager.DUMP_DIR, sc.current_wkb_filename
+                                )
+                                if os.path.exists(old_wkb):
+                                    shutil.copy2(
+                                        old_wkb,
+                                        os.path.join(
+                                            dump_manager.DUMP_DIR, f"{old_file}.wkb"
+                                        ),
+                                    )
+                            except:
+                                pass
+
+                        # Тепер спокійно завантажуємо нове вибране архівне поле
+                        print(
+                            f"[Main_Engine] Завантаження архівного поля: {field_name}"
+                        )
+                        sc.reset()
+                        state.path_history = []
+                        state.area = 0.0
+                        state.guidance_error = 0.0
+
+                        src_json = os.path.join(
+                            dump_manager.DUMP_DIR, f"{field_name}.json"
+                        )
+                        src_txt = os.path.join(
+                            dump_manager.DUMP_DIR, f"{field_name}.txt"
+                        )
+                        src_wkb = os.path.join(
+                            dump_manager.DUMP_DIR, f"{field_name}.wkb"
+                        )
+
+                        if os.path.exists(src_json):
+                            dump_manager.load_session_dump(state, sc, filename=src_json)
+
+                        if os.path.exists(src_wkb):
+                            try:
+                                all_chunks = []
+                                with open(src_wkb, "rb") as f:
+                                    while True:
+                                        try:
+                                            chunk = wkb.load(f)
+                                            if chunk and not chunk.is_empty:
+                                                all_chunks.append(chunk)
+                                        except EOFError:
+                                            break
+                                        except Exception:
+                                            break
+                                if all_chunks:
+                                    sc.covered_area = unary_union(all_chunks)
+                                    print(
+                                        f"[Main_Engine] УСПІХ: Архівна карта WKB відновлена ({len(all_chunks)} ешелонів)."
+                                    )
+                            except Exception as e:
+                                print(
+                                    f"[Main_Engine] Помилка читання архівного WKB: {e}"
+                                )
+
+                        # Копіюємо файли завантаженого поля в робочий буфер current_session
+                        try:
+                            if os.path.exists(src_json):
+                                shutil.copy2(
+                                    src_json, dump_manager.CURRENT_SESSION_FILE
+                                )
+                            if os.path.exists(src_txt):
+                                shutil.copy2(src_txt, dump_manager.CURRENT_TRACK_FILE)
+                            if os.path.exists(src_wkb):
+                                shutil.copy2(
+                                    src_wkb,
+                                    os.path.join(
+                                        dump_manager.DUMP_DIR, sc.current_wkb_filename
+                                    ),
+                                )
+                            dump_manager.set_session_active()
+                        except:
+                            pass
+
+                        state.current_file = field_name
+
+                # =======================================================================
+                # 🚜 НОВА КОМАНДА: ЗАВАНТАЖЕННЯ МУЛЬТИПРОФІЛЬНОЇ СЕСІЇ З ХАБУ
+                # =======================================================================
+                elif cmd == "load_hub_session":
+                    print(f"[Main_Engine Hub] Запуск мультипрофільної ")
+                    print(f"\n[CORE THREAD] Отримано команду load_hub_session з Хабу!", flush=True)
+                    field_name = (
+                        cmd_data.get("filename", "").replace(".json", "").strip()
+                    )
+                    impl_id = cmd_data.get("implement_id")
+                    taskmap_file = cmd_data.get("taskmap_file")
+                    target_rate = cmd_data.get("target_rate", 200.0)
+
+                    if field_name:
+                        print(
+                            f"[Main_Engine Hub] Запуск мультипрофільної сесії для поля: {field_name}"
+                        )
+
+                        # 1. РОЗУМНЕ ЗБЕРЕЖЕННЯ МИНУЛОГО ПОЛЯ (Твоя рідна безпечна логіка)
+                        old_file = getattr(state, "current_file", "NEW")
+                        if (
+                            old_file
+                            and old_file != "NEW"
+                            and old_file != "current_session"
+                            and old_file != field_name
+                        ):
+                            print(
+                                f"[Main_Engine Hub] Злив буферів минулого поля перед перемиканням: {old_file}"
+                            )
+                            sc.save_to_disk()
+                            if sc.track_buffer_to_disk:
+                                dump_manager.append_batch_to_track_file(
+                                    sc.track_buffer_to_disk
+                                )
+                                sc.track_buffer_to_disk = []
+                            dump_manager.save_lightweight_json(state)
+                            try:
+                                shutil.copy2(
+                                    dump_manager.CURRENT_SESSION_FILE,
+                                    os.path.join(
+                                        dump_manager.DUMP_DIR, f"{old_file}.json"
+                                    ),
+                                )
+                                shutil.copy2(
+                                    dump_manager.CURRENT_TRACK_FILE,
+                                    os.path.join(
+                                        dump_manager.DUMP_DIR, f"{old_file}.txt"
+                                    ),
+                                )
+                                old_wkb = os.path.join(
+                                    dump_manager.DUMP_DIR, sc.current_wkb_filename
+                                )
+                                if os.path.exists(old_wkb):
+                                    shutil.copy2(
+                                        old_wkb,
+                                        os.path.join(
+                                            dump_manager.DUMP_DIR, f"{old_file}.wkb"
+                                        ),
+                                    )
+                            except:
+                                pass
+
+                        # 2. СКИДАННЯ МАТЕМАТИКИ ПІД НОВУ ЗAГІНКУ
+                        sc.reset()
+                        state.path_history = []
+                        state.area = 0.0
+                        state.guidance_error = 0.0
+
+                        src_json = os.path.join(
+                            dump_manager.DUMP_DIR, f"{field_name}.json"
+                        )
+                        src_txt = os.path.join(
+                            dump_manager.DUMP_DIR, f"{field_name}.txt"
+                        )
+                        src_wkb = os.path.join(
+                            dump_manager.DUMP_DIR, f"{field_name}.wkb"
+                        )
+
+                        # Завантажуємо базову геометрію поля, якщо воно вже оброблялося раніше
+                        if os.path.exists(src_json):
+                            dump_manager.load_session_dump(state, sc, filename=src_json)
+                        if os.path.exists(src_wkb):
+                            try:
+                                all_chunks = []
+                                with open(src_wkb, "rb") as f:
+                                    while True:
+                                        try:
+                                            chunk = wkb.load(f)
+                                            if chunk and not chunk.is_empty:
+                                                all_chunks.append(chunk)
+                                        except EOFError:
+                                            break
+                                        except Exception:
+                                            break
+                                if all_chunks:
+                                    sc.covered_area = unary_union(all_chunks)
+                                    print(
+                                        f"[Main_Engine Hub] Архівна карта WKB відновлена ({len(all_chunks)} ешелонів)."
+                                    )
+                            except Exception as e:
+                                print(
+                                    f"[Main_Engine Hub] Помилка читання архівного WKB: {e}"
+                                )
+
+                        # 3. ДИНАМІЧНА ПІДМІНА ШТАНГИ В ОЗУ SectionControl (sc)
+                        if impl_id:
+                            base_sys_dir = os.path.dirname(os.path.abspath(__file__))
+                            impl_path = os.path.join(
+                                base_sys_dir, "implements", f"{impl_id}.json"
+                            )
+                            if os.path.exists(impl_path):
+                                with open(impl_path, "r", encoding="utf-8") as f_impl:
+                                    impl_config = json.load(f_impl)
+
+                                geometry = impl_config.get("geometry", {})
+                                dynamics = impl_config.get("dynamics", {})
+
+                                # Перебудовуємо крила обприскувача на льоту
+                                sc.cfg["SECTION_WIDTHS"] = [
+                                    float(x)
+                                    for x in geometry.get(
+                                        "section_widths", [3.0, 3.0, 3.0]
+                                    )
+                                ]
+                                sc.cfg["OFFSET_BACK"] = float(
+                                    geometry.get("offset_back", 0.0)
+                                )
+                                sc.cfg["LOOK_AHEAD_ON_TIME"] = float(
+                                    dynamics.get("look_ahead_on_time", 0.8)
+                                )
+                                sc.cfg["LOOK_AHEAD_OFF_TIME"] = float(
+                                    dynamics.get("look_ahead_off_time", 0.4)
+                                )
+                                sc.cfg["IMPLEMENT_TYPE"] = impl_config.get(
+                                    "implement_type", "mounted"
+                                )
+
+                                # Скидаємо пам'ять осей, щоб штанга не робила математичних стрибків
+                                sc.last_p1_list = []
+                                sc.last_p2_list = []
+                                sc.last_x = None
+                                sc.last_y = None
+
+                                sys_cfg = config_manager.load_config()
+                                sys_cfg["ACTIVE_IMPLEMENT_ID"] = impl_id
+                                sys_cfg["SECTION_MODES"] = ["AUTO"] * len(
+                                    sc.cfg["SECTION_WIDTHS"]
+                                )
+                                config_manager.save_config(sys_cfg)
+                                print(
+                                    f"[Main_Engine Hub] Штанга знаряддя '{impl_id}' успішно впроваджена в ядро."
+                                )
+
+                        # 4. СИНХРОНІЗАЦІЯ КАРТИ VRA ТА БАЗОВОЇ НОРМИ
+                        sys_cfg = config_manager.load_config()
+                        sys_cfg["VRA_RATE_DEFAULT"] = float(target_rate)
+                        if taskmap_file:
+                            
+                            vra = getattr(state, "vra_manager", None)
+                            if vra:
+                                if vra.activate_existing_map(taskmap_file):
+                                    state.active_vra_file = taskmap_file
+
+                            sys_cfg["ACTIVE_TASKMAP_FILE"] = taskmap_file
+                            print(
+                                f"[Main_Engine Hub] Підключено карту VRA: {taskmap_file}"
+                            )
+                        else:
+                            sys_cfg["ACTIVE_TASKMAP_FILE"] = ""
+                            print(
+                                f"[Main_Engine Hub] Робота без карти VRA. Норма: {target_rate} л/га"
+                            )
+                        config_manager.save_config(sys_cfg)
+
+                        # 5. КОПІЮВАННЯ В РОБОЧИЙ БУФЕР КАРТИ
+                        try:
+                            if os.path.exists(src_json):
+                                shutil.copy2(
+                                    src_json, dump_manager.CURRENT_SESSION_FILE
+                                )
+                            if os.path.exists(src_txt):
+                                shutil.copy2(src_txt, dump_manager.CURRENT_TRACK_FILE)
+                            if os.path.exists(src_wkb):
+                                shutil.copy2(
+                                    src_wkb,
+                                    os.path.join(
+                                        dump_manager.DUMP_DIR, sc.current_wkb_filename
+                                    ),
+                                )
+                            dump_manager.set_session_active()
+                        except:
+                            pass
+
+                        state.current_file = field_name
+                        print(
+                            f"[Main_Engine Hub] Мультипрофільна сесія успішно запущена в ОЗУ математики."
+                        )
 
                 elif cmd == "reload_config":
                     config_manager._cached_config = None
@@ -118,222 +522,6 @@ def main_calculation_loop():
                     sc.last_y = None
                     print("[Main_Engine] Master Switch змінено. Штанга синхронізована.")
 
-                # elif cmd == "save_field":
-                #     field_name = cmd_data.get("filename", f"field_{int(time.time())}")
-                #     print(f"[Main_Engine] Збереження поточного поля під іменем: {field_name}")
-                    
-                #     # 1. Примусово скидаємо залишки з ОЗУ-буферів на диск (Фінальний залп)
-                #     sc.save_to_disk()
-                #     if sc.track_buffer_to_disk:
-                #         dump_manager.append_batch_to_track_file(sc.track_buffer_to_disk)
-                #         sc.track_buffer_to_disk = []
-                    
-                #     # Зберігаємо легкі метадані (лінії А-В, гектари)
-                #     dump_manager.save_lightweight_json(state)
-                    
-                #     # 2. Копіюємо робочі файли під новим іменем поля
-                #     import shutil
-                #     try:
-                #         new_json = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.json")
-                #         new_txt = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.txt")
-                #         new_wkb = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.wkb")
-                        
-                #         if os.path.exists(dump_manager.CURRENT_SESSION_FILE):
-                #             shutil.copy2(dump_manager.CURRENT_SESSION_FILE, new_json)
-                #         if os.path.exists(dump_manager.CURRENT_TRACK_FILE):
-                #             shutil.copy2(dump_manager.CURRENT_TRACK_FILE, new_txt)
-                        
-                #         # Копіюємо бінарну карту WKB
-                #         old_wkb = os.path.join(dump_manager.DUMP_DIR, sc.current_wkb_filename)
-                #         if os.path.exists(old_wkb):
-                #             shutil.copy2(old_wkb, new_wkb)
-                            
-                #         state.current_file = field_name
-                #         print(f"[Main_Engine] УСПІХ: Поле '{field_name}' успішно зафіксовано на eMMC!")
-                #     except Exception as copy_err:
-                #         print(f"[Main_Engine] Помилка копіювання файлів поля: {copy_err}")
-
-                # elif cmd == "load_field":
-                #     field_name = cmd_data.get("filename")
-                #     if field_name:
-                #         print(f"[Main_Engine] Завантаження архівного поля: {field_name}")
-                        
-                #         # Повна зачистка поточного ОЗУ перед завантаженням старого поля
-                #         sc.reset()
-                #         state.path_history = []
-                #         state.area = 0.0
-                #         state.guidance_error = 0.0
-                        
-                #         # Формуємо шляхи до архівного поля
-                #         src_json = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.json")
-                #         src_txt = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.txt")
-                #         src_wkb = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.wkb")
-                        
-                #         # 1. Відновлюємо легкі змінні та лінії А-В
-                #         if os.path.exists(src_json):
-                #             dump_manager.load_session_dump(state, sc, filename=src_json)
-                        
-                #         # 2. Відновлюємо бінарну карту покриття WKB для математики
-                #         if os.path.exists(src_wkb):
-                #             try:
-                #                 all_chunks = []
-                #                 with open(src_wkb, "rb") as f:
-                #                     while True:
-                #                         try:
-                #                             chunk = wkb.load(f)
-                #                             if chunk and not chunk.is_empty:
-                #                                 all_chunks.append(chunk)
-                #                         except EOFError: break
-                #                         except Exception: break
-                #                 if all_chunks:
-                #                     sc.covered_area = unary_union(all_chunks)
-                #                     print(f"[Main_Engine] УСПІХ: Архівна карта WKB відновлена ({len(all_chunks)} ешелонів).")
-                #             except Exception as e:
-                #                 print(f"[Main_Engine] Помилка читання архівного WKB: {e}")
-                        
-                #         # Копіюємо архівні файли в робочу сесію, щоб автозбереження працювало далі
-                #         import shutil
-                #         try:
-                #             if os.path.exists(src_json): shutil.copy2(src_json, dump_manager.CURRENT_SESSION_FILE)
-                #             if os.path.exists(src_txt): shutil.copy2(src_txt, dump_manager.CURRENT_TRACK_FILE)
-                #             if os.path.exists(src_wkb): shutil.copy2(src_wkb, os.path.join(dump_manager.DUMP_DIR, sc.current_wkb_filename))
-                #             dump_manager.set_session_active()
-                #         except: pass
-                        
-                #         state.current_file = field_name
-                # elif cmd == "save_field":
-                #     raw_name = cmd_data.get("filename", f"field_{int(time.time())}")
-                    
-                #     # --- ЗАХИСТ ВІД ПОДВІЙНИХ РОЗШИРЕНЬ ---
-                #     # Очищаємо ім'я від .json, .txt, .wkb, якщо воно прилетіло з фронтенду
-                #     field_name = raw_name.replace(".json", "").replace(".txt", "").replace(".wkb", "").strip()
-                    
-                #     print(f"[Main_Engine] Збереження поточного поля під іменем: {field_name}")
-                    
-                #     # Примусово скидаємо залишки з ОЗУ-буферів на диск (Фінальний залп)
-                #     sc.save_to_disk()
-                #     if sc.track_buffer_to_disk:
-                #         dump_manager.append_batch_to_track_file(sc.track_buffer_to_disk)
-                #         sc.track_buffer_to_disk = []
-                #     print("test 1")
-                #     # Зберігаємо легкі метадані (лінії А-В, гектари)
-                #     dump_manager.save_lightweight_json(state)
-                #     print("test 2")
-                #     # Копіюємо робочі файли під новим іменем поля
-                #     #import shutil
-                #     try:
-                #         new_json = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.json")
-                #         new_txt = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.txt")
-                #         new_wkb = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.wkb")
-                        
-                #         if os.path.exists(dump_manager.CURRENT_SESSION_FILE):
-                #             shutil.copy2(dump_manager.CURRENT_SESSION_FILE, new_json)
-                #         if os.path.exists(dump_manager.CURRENT_TRACK_FILE):
-                #             shutil.copy2(dump_manager.CURRENT_TRACK_FILE, new_txt)
-                        
-                #         old_wkb = os.path.join(dump_manager.DUMP_DIR, sc.current_wkb_filename)
-                #         if os.path.exists(old_wkb):
-                #             shutil.copy2(old_wkb, new_wkb)
-                            
-                #         state.current_file = field_name
-                #         print(f"[Main_Engine] УСПІХ: Поле '{field_name}' успішно зафіксовано на eMMC!")
-                #     except Exception as copy_err:
-                #         print(f"[Main_Engine] Помилка копіювання файлів поля: {copy_err}")
-                elif cmd == "save_field":
-                    raw_name = cmd_data.get("filename", f"field_{int(time.time())}")
-                    field_name = raw_name.replace(".json", "").replace(".txt", "").replace(".wkb", "").strip()
-                    
-                    print(f"[Main_Engine] Збереження поточного поля під іменем: {field_name}")
-                    
-                    # Примусово скидаємо залишки з ОЗУ-буферів на диск
-                    sc.save_to_disk()
-                    if sc.track_buffer_to_disk:
-                        dump_manager.append_batch_to_track_file(sc.track_buffer_to_disk)
-                        sc.track_buffer_to_disk = []
-                    
-                    # Тепер цей виклик відпрацює ідеально, бо імпорт глобальний!
-                    dump_manager.save_lightweight_json(state)
-                    
-                    try:
-                        new_json = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.json")
-                        new_txt = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.txt")
-                        new_wkb = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.wkb")
-                        
-                        if os.path.exists(dump_manager.CURRENT_SESSION_FILE):
-                            shutil.copy2(dump_manager.CURRENT_SESSION_FILE, new_json)
-                        if os.path.exists(dump_manager.CURRENT_TRACK_FILE):
-                            shutil.copy2(dump_manager.CURRENT_TRACK_FILE, new_txt)
-                        
-                        old_wkb = os.path.join(dump_manager.DUMP_DIR, sc.current_wkb_filename)
-                        if os.path.exists(old_wkb):
-                            shutil.copy2(old_wkb, new_wkb)
-                            
-                        state.current_file = field_name
-                        print(f"[Main_Engine] УСПІХ: Поле '{field_name}' успішно зафіксовано на eMMC!")
-                    except Exception as copy_err:
-                        print(f"[Main_Engine] Помилка копіювання файлів поля: {copy_err}")
-
-
-                elif cmd == "load_field":
-                    raw_name = cmd_data.get("filename")
-                    if raw_name:
-                        # --- ЗАХИСТ ВІД ПОДВІЙНИХ РОЗШИРЕНЬ ---
-                        field_name = raw_name.replace(".json", "").replace(".txt", "").replace(".wkb", "").strip()
-                        
-                        print(f"[Main_Engine] Завантаження архівного поля: {field_name}")
-                        
-                        # Повна зачистка поточного ОЗУ перед завантаженням старого поля
-                        sc.reset()
-                        state.path_history = []
-                        state.area = 0.0
-                        state.guidance_error = 0.0
-                        
-                        # Формуємо шляхи до архівного поля
-                        src_json = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.json")
-                        src_txt = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.txt")
-                        src_wkb = os.path.join(dump_manager.DUMP_DIR, f"{field_name}.wkb")
-                        
-                        # 1. Відновлюємо легкі змінні та лінії А-В
-                        if os.path.exists(src_json):
-                            dump_manager.load_session_dump(state, sc, filename=src_json)
-                        else:
-                            print(f"[Main_Engine Warning] Файл метаданих не знайдено: {src_json}")
-                        
-                        # 2. Відновлюємо бінарну карту покриття WKB для математики
-                        if os.path.exists(src_wkb):
-                            try:
-                                all_chunks = []
-                                with open(src_wkb, "rb") as f:
-                                    while True:
-                                        try:
-                                            chunk = wkb.load(f)
-                                            if chunk and not chunk.is_empty:
-                                                all_chunks.append(chunk)
-                                        except EOFError: break
-                                        except Exception: break
-                                if all_chunks:
-                                    sc.covered_area = unary_union(all_chunks)
-                                    print(f"[Main_Engine] УСПІХ: Архівна карта WKB відновлена ({len(all_chunks)} ешелонів).")
-                                else:
-                                    print("[Main_Engine] Попередження: Файл WKB порожній.")
-                            except Exception as e:
-                                print(f"[Main_Engine] Помилка читання архівного WKB: {e}")
-                        else:
-                            print(f"[Main_Engine Warning] Файл карти WKB не знайдено: {src_wkb}")
-                        
-                        # Копіюємо архівні файли в робочу сесію, щоб автозбереження працювало далі
-                        #import shutil
-                        try:
-                            if os.path.exists(src_json): shutil.copy2(src_json, dump_manager.CURRENT_SESSION_FILE)
-                            if os.path.exists(src_txt): shutil.copy2(src_txt, dump_manager.CURRENT_TRACK_FILE)
-                            if os.path.exists(src_wkb): shutil.copy2(src_wkb, os.path.join(dump_manager.DUMP_DIR, sc.current_wkb_filename))
-                            dump_manager.set_session_active()
-                        except Exception as copy_err:
-                            print(f"[Main_Engine] Помилка синхронізації з робочою сесією: {copy_err}")
-                        
-                        state.current_file = field_name
-
-                
                 elif cmd == "activate_vra":
                     vra = getattr(state, "vra_manager", None)
                     if vra:
@@ -351,12 +539,12 @@ def main_calculation_loop():
                     state.emu_speed = cmd_data["spd"]
                     state.emu_enabled = cmd_data["enabled"]
 
-                elif cmd == "load_field" or cmd == "save_field":
-                    # Повністю заглушили команди, карта завжди чиста!
-                    state.current_file = "NEW"
-                    print(
-                        f"[Main_Engine] Команда {cmd} проігнорована. Працюємо на чистій карті."
-                    )
+                # elif cmd == "load_field" or cmd == "save_field":
+                #     # Повністю заглушили команди, карта завжди чиста!
+                #     state.current_file = "NEW"
+                #     print(
+                #         f"[Main_Engine] Команда {cmd} проігнорована. Працюємо на чистій карті."
+                #     )
 
                 elif cmd == "set_point":
                     label = cmd_data["label"]
@@ -394,7 +582,7 @@ def main_calculation_loop():
             last_track_x = last_track_y = None
 
         # =======================================================================
-        # main.py --- ЧАСТИНА 2.1 (РОЗРАХУНОК РЕЖИМІВ ТА ЗОН VRA В ОЗУ)
+        #               (РОЗРАХУНОК РЕЖИМІВ ТА ЗОН VRA В ОЗУ)
         # =======================================================================
 
         # Перевіряємо наявність базового зв'язку з GPS
@@ -476,10 +664,6 @@ def main_calculation_loop():
                     state.current_states = final_states
                     state.vra_flows = vra_flows
                     last_track_x = last_track_y = None
-                # =======================================================================
-                # main.py --- ЧАСТИНА 2.2 (ЛІНІЇ А-В, СНІМШОТ ТА ЗАПУСК СИСТЕМИ)
-                # =======================================================================
-
                 # =======================================================================
                 # РЕЖИМ 2: ТАК СОБІ (НАПІВ-АВТОМАТ / ЗАМОРОЗКА КАРТИ)
                 # =======================================================================
@@ -575,7 +759,9 @@ def main_calculation_loop():
                         state.guidance_error = dist_to_ab - (pass_num * sw)
                 except Exception as e:
                     print(f"[Main_Engine AB Calc Error] {e}")
-
+                    state.guidance_error = 0
+            else:
+                state.guidance_error = 0
             state.area = sc.get_area_ha()
             state.path_history = sc.path_history
 
@@ -619,6 +805,38 @@ def main_calculation_loop():
             "uy": sc.last_y,
         }
 
+        # Відправляємо зліпок ОЗУ, наприклад, раз на секунду
+        if iteration_counter % 10 == 0:
+            try:
+                clean_state_dump = {}
+
+                # Автоматично перебираємо ВСІ атрибути твого об'єкта SharedState
+                for attr_name, attr_val in state.__dict__.items():
+                    # ЗАХИСТ: Пропускаємо великі списки, масиви координат, Shapely-полігони та службові методи
+                    if attr_name.startswith("_") or isinstance(
+                        attr_val, (list, dict, tuple, set)
+                    ):
+                        continue
+
+                    # Дозволяємо передачу ТІЛЬКИ базових інженерних типів даних
+                    if (
+                        isinstance(attr_val, (int, float, str, bool))
+                        or attr_val is None
+                    ):
+                        clean_state_dump[attr_name] = attr_val
+                    else:
+                        # Якщо це складний об'єкт (наприклад, трансформатор координат), показуємо лише його тип
+                        clean_state_dump[attr_name] = (
+                            f"Object: {type(attr_val).__name__}"
+                        )
+
+                # Закидуємо чистий легкий пакет у міжпроцесну чергу
+                data_queue.put(
+                    {"type": "live_state_dump", "variables": clean_state_dump}
+                )
+            except Exception as e:
+                print(f"[Main_Engine Debug Error] Збій фільтрації SharedState: {e}")
+
         if data_queue.full():
             try:
                 data_queue.get_nowait()
@@ -632,58 +850,6 @@ def main_calculation_loop():
         time.sleep(0.25)
 
 
-# =======================================================================
-# main.py --- ФІНАЛЬНИЙ БЛОК ЗАПУСКУ З РОЗУМНИМ ВІДНОВЛЕННЯМ СЕСІЇ
-# =======================================================================
-
-
-# def start_flask_process(d_queue, c_queue):
-#     """Запуск веб-сервера з автоматичним відновленням кешу треку"""
-#     import dump_manager
-
-#     logging.getLogger("werkzeug").setLevel(logging.ERROR)
-
-#     # Перевіряємо, чи є активна сесія для відновлення
-#     if dump_manager.is_session_active() and os.path.exists(
-#         dump_manager.CURRENT_SESSION_FILE
-#     ):
-#         try:
-#             with open(dump_manager.CURRENT_SESSION_FILE, "r", encoding="utf-8") as f:
-#                 dump_data = json.load(f)
-
-#             # Покроково відновлюємо текстову траєкторію для Canvas вебу
-#             history = dump_manager.load_track_history()
-
-#             web_server.WEB_CACHE["new_points"] = history
-#             web_server.WEB_CACHE["total_count"] = len(history)
-#             web_server.WEB_CACHE["area"] = dump_data.get("area", 0.0)
-#             web_server.WEB_CACHE["current_file"] = "current_session"
-#             web_server.WEB_CACHE["active_vra_file"] = dump_data.get(
-#                 "active_vra_file", None
-#             )
-#             print(
-#                 f"[Web_Server Autoload] УСПІХ: Відновлено {len(history)} точок треку для веб-інтерфейсу."
-#             )
-#         except Exception as e:
-#             print(f"[Web_Server Autoload] Помилка відновлення кешу вебу: {e}")
-#             # Дефолтний чистий старт при збої
-#             web_server.WEB_CACHE["new_points"] = []
-#             web_server.WEB_CACHE["total_count"] = 0
-#             web_server.WEB_CACHE["area"] = 0.0
-#             web_server.WEB_CACHE["current_file"] = "NEW"
-#             web_server.WEB_CACHE["active_vra_file"] = None
-#     else:
-#         # Абсолютно чистий старт системи
-#         web_server.WEB_CACHE["new_points"] = []
-#         web_server.WEB_CACHE["total_count"] = 0
-#         web_server.WEB_CACHE["area"] = 0.0
-#         web_server.WEB_CACHE["current_file"] = "NEW"
-#         web_server.WEB_CACHE["active_vra_file"] = None
-#         print("[Web_Server Autoload] Чистий старт. Веб-кеш порожній.")
-
-
-#     app = web_server.create_app(d_queue, c_queue)
-#     app.run(host="0.0.0.0", port=80, debug=False, use_reloader=False)
 def start_flask_process(d_queue, c_queue, restored_history=None):
     """
     Запуск веб-сервера з гарантованим відновленням кешу треку.
@@ -710,7 +876,15 @@ def start_flask_process(d_queue, c_queue, restored_history=None):
     web_server.WEB_CACHE["active_vra_file"] = None
 
     app = web_server.create_app(d_queue, c_queue)
-    app.run(host="0.0.0.0", port=80, debug=False, use_reloader=False)
+
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # Вимикаємо кешування CSS/JS браузером
+
+    # Запускаємо з debug=True, але BEZ use_reloader=True,
+    # щоб автопілот і потоки заліза в main.py не перезапускалися і не ламалися!
+    app.run(host="0.0.0.0", port=80, debug=True, use_reloader=False)
+
+    # app.run(host="0.0.0.0", port=80, debug=False, use_reloader=False)
 
 
 if __name__ == "__main__":
@@ -720,7 +894,6 @@ if __name__ == "__main__":
     from shapely.geometry import MultiPolygon
     from shapely import wkb
     from shapely.ops import unary_union
-    #import dump_manager
 
     sc.current_wkb_filename = "current_session.wkb"
     wkb_path = os.path.join(dump_manager.DUMP_DIR, sc.current_wkb_filename)
@@ -779,9 +952,6 @@ if __name__ == "__main__":
             "[Main_Engine Autoload] УСПІХ: Чистий старт системи. Маска покриття в ОЗУ порожня."
         )
 
-
-
-
     # Ініціалізуємо менеджер карт-предписань (VRA)
     vra_manager = VRAManager(cfg)
     state.vra_manager = vra_manager
@@ -810,21 +980,6 @@ if __name__ == "__main__":
     emulator_logic.daemon = True
     emulator_logic.start()
 
-    # # 2. Запуск математичного ядра як звичайного потоку (прямий доступ до SharedState)
-    # import threading
-
-    # threading.Thread(target=main_calculation_loop, daemon=True).start()
-
-    # # 3. Запуск Flask у СПРАВЖНЬОМУ ОКРЕМУ ПРОЦЕСІ на іншому ядрі CPU
-    # flask_process = multiprocessing.Process(
-    #     target=start_flask_process, args=(data_queue, cmd_queue), daemon=True
-    # )
-    # flask_process.start()
-
-    # # Утримуємо головний потік системи
-    # while True:
-    #     time.sleep(1)
-    # 2. Запуск математичного ядра як звичайного потоку
     import threading
 
     threading.Thread(target=main_calculation_loop, daemon=True).start()
@@ -832,7 +987,7 @@ if __name__ == "__main__":
     # 3. ПЕРЕДАЄМО ВІДНОВЛЕНИЙ ТРЕК У ФЛАКС ПРИ СТАРТІ:
     # Беремо state.path_history, який щойно успішно прочитався з диска
     history_to_flask = getattr(state, "path_history", [])
-    #print(history_to_flask)
+    # print(history_to_flask)
 
     # Запуск Flask в окремому процесі з передачею історії
     flask_process = multiprocessing.Process(

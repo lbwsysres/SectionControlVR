@@ -25,7 +25,7 @@ body {
 /* --- НАВИГАЦИЯ ТАБАМИ --- */
 .tabs-nav {
     display: flex;
-    gap: 5px;
+    gap: 45px;
     margin-bottom: 15px;
     position: sticky;
     top: 0;
@@ -41,7 +41,7 @@ body {
     border: 2px solid var(--border);
     color: #666;
     border-radius: 12px;
-    font-size: 0.9rem;
+    font-size: 1.5rem;
     font-weight: bold;
     cursor: pointer;
     transition: 0.2s;
@@ -69,7 +69,13 @@ body {
     margin-bottom: 15px;
     border: 1px solid var(--border);
 }
-
+.card-divider {
+    height: 0;
+    border: none;
+    border-top: 1px solid #888888; /* Сіра лінія товщиною 2px */
+    margin: 20px 0; /* Відступи зверху та знизу лінії */
+    width: 100%; /* На всю ширину картки */
+}
 h2 {
     margin: 0 0 15px 0;
     font-size: 1rem;
@@ -93,13 +99,13 @@ h2 {
 
 .label-main {
     display: block;
-    font-size: 1rem;
+    font-size: 1.4rem;
     font-weight: 500;
 }
 
 .label-hint {
     display: block;
-    font-size: 0.8rem;
+    font-size: 1.0rem;
     color: #666;
     margin-top: 2px;
 }
@@ -120,7 +126,7 @@ h2 {
     background: var(--btn-gray);
     border: none;
     color: white;
-    font-size: 1.4rem;
+    font-size: 2.0rem;
     border-radius: 8px;
     cursor: pointer;
 }
@@ -130,9 +136,9 @@ h2 {
 }
 
 .spinner span {
-    min-width: 65px;
+    min-width: 85px;
     text-align: center;
-    font-size: 1.2rem;
+    font-size: 1.5rem;
     font-weight: bold;
 }
 

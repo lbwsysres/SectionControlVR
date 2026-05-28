@@ -265,6 +265,20 @@
 
     <!-- ЛЕВО Панель инструментов -->
     <div class="left-panel">
+        <!-- Кнопка переходу в Менеджер Знарядь (Трактор/Техніка) -->
+        <button class="tool-btn" onclick="location.href='/'" title="Менеджер причепів та знарядь">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00ff7f" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <!-- Кабіна та капот трактора -->
+                <path d="M3 11h5l1-3h3v3h4l2 4h3v3H3z"></path>
+                <!-- Велике заднє колесо -->
+                <circle cx="7" cy="18" r="3"></circle>
+                <!-- Маленьке переднє колесо -->
+                <circle cx="17" cy="19" r="2"></circle>
+                <!-- Дишло/зчеплення причепа -->
+                <path d="M20 18h4"></path>
+            </svg>
+        </button>
         <!-- Кнопка перехода в Менеджер Дампов (Полей) -->
         <button class="tool-btn" onclick="location.href='/fields'" title="Менеджер сохраненных полей">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00ff7f" stroke-width="2"
@@ -333,6 +347,8 @@
     <script src="{{ url_for('static', filename='js/emulator.js') }}"></script>
     <script src="{{ url_for('static', filename='js/diagnostic.js') }}"></script>
     <script src="{{ url_for('static', filename='js/board.js') }}"></script>
+    {% include 'json_inspector.html' %}
+
 </body>
 
 </html>

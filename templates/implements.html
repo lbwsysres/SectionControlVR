@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Менеджер знарядь</title>
+    <!-- ПІДКЛЮЧАЄМО ВАШ ФІРМОВИЙ CSS СТИЛЬ НАЛАШТУВАНЬ -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+    <!-- Підключаємо офлайн-пак іконок через Flask-шаблонізатор -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+
+    <style>
+        /* Додаткові кастомні стилі, яких немає в settings.css */
+        body {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            padding: 0 !important;
+            margin: 0;
+        }
+
+        .sidebar {
+            width: 35%;
+            border-right: 2px solid var(--border, #333);
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-card, #181818);
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 2px solid var(--border, #333);
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--accent, #2ecc71);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /*.impl-list {
+            flex: 1;
+            overflow-y: auto;
+        }*/
+        .impl-list {
+            flex: 1;
+            overflow-y: auto;
+
+            &::-webkit-scrollbar {
+                display: none;
+            }
+
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+
+        /* Великий тач-рядок списку техніки під палець */
+        .impl-item {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            height: 75px;
+            border-bottom: 1px solid #222;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .impl-item:hover {
+            background: #222;
+        }
+
+        .impl-item.active {
+            border-left: 4px solid var(--accent, #2ecc71);
+            background: #1a2a1f;
+        }
+
+        .impl-info {
+            flex: 1;
+        }
+
+        .impl-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .impl-meta {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .details-panel {
+            flex: 1;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-main, #0a0a0a);
+            position: relative;
+        }
+
+        .edit-form {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+
+            &::-webkit-scrollbar {
+                display: none;
+            }
+
+            /* Для сучасних стандартів (Firefox) */
+            scrollbar-width: none;
+            /* Для старих версій Internet Explorer / Edge */
+            -ms-overflow-style: none;
+        }
+
+        /* Кнопка "Назад" у вашому фірмовому SVG-контурі #00ff7f */
+        .tool-btn-nav {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .tool-btn-nav:active {
+            transform: scale(0.9);
+        }
+
+        .no-selection {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: #444;
+            text-align: center;
+            font-weight: 500;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ЛІВА КОЛОНКА: Великий список техніки під пальці водія -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <button class="tool-btn-nav" onclick="location.href='/'" title="Повернутися на карту">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00ff7f" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+            </button>
+            <!--button type="button" onclick="window.location.href='/hub'"
+                style="height:60px; width:60px; display:flex; align-items:center; justify-content:center;">
+                <i class="mi mi-md">home</i>
+            </button-->
+
+            <span>ЗНАРЯДДЯ</span>
+            <!-- Ваша фірмова тач-кнопка повернення на головну карту -->
+
+        </div>
+
+        <!-- Контейнер для карток (заповнюється через JS) -->
+        <div class="impl-list" id="implements-list-container"></div>
+
+        <!-- Фіксована панель дій лівої колонки -->
+        <div class="bottom-dock"
+            style="z-index: 999; position: relative; width: 100%; padding: 15px; background: #1a1a1a;">
+            <button type="button" class="btn-dock-action" onclick="createNewImplement()"
+                style="width: 25%; background: var(--accent, #2ecc71); color: #000; border: none; height: 60px; font-size: 1.5rem; border-radius: 10px;">
+                +
+            </button>
+            <button type="button" class="btn-dock-action" id="btn-activate-work" onclick="activateImplement()" disabled
+                style="width: 45%; background: #3498db; color: #fff; border: none; height: 60px; font-size: 1.1rem; border-radius: 10px;">
+                В РОБОТУ
+            </button>
+            <button type="button" class="btn-dock-action" id="btn-delete-work" onclick="deleteImplement()" disabled
+                style="width: 20%; background: var(--danger, #e74c3c); color: #fff; border: none; height: 60px; font-size: 1.2rem; border-radius: 10px;">
+                🗑️
+            </button>
+        </div>
+    </div>
+    <!-- ПРАВА КОЛОНКА: Детальна картка та редагування (Стиль settings.css) -->
+    <div class="details-panel" id="main-details-panel">
+        <div class="no-selection" id="no-selection-msg">
+            Виберіть знаряддя ліворуч або натисніть ➕ для налаштування
+        </div>
+
+        <div id="editor-container" style="display: none; height: 100%; flex-direction: column;">
+            <div class="edit-form">
+
+                <!-- КАРТКА 1: ГОЛОВНІ НАЛАШТУВАННЯ -->
+                <div class="card">
+                    <h2>Основні параметри знаряддя</h2>
+                    <div class="touch-row">
+                        <div class="label-box">
+                            <span class="label-main">Назва обладнання</span>
+                        </div>
+                        <input type="text" id="impl-name-input" class="input-text-touch" style="width: 250px;"
+                            oninput="updateCurrentCopy('name', this.value)">
+                    </div>
+
+                    <div class="touch-row">
+                        <div class="label-box">
+                            <span class="label-main">Тип навішування</span>
+                        </div>
+                        <select id="impl-type-select" style="width: 250px;"
+                            onchange="updateCurrentCopy('implement_type', this.value)">
+                            <option value="MOUNTED">Навісне (Mounted)</option>
+                            <option value="TRAILED">Причіпне (Trailed)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- КАРТКА 2: ГЕОМЕТРІЯ ТА ОСІ -->
+                <div class="card">
+                    <h2>Фізична геометрія штанги</h2>
+                    <div class="touch-row">
+                        <div class="label-box">
+                            <span class="label-main">Offset Back (м)</span>
+                            <span class="label-hint">Відстань від GPS антени назад до форсунок</span>
+                        </div>
+                        <div class="spinner">
+                            <button type="button" onclick="adjustGeometryValue('offset_back', -0.1)">-</button>
+                            <input type="text" id="impl-offset-back" class="input-text-touch"
+                                style="width: 70px; height: 50px; border: none;" readonly>
+                            <button type="button" onclick="adjustGeometryValue('offset_back', 0.1)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="touch-row">
+                        <div class="label-box">
+                            <span class="label-main">Кількість секцій</span>
+                            <span class="label-hint">Загальна кількість робочих клапанів</span>
+                        </div>
+                        <div class="spinner">
+                            <button type="button" onclick="adjustSectionsCount(-1)">-</button>
+                            <input type="text" id="impl-sections-count" class="input-text-touch"
+                                style="width: 70px; height: 50px; border: none;" readonly>
+                            <button type="button" onclick="adjustSectionsCount(1)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="touch-row">
+                        <div class="label-box">
+                            <span class="label-main">Ширина секції (м)</span>
+                            <span class="label-hint">Робоче перекриття одного проходу форсунок</span>
+                        </div>
+                        <div class="spinner">
+                            <button type="button" onclick="adjustGeometryValue('single_section_width', -0.1)">-</button>
+                            <input type="text" id="impl-section-width" class="input-text-touch"
+                                style="width: 70px; height: 50px; border: none;" readonly>
+                            <button type="button" onclick="adjustGeometryValue('single_section_width', 0.1)">+</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Нижня фіксована панель дій для правої колонки (Ваш bottom-dock) -->
+            <div class="bottom-dock"
+                style="z-index: 999;position: absolute; bottom: 0; left: 0; width: 100%; padding: 20px 30px;">
+                <button type="button" class="btn-dock-action" id="btn-rollback" onclick="askRollback()"
+                    style="background: #2c2c2c; color: #fff; border: 2px solid #444;">
+                    СКАСУВАТИ
+                </button>
+                <button type="button" class="btn-dock-action" id="btn-save-disk" onclick="confirmSaveImplement()"
+                    style="background: var(--accent, #2ecc71); color: #000; border: none;">
+                    ЗБЕРЕГТИ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ДЕЛЬФІЙСЬКЕ МОДАЛЬНЕ ВІКНО ПІДТВЕРДЖЕННЯ (Ваш #customModal) -->
+    <div id="customModal">
+        <div class="modal-card" id="modalCard">
+            <h3 id="modalText"
+                style="margin: 0 0 40px 0; font-size: 24px; color: white; font-weight: bold; line-height: 1.4;"></h3>
+            <div style="display: flex; gap: 30px; justify-content: center;">
+                <button type="button" id="modalCancelBtn"
+                    style="flex:1; background:#444; height:70px; font-size:18px; border-radius:12px; border:none; color:white; font-weight:bold; cursor:pointer;">
+                    ОТМЕНА
+                </button>
+                <button type="button" id="modalConfirmBtn"
+                    style="flex:1; height:70px; font-size:18px; border-radius:12px; border:none; color:white; font-weight:bold; cursor:pointer;">
+                    ДА
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Функція-міст для дельфійських вікон askUser (адаптована під логіку знарядь) -->
+    <script>
+        function askUser(text, theme, confirmText, onConfirm = null) {
+            const modal = document.getElementById('customModal');
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            const cancelBtn = document.getElementById('modalCancelBtn');
+
+            if (modal.classList.contains('show')) {
+                modal.classList.remove('show');
+                setTimeout(() => { askUser(text, theme, confirmText, onConfirm); }, 200);
+                return;
+            }
+
+            document.getElementById('modalText').innerHTML = text;
+            confirmBtn.innerText = confirmText;
+            confirmBtn.style.background = (theme === 'danger') ? '#c0392b' : 'var(--accent, #2ecc71)';
+            cancelBtn.style.display = (onConfirm === null) ? 'none' : 'inline-block';
+
+            modal.classList.add('show');
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+            const closeModal = () => { modal.classList.remove('show'); };
+
+            newConfirmBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (typeof onConfirm === 'function') onConfirm();
+                closeModal();
+            }, { once: true });
+
+            cancelBtn.onclick = (e) => { e.preventDefault(); closeModal(); };
+            modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+        }
+
+        // Містки для виклику дельфійських модалок з JS-логіки
+        function askRollback() {
+            askUser('Скасувати всі поточні зміни?<br><small>Конфігурація ОЗУ повернеться до збереженого оригіналу</small>', 'danger', 'ОТМЕНА', () => { rollbackChanges(); });
+        }
+        function confirmSaveImplement() {
+            askUser('Зберегти конфігурацію знаряддя на eMMC?<br><small>Зміни будуть записані в базу даних обладнання</small>', 'success', 'ЗБЕРЕГТИ', () => { saveChangesToDisk(); });
+        }
+    </script>
+
+    <!-- Підключаємо нашу JS логіку з глибоким клонуванням -->
+    <script src="/static/js/implements_logic.js"></script>
+</body>
+
+</html>

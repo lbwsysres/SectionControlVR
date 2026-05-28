@@ -1,0 +1,222 @@
+<!-- templates/json_inspector.html (ЧАСТЬ 1 ИЗ 2) -->
+<style>
+    /* Маленька плаваюча інженерна кнопка-тригер у кутку екрана */
+    .engineer-floating-trigger {
+        position: fixed;
+        bottom: 25px;
+        right: 25px;
+        width: 65px;
+        height: 65px;
+        background: #d35400;
+        /* Помаранчевий колір спецтехніки */
+        color: #fff;
+        border: 2px solid #e67e22;
+        border-radius: 50%;
+        font-size: 1.6rem;
+        font-weight: bold;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        z-index: 9999;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        opacity: 0.6;
+        transition: opacity 0.2s, transform 0.2s;
+    }
+
+    .engineer-floating-trigger:active {
+        opacity: 1.0;
+        transform: scale(0.9);
+    }
+
+    /* Великий повноформатний екран інспектора ОЗУ */
+    .engineer-panel-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(10, 10, 10, 0.95);
+        z-index: 10000;
+        justify-content: center;
+        align-items: center;
+        font-family: 'Courier New', Courier, monospace;
+        /* Промисловий моноширинний шрифт */
+    }
+
+    .engineer-panel-overlay.show {
+        display: flex;
+    }
+
+    .engineer-panel-card {
+        width: 92%;
+        height: 90%;
+        background: #111;
+        border: 2px solid #444;
+        border-radius: 16px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .engineer-panel-header {
+        padding: 15px 25px;
+        background: #1a1a1a;
+        border-bottom: 1px solid #333;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: #fff;
+    }
+
+    .engineer-panel-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        background: #080808;
+    }
+
+    /* Стильна інженерна таблиця змінних ОЗУ */
+    .engineer-table {
+        width: 100%;
+        border-collapse: collapse;
+        color: #2ecc71;
+        /* Зелений колір матричного монітора */
+        font-size: 1.0rem;
+    }
+
+    .engineer-table th,
+    .engineer-table td {
+        padding: 14px 18px;
+        text-align: left;
+        border-bottom: 1px solid #222;
+    }
+
+    .engineer-table th {
+        color: #e67e22;
+        background: #141414;
+        font-size: 1.3rem;
+    }
+
+    .engineer-table tr:active {
+        background: #112211;
+    }
+
+    .var-name {
+        color: #3498db;
+        font-weight: bold;
+    }
+
+    /* Синій колір для імен Python */
+    .var-value {
+        color: #2ecc71;
+        font-weight: bold;
+        word-break: break-all;
+    }
+</style>
+
+<!-- ПЛАВАЮЧА КНОПКА (ЗАВЖДИ НАВЕРХУ) -->
+<div class="engineer-floating-trigger" onclick="openEngineerStateInspector()">🛠️</div>
+
+<!-- ВІКНО МОНІТОРА ЗМІННИХ ОЗУ -->
+<div id="engineerPanelOverlay" class="engineer-panel-overlay">
+    <div class="engineer-panel-card">
+        <div class="engineer-panel-header">
+            <div>
+                <h2 style="margin:0; font-size:1.4rem; color:#e67e22;">RAM State Inspector</h2>
+                <small id="engineer-meta-status" style="color:#666;">SharedState | Оновлено: --:--:--</small>
+            </div>
+            <button type="button" onclick="refreshEngineerVariables()"
+                style="height:45px; width:180px; background:#27ae60; color:#000; border:none; border-radius:10px; font-weight:900; font-size:1.2rem; cursor:pointer;">
+                🔄 REFRESH
+            </button>
+            <button type="button" onclick="document.getElementById('engineerPanelOverlay').classList.remove('show')"
+                style="background:#c0392b; color:white; border:none; padding:12px 30px; font-weight:bold; font-size:1.1rem; border-radius:8px; cursor:pointer;">
+                ❌ CLOSE
+            </button>
+        </div>
+        <div class="engineer-panel-body">
+            <table class="engineer-table">
+                <thead>
+                    <tr>
+                        <th style="width: 45%;">Variable Name</th>
+                        <th style="width: 55%;">Live Value</th>
+                    </tr>
+                </thead>
+                <tbody id="engineer-variables-table-body">
+                    <!-- Сюди JS автоматично висипе всі змінні твого класу -->
+                </tbody>
+            </table>
+        </div>
+        <!-- НИЖНЯ ПАНЕЛЬ ОНОВЛЕННЯ ДАНИХ -->
+        <!--div
+            style="padding:15px; background:#1a1a1a; border-top:1px solid #333; display:flex; justify-content:flex-end;">
+            <button type="button" onclick="refreshEngineerVariables()"
+                style="height:65px; width:280px; background:#27ae60; color:#000; border:none; border-radius:10px; font-weight:900; font-size:1.2rem; cursor:pointer;">
+                🔄 ОНОВИТИ ДАНІ З ОЗУ
+            </button>
+        </div-->
+    </div>
+</div>
+<script>
+    // --- ФУНКЦІЯ ВІДКРИТТЯ ІНЖЕНЕРНОГО ПАНЕЛІ ---
+    function openEngineerStateInspector() {
+        document.getElementById('engineerPanelOverlay').classList.add('show');
+        refreshEngineerVariables();
+    }
+
+    // --- АСИНХРОННИЙ ЗАПИТ І СУПЕР-РЕНДЕР ЗМІННИХ КЛАСУ ---
+    function refreshEngineerVariables() {
+        const tableBody = document.getElementById('engineer-variables-table-body');
+        const metaStatus = document.getElementById('engineer-meta-status');
+
+        fetch('/api/system/state_inspector')
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'warning') {
+                    tableBody.innerHTML = `<tr><td colspan="2" style="color:#f1c40f; text-align:center; padding:30px; font-weight:bold;">⚠️ ${data.message}</td></tr>`;
+                    return;
+                }
+                if (data.status === 'error') {
+                    tableBody.innerHTML = `<tr><td colspan="2" style="color:#e74c3c; text-align:center; padding:30px; font-weight:bold;">🚨 Помилка інспектора: ${data.message}</td></tr>`;
+                    return;
+                }
+
+                // Оновлюємо заголовок (час та ім'я класу в ОЗУ)
+                metaStatus.innerText = `Класс ядра: ${data.class_name} | Оновлено з ОЗУ о: ${data.timestamp}`;
+
+                const vars = data.variables;
+                let rowsHtml = '';
+
+                // Пробігаємося по відсортованому Python-словнику атрибутів
+                for (let [key, val] of Object.entries(vars)) {
+                    let formattedValue = val;
+
+                    // Інженерна підсвітка булевих статусів зв'язку/RTK
+                    if (val === true) {
+                        formattedValue = '<span style="color:#2ecc71; background:#112211; padding:4px 10px; border-radius:6px; border:1px solid #2ecc71;">TRUE</span>';
+                    } else if (val === false) {
+                        formattedValue = '<span style="color:#e74c3c; background:#221111; padding:4px 10px; border-radius:6px; border:1px solid #e74c3c;">FALSE</span>';
+                    } else if (val === null) {
+                        formattedValue = '<span style="color:#7f8c8d; font-style:italic;">None</span>';
+                    } else if (typeof val === 'number') {
+                        // Якщо число з плаваючою крапкою — робимо красиве інженерне округлення до 4 знаків
+                        formattedValue = Number.isInteger(val) ? val : val.toFixed(4);
+                    }
+
+                    rowsHtml += `
+                    <tr>
+                        <td class="var-name">${key}</td>
+                        <td class="var-value">${formattedValue}</td>
+                    </tr>
+                `;
+                }
+
+                tableBody.innerHTML = rowsHtml;
+            })
+            .catch(err => {
+                tableBody.innerHTML = `<tr><td colspan="2" style="color:#e74c3c; text-align:center; padding:30px;">Мережева помилка зчитування пам'яті ядра!</td></tr>`;
+            });
+    }
+</script>

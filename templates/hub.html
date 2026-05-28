@@ -1,0 +1,880 @@
+<!-- templates/hub.html (ЧАСТЬ 1 ИЗ 2) -->
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Панель Управління Агро-Системи</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+    <style>
+        .hub-layout {
+            display: flex;
+            gap: 25px;
+            height: calc(100vh - 150px);
+            margin-bottom: 20px;
+        }
+
+        .sidebar-fields {
+            flex: 0 0 35%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .main-inspect {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .field-card-btn {
+            width: 100%;
+            padding: 22px;
+            background: #1e1e1e;
+            border: 2px solid var(--border);
+            color: var(--text);
+            border-radius: 12px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .field-card-btn.active {
+            border-color: var(--accent);
+            background: #1a2a1f;
+            color: var(--accent);
+        }
+
+        .fields-scroller {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Промисловий тач-селект для вибору штанги та карт VRA */
+        .touch-select {
+            width: 100%;
+            height: 70px;
+            background: #1e1e1e;
+            color: #fff;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 0 20px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            appearance: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        .touch-select:focus {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .select-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .select-wrapper::after {
+            content: "▼";
+            position: absolute;
+            right: 25px;
+            top: 22px;
+            color: #666;
+            pointer-events: none;
+            font-size: 1.2rem;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .status-ok {
+            background: #1a3a22;
+            color: #2ecc71;
+            border: 1px solid #2ecc71;
+        }
+
+        .status-warn {
+            background: #3a2a1a;
+            color: #f1c40f;
+            border: 1px solid #f1c40f;
+        }
+
+        .placeholder-text {
+            text-align: center;
+            color: #555;
+            font-size: 1.6rem;
+            margin-top: 150px;
+            font-weight: bold;
+        }
+
+        /* Велика тач-кнопка, яка імітує селект */
+        .touch-combo-trigger {
+            width: 100%;
+            height: 75px;
+            background: #1e1e1e;
+            color: #fff;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 0 25px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .touch-combo-trigger:active {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .touch-combo-trigger::after {
+            content: "▼";
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        /* Модальне вікно вибору для комбобоксу */
+        .combo-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 3000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .combo-modal-overlay.show {
+            display: flex;
+        }
+
+        .combo-modal-card {
+            width: 85%;
+            max-height: 80%;
+            background: #141414;
+            border: 2px solid #333;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .combo-modal-header {
+            padding: 20px 25px;
+            background: #1c1c1c;
+            border-bottom: 1px solid #282828;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .combo-modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Велетенські плитки вибору всередині комбобоксу */
+        .combo-item-btn {
+            width: 100%;
+            padding: 25px;
+            background: #1c1c1c;
+            border: 2px solid #282828;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 1.3rem;
+            font-weight: bold;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .combo-item-btn:active,
+        .combo-item-btn.selected {
+            border-color: var(--accent);
+            background: #1a2a1f;
+            color: var(--accent);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="hub-layout">
+
+        <!-- ЛЕВА ПАНЕЛЬ: СПИСОК ЗБЕРЕЖЕНИХ ПОЛІВ НА eMMC -->
+        <div class="sidebar-fields">
+            <h2 style="margin:0">Диспетчер полів</h2>
+            <div class="fields-scroller" id="fields-list-container">
+                <!-- Сюди JS нарендерить плитки полів -->
+            </div>
+            <button type="button" onclick="handleCreateFieldClick()"
+                style="width:100%; height: 75px; background:transparent; color:var(--accent); border:2px dashed var(--accent); border-radius:12px; font-weight:bold; font-size:1.3rem; cursor:pointer;">
+                ➕ СТВОРТИ НОВЕ ПОЛЕ
+            </button>
+        </div>
+
+        <!-- ПРАВА ПАНЕЛЬ: ІНСПЕКТОР ТА НАЛАШТУВАННЯ ВИЇЗДУ -->
+        <div class="main-inspect">
+
+            <!-- Заглушка, поки поле не вибрано -->
+            <div id="hub-placeholder" class="placeholder-text">
+                ◀ Виберіть робоче поле зі списку зліва<br>або створіть нову загінку
+            </div>
+
+            <!-- Робочий екран конфігурації завдання (по замовчуванню прихований) -->
+            <div id="hub-workspace" style="display: none;">
+
+                <div class="card" style="margin-bottom: 10px;">
+                    <div class="touch-row" style="margin-top:10px;">
+                        <!--span class="label-main">Обрана загінка (Поле)</span-->
+                        <h3 id="HUB_FIELD_NAME" style="color:var(--accent); font-size:1.7rem; margin:10px 0 5px 0;">-
+                        </h3>
+                        <span id="HUB_FIELD_AREA" style="color:#888; font-size:1.1rem; font-weight:bold;">Площа: 0.00
+                            га</span>
+                    </div>
+                    <!--h2>Обрана загінка (Поле)</h2>
+                    <h3 id="HUB_FIELD_NAME" style="color:var(--accent); font-size:1.7rem; margin:10px 0 5px 0;">-</h3>
+                    <span id="HUB_FIELD_AREA" style="color:#888; font-size:1.1rem; font-weight:bold;">Оброблена площа:
+                        0.00 га</span-->
+                    <!--/div -->
+
+                    <!-- <div class="card" style="margin-bottom: 20px;"> -->
+                    <!--h2>Статус навігації та орієнтирів</h2-->
+                    <div class="touch-row" style="margin-top:10px;">
+                        <span class="label-main">Траєкторія розвороту (Лінія А-В):</span>
+                        <span id="HUB_AB_STATUS" class="status-badge">-</span>
+                    </div>
+                    <!-- </div> -->
+                    <div class="card-divider"></div>
+                    <!-- 1. НОВИЙ ТАЧ-КОМБОБОКС ОБПРИСКУВАЧА -->
+                    <!-- <div class="card" style="margin-bottom: 20px;"> -->
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h2>Застосувати агрегат</h2>
+                        <button type="button" onclick="window.location.href='/implement_manager'"
+                            style="background:transparent;  /*height: 75px;*/ border:1px solid #444; color:#aaa; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                            ⚙️ МЕНЕДЖЕР АГРЕГАТИ
+                        </button>
+                    </div>
+                    <!-- Схований інпут для зберігання ID, як у звичайній формі -->
+                    <input type="hidden" id="hub-implement-select" value="">
+                    <button type="button" id="combo-implement-trigger" class="touch-combo-trigger"
+                        onclick="openComboModal('implement')">
+                        <span id="combo-implement-text">Оберіть обприскувач...</span>
+                    </button>
+
+
+
+
+                    <!-- </div> -->
+                    <div class="card-divider"></div>
+                    <!-- 2. НОВИЙ ТАЧ-КОМБОБОКС КАРТ VRA -->
+                    <!-- <div class="card" style="margin-bottom: 20px;"> -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h2>Карта диференційованого виливу</h2>
+                        <button type="button" onclick="window.location.href='/taskmaps_manager'"
+                            style="background:transparent; border:1px solid #444; color:#aaa; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                            👁️ МЕНЕДЖЕР КАРТ VRA
+                        </button>
+                    </div>
+                    <input type="hidden" id="hub-taskmap-select" value="">
+                    <button type="button" id="combo-taskmap-trigger" class="touch-combo-trigger"
+                        onclick="openComboModal('taskmap')">
+                        <span id="combo-taskmap-text">Без карти завдань (Ручний вилив)</span>
+                    </button>
+                    <div class="card-divider"></div>
+                    <!-- </div> -->
+                    <!-- ВВЕДЕННЯ ЦІЛЬОВОЇ НОРМИ ВИЛИВУ (ДО 60 000 Л/ГА) -->
+                    <!-- <div class="card" id="hub-rate-card"> -->
+                    <h2>Цільова базова норма виливу</h2>
+                    <div class="touch-row" style="margin-top:15px;">
+                        <div class="label-box">
+                            <span class="label-main">Норма внесення (л/га)</span>
+                            <span class="label-hint" id="hub-rate-hint">Використовується як константа, якщо немає карти
+                                завдання</span>
+                        </div>
+                        <div class="spinner">
+                            <button type="button" onmousedown="startHoldRate(-10)" onmouseup="stopHoldRate()"
+                                onmouseleave="stopHoldRate()" ontouchstart="startHoldRate(-10)"
+                                ontouchend="stopHoldRate()">-</button>
+                            <span id="HUB_TARGET_RATE"
+                                style="min-width:120px; text-align:center; font-size:1.7rem; font-weight:bold; color:var(--accent);">200</span>
+                            <button type="button" onmousedown="startHoldRate(10)" onmouseup="stopHoldRate()"
+                                onmouseleave="stopHoldRate()" ontouchstart="startHoldRate(10)"
+                                ontouchend="stopHoldRate()">+</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- НИЖНЯ ДОК-ПАНЕЛЬ ХАБУ З ГОЛОВНОЮ КНОПКОЮ ДІЇ -->
+    <div class="bottom-dock">
+        <button type="button" class="btn-dock-action" onclick="window.location.href='/settings'"
+            style="background: #2c2c2c; color: #fff; border: 2px solid #444; width: 250px;">
+            ⚙️ Налаштування
+        </button>
+        <button type="button" id="hub-save-nav-btn" class="btn-dock-action" onclick="handleStartNavigation(false)"
+            style="background: #fef102;; color: #000; border: none; width: 40%; font-size:1.5rem; font-weight:900; opacity: 0.3; pointer-events: none; margin-left:auto;">
+            ▶▶ Зберігти
+        </button>
+        <button type="button" id="hub-start-nav-btn" class="btn-dock-action" onclick="handleStartNavigation(true)"
+            style="background: var(--accent); color: #000; border: none; width: 40%; font-size:1.5rem; font-weight:900; opacity: 0.3; pointer-events: none; margin-left:auto;">
+            ▶▶ Розпочати
+        </button>
+    </div>
+    <div id="comboModalOverlay" class="combo-modal-overlay" onclick="closeComboModal(event)">
+        <div class="combo-modal-card" onclick="event.stopPropagation()">
+            <div class="combo-modal-header">
+                <h2 id="combo-modal-title" style="margin:0; font-size:1.5rem;">Вибір параметру</h2>
+                <button type="button" onclick="document.getElementById('comboModalOverlay').classList.remove('show')"
+                    style="background:#333; color:white; border:none; padding:12px 25px; font-weight:bold; font-size:1.1rem; border-radius:8px; cursor:pointer;">
+                    ❌ ЗАКРИТИ
+                </button>
+            </div>
+            <div class="combo-modal-body" id="combo-modal-items-container">
+                <!-- Сюди JS нарендерить велетенські тач-плитки вибору -->
+            </div>
+        </div>
+    </div>
+
+    <!-- СИСТЕМНА МОДАЛКА З ПРУЖНИМ ВІДБИТТЯМ -->
+    <div id="customModal">
+        <div class="modal-card" id="modalCard">
+            <h3 id="modalText"
+                style="margin: 0 0 40px 0; font-size: 24px; color: white; font-weight: bold; line-height: 1.4;"></h3>
+            <div style="display: flex; gap: 30px; justify-content: center;">
+                <button type="button" id="modalCancelBtn"
+                    style="flex:1; background:#444; height:70px; font-size:18px; border-radius:12px; border:none; color:white; font-weight:bold; cursor:pointer;">
+                    СКАСУВАТИ
+                </button>
+                <button type="button" id="modalConfirmBtn"
+                    style="flex:1; height:70px; font-size:18px; border-radius:12px; border:none; color:white; font-weight:bold; cursor:pointer;">
+                    ТАК
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let fieldsCache = [];
+        let selectedFieldId = null;
+        let implementsCache = [];
+        let taskmapsCache = [];
+
+        // --- 1. ЗАВАНТАЖЕННЯ СПИСКУ ПОЛІВ З eMMC ---
+        function loadHubFields() {
+            fetch('/api/hub_session/fields')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status !== 'ok') return;
+                    fieldsCache = data.fields;
+
+                    const container = document.getElementById('fields-list-container');
+                    container.innerHTML = '';
+
+                    if (fieldsCache.length === 0) {
+                        container.innerHTML = '<div style="color:#555; text-align:center; padding:20px;">Список полів порожній</div>';
+                        return;
+                    }
+
+                    fieldsCache.forEach(f => {
+                        let btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'field-card-btn';
+                        btn.id = `field-btn-${f.id}`;
+                        btn.innerHTML = `
+                    <div style="display:flex; flex-direction:column; gap:3px;">
+                        <span>${f.name}</span>
+                        <small style="color:#666; font-size:0.9rem;">Площа: ${f.area.toFixed(2)} га</small>
+                    </div>
+                    <span style="font-size:0.9rem; color:${f.has_line_ab ? '#2ecc71' : '#666'}">${f.has_line_ab ? '➔ AB є' : 'немає AB'}</span>
+                `;
+                        btn.onclick = () => selectFieldForWork(f.id);
+                        container.appendChild(btn);
+                    });
+                });
+        }
+        // --- 2. ВИБІР ПОЛЯ ТА АВТО-ПІДСТАНОВКА МИНУЛИХ ПРИВ'ЯЗОК ---
+        function selectFieldForWork(fieldId) {
+            selectedFieldId = fieldId;
+            const foundField = fieldsCache.find(x => x.id === fieldId);
+            if (!foundField) return;
+
+            document.querySelectorAll('.field-card-btn').forEach(b => b.classList.remove('active'));
+            const activeBtn = document.getElementById(`field-btn-${fieldId}`);
+            if (activeBtn) activeBtn.classList.add('active');
+
+            document.getElementById('hub-placeholder').style.display = 'none';
+            document.getElementById('hub-workspace').style.display = 'block';
+
+            document.getElementById('HUB_FIELD_NAME').innerText = foundField.name;
+            document.getElementById('HUB_FIELD_AREA').innerText = `Площа: ${foundField.area.toFixed(4)} га`;
+
+            const abBadge = document.getElementById('HUB_AB_STATUS');
+            if (foundField.has_line_ab) {
+                abBadge.innerText = "Є ЗБЕРЕЖЕНА ЛІНІЯ А-В";
+                abBadge.className = "status-badge status-ok";
+            } else {
+                abBadge.innerText = "ЛІНІЯ А-В ВІДСУТНЯ (БУДЕ ЗАПИСАНА В ПОЛІ)";
+                abBadge.className = "status-badge status-warn";
+            }
+
+            document.getElementById('HUB_TARGET_RATE').innerText = Math.round(foundField.target_rate_default);
+
+            // Завантажуємо бази даних для тач-комбобоксів
+            Promise.all([
+                fetch('/api/implements/list').then(r => r.json()),
+                fetch('/api/taskmaps/list').then(r => r.json())
+            ]).then(([implements, taskmaps]) => {
+                implementsCache = implements;
+                taskmapsCache = taskmaps.maps || [];
+
+                // 1. Відновлюємо знаряддя
+                const hiddenImpl = document.getElementById('hub-implement-select');
+                const triggerImplText = document.getElementById('combo-implement-text');
+
+                // if (foundField.active_implement_id && implementsCache.some(x => x.id === foundField.active_implement_id)) {
+                //     const activeImpl = implementsCache.find(x => x.id === foundField.active_implement_id);
+                //     hiddenImpl.value = activeImpl.id;
+                //     triggerImplText.innerText = `${activeImpl.name} (${activeImpl.section_widths.length} секц.)`;
+                // } else if (implementsCache.length > 0) {
+                //     // Якщо прив'язки немає, беремо перше доступне з бази
+                //     hiddenImpl.value = implementsCache[0].id;
+                //     triggerImplText.innerText = `${implementsCache[0].name} (${implementsCache[0].section_widths.length} секц.)`;
+                // } else {
+                //     hiddenImpl.value = "";
+                //     triggerImplText.innerText = "🚨 Створіть агрегат в менеджері!";
+                // }
+
+                if (foundField.active_implement_id && implementsCache.some(x => x.id === foundField.active_implement_id)) {
+                    const activeImpl = implementsCache.find(x => x.id === foundField.active_implement_id);
+                    hiddenImpl.value = activeImpl.id;
+                    // БЕЗПЕЧНО: Витягуємо довжину масиву з гілки geometry
+                    const secCount = (activeImpl.geometry && activeImpl.geometry.section_widths) ? activeImpl.geometry.section_widths.length : 0;
+                    triggerImplText.innerText = `${activeImpl.name} (${secCount} секц.)`;
+                } else if (implementsCache.length > 0) {
+                    hiddenImpl.value = implementsCache[0].id;
+                    const secCount = (implementsCache[0].geometry && implementsCache[0].geometry.section_widths) ? implementsCache[0].geometry.section_widths.length : 0;
+                    triggerImplText.innerText = `${implementsCache[0].name} (${secCount} секц.)`;
+                } else {
+                    hiddenImpl.value = "";
+                    triggerImplText.innerText = "🚨 Створіть агрегат в менеджері!";
+                }
+
+
+                // 2. Відновлюємо карту VRA
+                const hiddenMap = document.getElementById('hub-taskmap-select');
+                const triggerMapText = document.getElementById('combo-taskmap-text');
+
+                if (foundField.active_taskmap_file && taskmapsCache.some(x => x.filename === foundField.active_taskmap_file)) {
+                    hiddenMap.value = foundField.active_taskmap_file;
+                    triggerMapText.innerText = `🔌 Карта: ${foundField.active_taskmap_file}`;
+                } else {
+                    hiddenMap.value = "";
+                    triggerMapText.innerText = "❌ Без карти завдань (Ручний вилив)";
+                }
+
+                toggleRateSpinnerState();
+            });
+
+            const startBtn = document.getElementById('hub-start-nav-btn');
+            startBtn.style.opacity = '1.0';
+            startBtn.style.pointerEvents = 'auto';
+
+            const saveBtn = document.getElementById('hub-save-nav-btn');
+            saveBtn.style.opacity = '1.0';
+            saveBtn.style.pointerEvents = 'auto';
+
+        }
+
+        function selectFieldForWork_1(fieldId) {
+            selectedFieldId = fieldId;
+            const foundField = fieldsCache.find(x => x.id === fieldId);
+            if (!foundField) return;
+
+            document.querySelectorAll('.field-card-btn').forEach(b => b.classList.remove('active'));
+            const activeBtn = document.getElementById(`field-btn-${fieldId}`);
+            if (activeBtn) activeBtn.classList.add('active');
+
+            document.getElementById('hub-placeholder').style.display = 'none';
+            document.getElementById('hub-workspace').style.display = 'block';
+
+            // Оновлюємо картку метаданих
+            document.getElementById('HUB_FIELD_NAME').innerText = foundField.name;
+            document.getElementById('HUB_FIELD_AREA').innerText = `Площа: ${foundField.area.toFixed(4)} га`;
+
+            const abBadge = document.getElementById('HUB_AB_STATUS');
+            if (foundField.has_line_ab) {
+                abBadge.innerText = "Є ЗБЕРЕЖЕНА ЛІНІЯ А-В";
+                abBadge.className = "status-badge status-ok";
+            } else {
+                abBadge.innerText = "ЛІНІЯ А-В ВІДСУТНЯ (БУДЕ ЗАПИСАНА В ПОЛІ)";
+                abBadge.className = "status-badge status-warn";
+            }
+
+            // Підставляємо збережену раніше базову норму виливу
+            document.getElementById('HUB_TARGET_RATE').innerText = Math.round(foundField.target_rate_default);
+
+            // Синхронізуємо випадаючі списки обприскувачів та карт VRA
+            Promise.all([
+                fetch('/api/implements/list').then(r => r.json()),
+                fetch('/api/taskmaps/list').then(r => r.json())
+            ]).then(([implements, taskmaps]) => {
+                // Наповнюємо селект обприскувачів
+                const implSelect = document.getElementById('hub-implement-select');
+                implSelect.innerHTML = implements.map(i => `<option value="${i.id}">${i.name} (${i.geometry.section_widths.length} секц.)</option>`).join('');
+                if (foundField.active_implement_id && implements.some(x => x.id === foundField.active_implement_id)) {
+                    implSelect.value = foundField.active_implement_id;
+                }
+
+                // Наповнюємо селект карт VRA
+                const mapsData = taskmaps.maps || [];
+                const mapSelect = document.getElementById('hub-taskmap-select');
+                let mapsOptions = '<option value="">❌ Без карти завдань (Ручний вилив / Базова норма)</option>';
+                mapsOptions += mapsData.map(m => `<option value="${m.filename}">🔌 Карта: ${m.filename}</option>`).join('');
+                mapSelect.innerHTML = mapsOptions;
+
+                if (foundField.active_taskmap_file && mapsData.some(x => x.filename === foundField.active_taskmap_file)) {
+                    mapSelect.value = foundField.active_taskmap_file;
+                }
+
+                toggleRateSpinnerState();
+            });
+
+            // Активуємо велику головну кнопку «СТАРТ НАВІГАЦІЮ»
+            const startBtn = document.getElementById('hub-start-nav-btn');
+            startBtn.style.opacity = '1.0';
+            startBtn.style.pointerEvents = 'auto';
+
+            const saveBtn = document.getElementById('hub-save-nav-btn');
+            saveBtn.style.opacity = '1.0';
+            saveBtn.style.pointerEvents = 'auto';
+        }
+
+        // Блокуємо або підсвічуємо спіннер норми залежно від вибору карти VRA
+        function toggleRateSpinnerState() {
+            const mapSelect = document.getElementById('hub-taskmap-select');
+            const rateCard = document.getElementById('hub-rate-card');
+            const hint = document.getElementById('hub-rate-hint');
+
+            if (mapSelect.value !== "") {
+                //rateCard.style.opacity = "0.3";
+                //rateCard.style.pointerEvents = "none";
+                hint.innerText = "Норма автоматично керується картою VRA " + mapSelect.value;
+            } else {
+                //rateCard.style.opacity = "1.0";
+                //rateCard.style.pointerEvents = "auto";
+                hint.innerText = "Використовується як константа, якщо немає карти завдання";
+            }
+        }
+
+        // --- 3. ШВИДКИЙ ТАЧ-СПІННЕР ЦІЛЬОВОЇ НОРМИ ВИЛИВУ ---
+        let holdRateTimer = null;
+        let holdRateCounter = 0;
+
+        function changeRate(val) {
+            const el = document.getElementById('HUB_TARGET_RATE');
+            let current = parseInt(el.innerText) + val;
+            if (current < 10) current = 10;
+            if (current > 60000) current = 60000;
+            el.innerText = current;
+        }
+
+        function startHoldRate(val) {
+            holdRateCounter = 0;
+            changeRate(val);
+            clearInterval(holdRateTimer);
+            holdRateTimer = setInterval(() => {
+                holdRateCounter += 100;
+                let step = val;
+                if (holdRateCounter >= 1500) step = val * 10;
+                if (holdRateCounter >= 3000) step = val * 50;
+                changeRate(step);
+            }, 100);
+        }
+
+        function stopHoldRate() { clearInterval(holdRateTimer); }
+
+        // --- 4. СТВОРЕННЯ НОВОГО ПОЛЯ З ТАЧ-КЛАВІАТУРИ ---
+        function handleCreateFieldClick() {
+            let name = prompt("Введіть назву нового поля (загінки):");
+            if (!name) return;
+            name = name.trim();
+            if (!name) return;
+
+            fetch('/api/hub_session/create_field', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        fetch('/api/hub_session/fields')
+                            .then(r => r.json())
+                            .then(res => {
+                                fieldsCache = res.fields;
+                                loadHubFields();
+                                selectFieldForWork(data.id);
+                            });
+                    } else {
+                        askUser(`Помилка: ${data.message}`, 'danger', 'ОК');
+                    }
+                });
+        }
+
+        // --- 5. ЗАЛІЗОБЕТОННИЙ ЗАПУСК СЕСІЇ «СТАРТ НАВІГАЦІЮ» АБО ОНОВЛЕННЯ ---
+        function handleStartNavigation(isRunMode = true) {
+            if (!selectedFieldId) return;
+
+            const implId = document.getElementById('hub-implement-select').value;
+            const taskmapFile = document.getElementById('hub-taskmap-select').value;
+            const targetRate = parseInt(document.getElementById('HUB_TARGET_RATE').innerText);
+
+            if (!implId) {
+                askUser('🚨 Помилка: Не вибрано знаряддя! Будь ласка, створить або оберіть штангу.', 'danger', 'ОК');
+                return;
+            }
+
+            // Визначаємо текст та тип дії залежно від параметра
+            let promptText = '';
+            let btnText = '';
+            let actionType = '';
+
+            if (isRunMode) {
+                promptText = '💡 Запустити систему в роботу?<br><small>Математика підготує геометрію штанги та завантажить координати.</small>';
+                btnText = 'ЗАПУСТИТИ';
+                actionType = 'run';
+            } else {
+                promptText = '💾 Зберегти та оновити налаштування сесії?<br><small>Параметри штанги, норми та карти будуть записані у файл поля.</small>';
+                btnText = 'ЗБЕРЕГТИ';
+                actionType = 'save';
+            }
+
+            askUser(promptText, 'success', btnText, () => {
+                fetch('/api/hub_session/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        field_id: selectedFieldId,
+                        implement_id: implId,
+                        taskmap_file: taskmapFile,
+                        target_rate: targetRate,
+                        action_type: actionType // <-- Додали тип виклику (run або save)
+                    })
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'ok') {
+                            if (isRunMode) {
+                                // Якщо це повний запуск — перенаправляємо на сторінку карти
+                                window.location.href = '/map';
+                            } else {
+                                // Якщо це просто збереження налаштувань — показуємо успіх і не перевантажуємо сторінку
+                                askUser('✅ Налаштування поля успішно збережено!', 'success', 'ОК');
+                                //askUser(data.message, 'success', 'ОК');
+                            }
+                        } else {
+                            askUser(data.message, 'danger', 'ОК');
+                        }
+                    })
+                    .catch(() => askUser('Помилка зв\'язку з бортовим сервером трактора!', 'danger', 'ОК'));
+            });
+        }
+
+
+        // --- 5. ЗАЛІЗОБЕТОННИЙ ЗАПУСК СЕСІЇ «СТАРТ НАВІГАЦІЮ» ---
+        function handleStartNavigation_1() {
+            if (!selectedFieldId) return;
+
+            const implId = document.getElementById('hub-implement-select').value;
+            const taskmapFile = document.getElementById('hub-taskmap-select').value;
+            const targetRate = parseInt(document.getElementById('HUB_TARGET_RATE').innerText);
+
+            if (!implId) {
+                askUser('🚨 Помилка: Не вибрано знаряддя! Будь ласка, створіть або оберіть штангу.', 'danger', 'ОК');
+                return;
+            }
+
+            askUser('💡 Запустити систему в роботу?<br><small>Математика підготує геометрію штанги та завантажить координати.</small>', 'success', 'ЗАПУСТИТИ', () => {
+                fetch('/api/hub_session/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        field_id: selectedFieldId,
+                        implement_id: implId,
+                        taskmap_file: taskmapFile,
+                        target_rate: targetRate
+                    })
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'ok') {
+                            // Повний успіх: перенаправляємо на сторінку робочої карти
+                            window.location.href = '/map';
+                        } else {
+                            askUser(data.message, 'danger', 'ОК');
+                        }
+                    })
+                    .catch(() => askUser('Помилка зв\'язку з бортовим сервером трактора!', 'danger', 'ОК'));
+            });
+        }
+
+        // --- 6. МОДАЛКА ASKUSER ---
+        function askUser(text, theme, confirmText, onConfirm = null) {
+            const modal = document.getElementById('customModal');
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            const cancelBtn = document.getElementById('modalCancelBtn');
+
+            if (modal.classList.contains('show')) {
+                modal.classList.remove('show');
+                setTimeout(() => { askUser(text, theme, confirmText, onConfirm); }, 200);
+                return;
+            }
+
+            document.getElementById('modalText').innerHTML = text;
+            confirmBtn.innerText = confirmText;
+            confirmBtn.style.background = (theme === 'danger') ? '#c0392b' : '#2ecc71';
+            cancelBtn.style.display = (onConfirm === null) ? 'none' : 'inline-block';
+
+            modal.classList.add('show');
+
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+            const closeModal = () => { modal.classList.remove('show'); };
+
+            newConfirmBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (typeof onConfirm === 'function') onConfirm();
+                closeModal();
+            }, { once: true });
+
+            cancelBtn.onclick = (e) => { e.preventDefault(); closeModal(); };
+        }
+        function openComboModal(type) {
+            const overlay = document.getElementById('comboModalOverlay');
+            const title = document.getElementById('combo-modal-title');
+            const container = document.getElementById('combo-modal-items-container');
+
+            container.innerHTML = '';
+
+            if (type === 'implement') {
+                title.innerText = "🚜 Виберіть агрегат (Штангу)";
+                const currentVal = document.getElementById('hub-implement-select').value;
+
+                if (implementsCache.length === 0) {
+                    container.innerHTML = '<div style="color:#666; text-align:center; padding:20px; font-size:1.3rem;">База знарядь порожня. Спочатку створіть обприскувач.</div>';
+                } else {
+                    // implementsCache.forEach(impl => {
+                    //     let btn = document.createElement('button');
+                    //     btn.type = 'button';
+                    //     btn.className = `combo-item-btn ${currentVal === impl.id ? 'selected' : ''}`;
+                    //     btn.innerHTML = `<span>${impl.name}</span><small style="color:#888;">${impl.section_widths.length} секцій</small>`;
+                    //     btn.onclick = () => {
+                    //         document.getElementById('hub-implement-select').value = impl.id;
+                    //         document.getElementById('combo-implement-text').innerText = `${impl.name} (${impl.section_widths.length} секц.)`;
+                    //         overlay.classList.remove('show');
+                    //     };
+                    //     container.appendChild(btn);
+                    // });
+                    implementsCache.forEach(impl => {
+                        let btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = `combo-item-btn ${currentVal === impl.id ? 'selected' : ''}`;
+
+                        // БЕЗПЕЧНО: Перевіряємо наявність об'єкта geometry
+                        const secCount = (impl.geometry && impl.geometry.section_widths) ? impl.geometry.section_widths.length : 0;
+
+                        btn.innerHTML = `<span>${impl.name}</span><small style="color:#888;">${secCount} секцій</small>`;
+                        btn.onclick = () => {
+                            document.getElementById('hub-implement-select').value = impl.id;
+                            document.getElementById('combo-implement-text').innerText = `${impl.name} (${secCount} секц.)`;
+                            overlay.classList.remove('show');
+                        };
+                        container.appendChild(btn);
+                    });
+
+                }
+            }
+            else if (type === 'taskmap') {
+                title.innerText = "🔌 Виберіть карту припису VRA";
+                const currentVal = document.getElementById('hub-taskmap-select').value;
+
+                // Плитка "Без карти" (Ручний вилив) є завжди першою та велетенською
+                let noMapBtn = document.createElement('button');
+                noMapBtn.type = 'button';
+                noMapBtn.className = `combo-item-btn ${currentVal === "" ? 'selected' : ''}`;
+                noMapBtn.style.borderColor = '#c0392b';
+                noMapBtn.innerHTML = '<span>❌ Без карти завдань (Ручний вилив / Базова норма)</span>';
+                noMapBtn.onclick = () => {
+                    document.getElementById('hub-taskmap-select').value = "";
+                    document.getElementById('combo-taskmap-text').innerText = "❌ Без карти завдань (Ручний вилив)";
+                    overlay.classList.remove('show');
+                    toggleRateSpinnerState();
+                };
+                container.appendChild(noMapBtn);
+
+                // Рендеримо карти, якщо вони є на eMMC
+                taskmapsCache.forEach(m => {
+                    let btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = `combo-item-btn ${currentVal === m.filename ? 'selected' : ''}`;
+                    btn.innerHTML = `<span style="word-break:break-all;">🔌 ${m.filename}</span><small style="color:#666;">${m.created}</small>`;
+                    btn.onclick = () => {
+                        document.getElementById('hub-taskmap-select').value = m.filename;
+                        document.getElementById('combo-taskmap-text').innerText = `🔌 Карта: ${m.filename}`;
+                        overlay.classList.remove('show');
+                        toggleRateSpinnerState();
+                    };
+                    container.appendChild(btn);
+                });
+            }
+
+            overlay.classList.add('show');
+        }
+
+        function closeComboModal(e) {
+            if (e.target === document.getElementById('comboModalOverlay')) {
+                document.getElementById('comboModalOverlay').classList.remove('show');
+            }
+        }
+        document.addEventListener("DOMContentLoaded", () => { loadHubFields(); });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,729 @@
+<!-- templates/implement_manager.html (ЧАСТЬ 1 ИЗ 2) -->
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Менеджер агрегатов</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+    <style>
+        .manager-layout {
+            display: flex;
+            gap: 25px;
+            height: calc(100vh - 150px);
+            margin-bottom: 20px;
+        }
+
+        .sidebar-panel {
+            flex: 0 0 32%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .workspace-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .implement-card-btn {
+            width: 100%;
+            padding: 22px;
+            background: #1e1e1e;
+            border: 2px solid var(--border);
+            color: var(--text);
+            border-radius: 12px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .implement-card-btn.active {
+            border-color: var(--accent);
+            background: #1a2a1f;
+            color: var(--accent);
+        }
+
+        .list-container {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .placeholder-text {
+            text-align: center;
+            color: #555;
+            font-size: 1.6rem;
+            margin-top: 150px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="manager-layout">
+        <!-- ЛЕВАЯ ПАНЕЛЬ: СПИСОК -->
+        <div class="sidebar-panel">
+            <h2>📋 База знарядь (eMMC)</h2>
+            <div class="list-container" id="implement-list"></div>
+            <button type="button" onclick="handleCreateNew()"
+                style="width:100%; height: 75px; background:transparent; color:var(--accent); border:2px dashed var(--accent); border-radius:12px; font-weight:bold; font-size:1.3rem; cursor:pointer;">
+                ➕ СТВОРТИ ЗНАРЯДДЯ
+            </button>
+        </div>
+        <!-- ПРАВАЯ ПАНЕЛЬ: РЕДАКТОР -->
+        <div class="workspace-panel">
+            <div id="editor-placeholder" class="placeholder-text">
+                ◀ Выберите агрегат из списка слева<br>или создайте новый шаблон
+            </div>
+            <div id="editor-workspace" style="display: none;">
+                <div class="card" style="margin-bottom: 20px;">
+                    <h2>Название агрегата (для экрана Хаба)</h2>
+                    <input type="text" id="IMPLEMENT_NAME" class="input-text-touch"
+                        style="width: 100%; text-align: left; padding: 0 20px; height: 65px; font-size: 1.4rem;">
+                </div>
+                <div class="tabs-nav">
+                    <button class="tab-link active" onclick="openTab(event, 'tab1')">ШТАНГА</button>
+                    <button class="tab-link" onclick="openTab(event, 'tab2')">АВТОМАТИКА</button>
+                </div>
+                <!-- ТАБ 1: ГЕОМЕТРИЯ ШТАНГИ -->
+                <div id="tab1" class="tab-content active">
+                    <div class="card">
+                        <h2>Тип зчеплення з трактором</h2>
+                        <div style="display: flex; gap: 20px; margin-top: 10px;">
+                            <button type="button" id="TYPE_MOUNTED" onclick="setImplementType('mounted')"
+                                style="flex:1; height:70px; background:#1e1e1e; color:#fff; border:2px solid var(--border); border-radius:12px; font-size:1.2rem; font-weight:bold; cursor:pointer;">
+                                🚜 НАВІСНИЙ
+                            </button>
+                            <button type="button" id="TYPE_TRAILED" onclick="setImplementType('trailed')"
+                                style="flex:1; height:70px; background:#1e1e1e; color:#fff; border:2px solid var(--border); border-radius:12px; font-size:1.2rem; font-weight:bold; cursor:pointer;">
+                                🔌 ПРИЧІПНИЙ
+                            </button>
+                        </div>
+                        <div class="touch-row">
+                            <div class="help-layout">
+                                <button type="button" class="btn-help" onclick="showHelp('OFFSET_BACK')">?</button>
+                                <div class="label-box">
+                                    <span class="label-main">Физическое смещение (м)</span>
+                                    <span class="label-hint">Расстояние от GPS антенны назад до форсунок</span>
+                                </div>
+                            </div>
+                            <div class="spinner">
+                                <button type="button" onclick="change('OFFSET_BACK', -0.1)">-</button>
+                                <span id="OFFSET_BACK">0.00</span>
+                                <button type="button" onclick="change('OFFSET_BACK', 0.1)">+</button>
+                            </div>
+                        </div>
+                        <div id="sec-list"></div>
+                        <button type="button" onclick="addSec()"
+                            style="width:100%; padding:20px; background:transparent; color:var(--accent); border:2px dashed var(--accent); border-radius:10px; margin-top:15px; font-weight:bold; font-size:1.1rem; cursor:pointer;">
+                            + ДОБАВИТЬ СЕКЦИЮ
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ТАБ 2: МАТЕМАТИКА АВТОМАТИКИ (ПОВНА СТРУКТУРА) -->
+                <div id="tab2" class="tab-content">
+                    <!-- 1. ТАЙМІНГИ ТА ВИНОС -->
+                    <div class="card">
+                        <h2>Временное опережение и скорость</h2>
+                        <div class="touch-row">
+                            <div class="help-layout">
+                                <button type="button" class="btn-help"
+                                    onclick="showHelp('LOOK_AHEAD_ON_TIME')">?</button>
+                                <div class="label-box">
+                                    <span class="label-main">Look Ahead ON (сек)</span>
+                                    <span class="label-hint">Время упреждения на включение клапанов</span>
+                                </div>
+                            </div>
+                            <div class="spinner">
+                                <button type="button" onclick="change('LOOK_AHEAD_ON_TIME', -0.1)">-</button>
+                                <span id="LOOK_AHEAD_ON_TIME">0.80</span>
+                                <button type="button" onclick="change('LOOK_AHEAD_ON_TIME', 0.1)">+</button>
+                            </div>
+                        </div>
+                        <div class="touch-row">
+                            <div class="help-layout">
+                                <button type="button" class="btn-help"
+                                    onclick="showHelp('LOOK_AHEAD_OFF_TIME')">?</button>
+                                <div class="label-box">
+                                    <span class="label-main">Look Ahead OFF (сек)</span>
+                                    <span class="label-hint">Время упреждения на выключение клапанов</span>
+                                </div>
+                            </div>
+                            <div class="spinner">
+                                <button type="button" onclick="change('LOOK_AHEAD_OFF_TIME', -0.1)">-</button>
+                                <span id="LOOK_AHEAD_OFF_TIME">0.30</span>
+                                <button type="button" onclick="change('LOOK_AHEAD_OFF_TIME', 0.1)">+</button>
+                            </div>
+                        </div>
+                        <div class="touch-row">
+                            <div class="help-layout">
+                                <button type="button" class="btn-help"
+                                    onclick="showHelp('MIN_LOOK_AHEAD_DIST')">?</button>
+                                <div class="label-box">
+                                    <span class="label-main">Мин. вынос штанги (м)</span>
+                                    <span class="label-hint">Минимальная предсказанная дистанция перед форсунками</span>
+                                </div>
+                            </div>
+                            <div class="spinner">
+                                <button type="button" onclick="change('MIN_LOOK_AHEAD_DIST', -0.1)">-</button>
+                                <span id="MIN_LOOK_AHEAD_DIST">0.50</span>
+                                <button type="button" onclick="change('MIN_LOOK_AHEAD_DIST', 0.1)">+</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. ЗОНИ ПЕРЕКРИТТЯ ТА БУФЕР -->
+                    <div class="card">
+                        <h2>Зоны перекрытия площадей</h2>
+                        <div class="slider-box">
+                            <div class="touch-row">
+                                <div class="help-layout">
+                                    <button type="button" class="btn-help"
+                                        onclick="showHelp('AUTO_SECTION_MIN_OVERLAP')">?</button>
+                                    <span class="label-main">Чувствительность к перекрытию</span>
+                                </div>
+                                <b id="overlap_label" style="color:var(--accent)">30%</b>
+                            </div>
+                            <input type="range" class="slider" id="AUTO_SECTION_MIN_OVERLAP" min="0" max="1" step="0.05"
+                                value="0.30" oninput="updateOverlap(this.value)">
+                        </div>
+                        <div class="touch-row" style="margin-top:20px;">
+                            <div class="help-layout">
+                                <button type="button" class="btn-help"
+                                    onclick="showHelp('AUTO_SECTION_BUFFER')">?</button>
+                                <div class="label-box">
+                                    <span class="label-main">Допуск заступа / Buffer (м)</span>
+                                    <span class="label-hint">Внутренний защитный отступ полигона секции</span>
+                                </div>
+                            </div>
+                            <div class="spinner">
+                                <button type="button" onclick="change('AUTO_SECTION_BUFFER', -0.01)">-</button>
+                                <span id="AUTO_SECTION_BUFFER">-0.05</span>
+                                <button type="button" onclick="change('AUTO_SECTION_BUFFER', 0.01)">+</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. ЛІМІТИ КЛАПАНІВ ШТАНГИ -->
+                    <div class="card">
+                        <h2>Адаптивный вылив на поворотах</h2>
+                        <div class="touch-row">
+                            <div class="help-layout">
+                                <button type="button" class="btn-help"
+                                    onclick="showHelp('CURVE_COMP_LIMITS')">?</button>
+                                <span class="label-main">Нижний лимит вылива (%)</span>
+                            </div>
+                            <div class="spinner">
+                                <button type="button" onclick="change('CURVE_COMP_LIMIT_LOW', -5)">-</button>
+                                <span id="CURVE_COMP_LIMIT_LOW">50</span>
+                                <button type="button" onclick="change('CURVE_COMP_LIMIT_LOW', 5)">+</button>
+                            </div>
+                        </div>
+                        <div class="touch-row">
+                            <div class="help-layout">
+                                <button type="button" class="btn-help"
+                                    onclick="showHelp('CURVE_COMP_LIMITS')">?</button>
+                                <span class="label-main">Верхний лимит вылива (%)</span>
+                            </div>
+                            <div class="spinner">
+                                <button type="button" onclick="change('CURVE_COMP_LIMIT_HIGH', -5)">-</button>
+                                <span id="CURVE_COMP_LIMIT_HIGH">150</span>
+                                <button type="button" onclick="change('CURVE_COMP_LIMIT_HIGH', 5)">+</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- НИЖНЯЯ ПАНЕЛЬ -->
+    <div class="bottom-dock">
+        <button type="button" class="btn-dock-action" onclick="handleGoBack()"
+            style="background: #2c2c2c; color: #fff; border: 2px solid #444;">НАЗАД</button>
+        <div id="action-buttons-group"
+            style="display: flex; gap: 20px; width: 60%; justify-content: flex-end; opacity: 0.3; pointer-events: none;">
+            <button type="button" class="btn-dock-action" onclick="handleDelete()"
+                style="background: var(--danger); color: #fff; border: none; width: 200px;">УДАЛИТЬ</button>
+            <button type="button" class="btn-dock-action" onclick="handleConfirmSave()"
+                style="background: var(--accent); color: #000; border: none; width: 250px;">СОХРАНИТЬ</button>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА -->
+    <div id="customModal">
+        <div class="modal-card" id="modalCard">
+            <h3 id="modalText" style="margin: 0 0 40px 0; font-size: 24px; color: white; font-weight: bold;"></h3>
+            <div style="display: flex; gap: 30px; justify-content: center;">
+                <button type="button" id="modalCancelBtn"
+                    style="flex:1; background:#444; height:70px; font-size:18px; border-radius:12px; border:none; color:white; font-weight:bold;">ОТМЕНА</button>
+                <button type="button" id="modalConfirmBtn"
+                    style="flex:1; height:70px; font-size:18px; border-radius:12px; border:none; color:white; font-weight:bold;">ДА</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        // --- ГЛОБАЛЬНІ ЗМІННІ ОЗУ ДЛЯ СИНХРОНІЗАЦІЇ ---
+        let originalCopy = null;       // Еталонний конфіг з eMMC
+        let currentEditingCopy = null; // Робоча копія для повзунків та кнопок
+
+        // Базові кроки для налаштувань
+        const BAUD_RATES = [4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800];
+
+        // --- 1. КЕРУВАННЯ ТАБАМИ ---
+        function openTab(evt, name) {
+            if (evt) evt.preventDefault();
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
+            document.getElementById(name).classList.add('active');
+            if (evt) evt.currentTarget.classList.add('active');
+        }
+
+        // --- 2. ТАЧ-СПИННЕРИ (Зміна параметрів ОЗУ) ---
+        function change(paramId, val) {
+            if (!currentEditingCopy) return;
+
+            let el = document.getElementById(paramId);
+            if (!el) return;
+
+            let currentVal = parseFloat(el.innerText) + val;
+
+            // Спеціальна логіка для масиву лімітів виливу
+            if (paramId === 'CURVE_COMP_LIMIT_LOW') {
+                currentEditingCopy.geometry.curve_comp_limits[0] = Math.round(currentVal);
+                el.innerText = Math.round(currentVal);
+            } else if (paramId === 'CURVE_COMP_LIMIT_HIGH') {
+                currentEditingCopy.geometry.curve_comp_limits[1] = Math.round(currentVal);
+                el.innerText = Math.round(currentVal);
+            }
+            // Стандартна логіка для лінійних параметрів геометрії
+            else if (paramId === 'OFFSET_BACK' || paramId === 'AUTO_SECTION_BUFFER') {
+                currentEditingCopy.geometry[paramId.toLowerCase()] = currentVal;
+                el.innerText = currentVal.toFixed(2);
+            }
+            // Параметри динаміки (Look Ahead)
+            else {
+                currentEditingCopy.dynamics[paramId.toLowerCase()] = currentVal;
+                el.innerText = currentVal.toFixed(2);
+            }
+
+            checkChanges();
+        }
+
+        function change_old(paramId, val) {
+            if (!currentEditingCopy) return;
+
+            let el = document.getElementById(paramId);
+            if (!el) return;
+
+            let currentVal = parseFloat(el.innerText) + val;
+
+            // Запис у правильну гілку нашого ОЗУ-конфігу
+            if (paramId === 'OFFSET_BACK' || paramId === 'AUTO_SECTION_BUFFER') {
+                currentEditingCopy.geometry[paramId.toLowerCase()] = currentVal;
+            } else {
+                currentEditingCopy.dynamics[paramId.toLowerCase()] = currentVal;
+            }
+
+            // Вивід на екран з правильним округленням
+            const isInteger = paramId.includes('LIMIT');
+            el.innerText = isInteger ? Math.round(currentVal) : currentVal.toFixed(2);
+
+            checkChanges(); // Перевіряємо, чи змінився конфіг від оригіналу
+        }
+
+        function updateOverlap(v) {
+            if (!currentEditingCopy) return;
+            document.getElementById('overlap_label').innerText = Math.round(v * 100) + '%';
+            currentEditingCopy.dynamics.auto_section_min_overlap = parseFloat(v);
+            checkChanges();
+        }
+
+        // --- 3. ДЕЛЬФІЙСЬКА МОДАЛКА АНІМАЦІЇ ВІДДИХУ ---
+        function askUser(text, theme, confirmText, onConfirm = null) {
+            const modal = document.getElementById('customModal');
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            const cancelBtn = document.getElementById('modalCancelBtn');
+
+            if (modal.classList.contains('show')) {
+                modal.classList.remove('show');
+                setTimeout(() => { askUser(text, theme, confirmText, onConfirm); }, 200);
+                return;
+            }
+
+            document.getElementById('modalText').innerHTML = text;
+            confirmBtn.innerText = confirmText;
+            confirmBtn.style.background = (theme === 'danger') ? '#c0392b' : '#2ecc71';
+            cancelBtn.style.display = (onConfirm === null) ? 'none' : 'inline-block';
+
+            modal.classList.add('show');
+
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+            const closeModal = () => { modal.classList.remove('show'); };
+
+            newConfirmBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (typeof onConfirm === 'function') onConfirm();
+                closeModal();
+            }, { once: true });
+
+            cancelBtn.onclick = (e) => { e.preventDefault(); closeModal(); };
+            modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+        }
+
+        // --- 4. ДИНАМІЧНИЙ СПИСОК СЕКЦІЙ ШТАНГИ ---
+        function drawSecs() {
+            const container = document.getElementById('sec-list');
+            if (!currentEditingCopy || !container) return;
+
+            const widths = currentEditingCopy.geometry.section_widths;
+
+            container.innerHTML = widths.map((w, i) => `
+        <div class="section-item">
+            <button class="btn-del" type="button" onclick="removeSection(${i})">×</button>
+            <span style="flex:1; font-weight:700; font-size: 1.5rem;">Секція №${i + 1}</span>
+            <div class="spinner">
+                <button type="button" onmousedown="startHoldChangeW(event, ${i}, -0.05)" onmouseup="stopHoldChangeW()" onmouseleave="stopHoldChangeW()" ontouchstart="startHoldChangeW(event, ${i}, -0.05)" ontouchend="stopHoldChangeW()">-</button>
+                <span>${w.toFixed(2)}</span>
+                <button type="button" onmousedown="startHoldChangeW(event, ${i}, 0.05)" onmouseup="stopHoldChangeW()" onmouseleave="stopHoldChangeW()" ontouchstart="startHoldChangeW(event, ${i}, 0.05)" ontouchend="stopHoldChangeW()">+</button>
+            </div>
+        </div>
+    `).join('');
+        }
+
+        function changeW(i, v) {
+            if (!currentEditingCopy) return;
+            let widths = currentEditingCopy.geometry.section_widths;
+            let newValue = parseFloat((widths[i] + v).toFixed(2));
+            widths[i] = Math.max(0.1, newValue); // Захист від нуля та мінусу
+            drawSecs();
+            checkChanges();
+        }
+
+        let holdTimerChangeW = null;
+        let holdDurationChangeW = 0;
+
+        function startHoldChangeW(e, i, v) {
+            if (e.cancelable) e.preventDefault();
+            holdDurationChangeW = 0;
+            changeW(i, v);
+            clearInterval(holdTimerChangeW);
+
+            holdTimerChangeW = setInterval(() => {
+                holdDurationChangeW += 100;
+                let currentStep = v;
+                if (holdDurationChangeW >= 1000) {
+                    currentStep = v < 0 ? -1.0 : 1.0; // Прискорюємо крок до 1 метра, якщо тримаємо довше секунди
+                }
+                changeW(i, currentStep);
+            }, 100);
+        }
+
+        function stopHoldChangeW() {
+            clearInterval(holdTimerChangeW);
+        }
+
+        function addSec() {
+            if (!currentEditingCopy) return;
+            currentEditingCopy.geometry.section_widths.push(3.0); // Додаємо стандартну секцію 3 метри
+            drawSecs();
+            checkChanges();
+        }
+
+        function removeSection(index) {
+            askUser(`Видалити секцію №${index + 1}?`, 'danger', 'ВИДАЛИТЬ', () => {
+                currentEditingCopy.geometry.section_widths.splice(index, 1);
+                drawSecs();
+                checkChanges();
+            });
+        }
+        // --- 5. ПЕРЕВІРКА ЗМІН В ОЗУ (Rollback & Блокування кнопок) ---
+        function checkChanges() {
+            if (!originalCopy || !currentEditingCopy) return;
+
+            // Зчитуємо назву з інпуту перед порівнянням
+            currentEditingCopy.name = document.getElementById('IMPLEMENT_NAME').value.trim();
+
+            const hasChanges = JSON.stringify(originalCopy) !== JSON.stringify(currentEditingCopy);
+            const dockGroup = document.getElementById('action-buttons-group');
+
+            if (hasChanges) {
+                dockGroup.style.opacity = '1.0';
+                dockGroup.style.pointerEvents = 'auto';
+            } else {
+                dockGroup.style.opacity = '0.3';
+                dockGroup.style.pointerEvents = 'none';
+            }
+        }
+
+        // --- 6. ЗАВАНТАЖЕННЯ БАЗИ ДАНИХ З eMMC (AJAX) ---
+        function loadImplementsList(selectIdAfterLoad = null) {
+            fetch('/api/implements/list')
+                .then(r => r.json())
+                .then(data => {
+                    const listContainer = document.getElementById('implement-list');
+                    listContainer.innerHTML = '';
+
+                    if (data.length === 0) {
+                        listContainer.innerHTML = '<div style="color:#666; text-align:center; padding:20px;">База порожня</div>';
+                        return;
+                    }
+
+                    data.forEach(impl => {
+                        let btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'implement-card-btn';
+                        btn.id = `btn-${impl.id}`;
+                        btn.innerHTML = `<span>${impl.name}</span><small style="color:#666;">${impl.geometry.section_widths.length} секц.</small>`;
+                        btn.onclick = () => selectImplement(impl);
+                        listContainer.appendChild(btn);
+                    });
+
+                    if (selectIdAfterLoad) {
+                        const found = data.find(x => x.id === selectIdAfterLoad);
+                        if (found) selectImplement(found);
+                    }
+                })
+                .catch(err => console.error("Помилка завантаження бази:", err));
+        }
+
+        // --- 7. ВИБІР ЗНАРЯДДЯ ТА ІНІЦІАЛІЗАЦІЯ РЕДАКТОРА ---
+        function selectImplement(impl) {
+            // Робимо глибоке копіювання для ізоляції в ОЗУ
+            originalCopy = JSON.parse(JSON.stringify(impl));
+            currentEditingCopy = JSON.parse(JSON.stringify(impl));
+
+            // Підсвічуємо активну плитку зліва
+            document.querySelectorAll('.implement-card-btn').forEach(b => b.classList.remove('active'));
+            const activeBtn = document.getElementById(`btn-${impl.id}`);
+            if (activeBtn) activeBtn.classList.add('active');
+
+            // Прибираємо заглушку та відкриваємо редактор
+            document.getElementById('editor-placeholder').style.display = 'none';
+            document.getElementById('editor-workspace').style.display = 'block';
+
+            // Наповнюємо поля даними
+            document.getElementById('IMPLEMENT_NAME').value = impl.name;
+            document.getElementById('OFFSET_BACK').innerText = impl.geometry.offset_back.toFixed(2);
+            document.getElementById('LOOK_AHEAD_ON_TIME').innerText = impl.dynamics.look_ahead_on_time.toFixed(2);
+            document.getElementById('LOOK_AHEAD_OFF_TIME').innerText = impl.dynamics.look_ahead_off_time.toFixed(2);
+            document.getElementById('MIN_LOOK_AHEAD_DIST').innerText = impl.dynamics.min_look_ahead_dist.toFixed(2);
+
+            document.getElementById('AUTO_SECTION_MIN_OVERLAP').value = impl.dynamics.auto_section_min_overlap;
+            document.getElementById('overlap_label').innerText = Math.round(impl.dynamics.auto_section_min_overlap * 100) + '%';
+            document.getElementById('AUTO_SECTION_BUFFER').innerText = impl.geometry.auto_section_buffer.toFixed(2);
+            //document.getElementById('CURVE_COMP_LIMIT_LOW').innerText = impl.geometry.curve_comp_limits[0];
+            //document.getElementById('CURVE_COMP_LIMIT_HIGH').innerText = impl.geometry.curve_comp_limits[1];
+
+            // Зчитуємо масив лімітів [Нижній, Верхній]
+            const limits = impl.geometry.curve_comp_limits || [50, 150];
+            document.getElementById('CURVE_COMP_LIMIT_LOW').innerText = Math.round(limits[0]);
+            document.getElementById('CURVE_COMP_LIMIT_HIGH').innerText = Math.round(limits[1]);
+
+            // Навішуємо стеження за зміною імені
+            document.getElementById('IMPLEMENT_NAME').oninput = checkChanges;
+            const currentType = impl.implement_type || 'mounted';
+            setImplementType(currentType);
+            drawSecs();
+            checkChanges();
+            openTab(null, 'tab1'); // Завжди скидаємо на першу вкладку
+        }
+
+        // --- 8. СТВОРЕННЯ НОВОГО ШАБЛОНУ ---
+        function handleCreateNew() {
+            const newId = "impl_" + Date.now();
+            const newTemplate = {
+                "id": newId,
+                "name": "Нове знаряддя",
+                "implement_type": "mounted",
+                "geometry": {
+                    "section_widths": [3.0, 3.0, 3.0],
+                    "offset_back": 1.50,
+                    "auto_section_buffer": -0.05,
+                    "curve_comp_limits": [50, 150]
+                },
+                "dynamics": {
+                    "look_ahead_on_time": 0.80,
+                    "look_ahead_off_time": 0.30,
+                    "min_look_ahead_dist": 0.50,
+                    "auto_section_min_overlap": 0.30
+                }
+            };
+
+            // Одразу закидуємо новий шаблон у редактор, змушуючи водія натиснути «Зберегти»
+            selectImplement(newTemplate);
+            checkChanges();
+        }
+
+        // --- 9. ЗБЕРЕЖЕННЯ ЗМІН НА eMMC (POST) ---
+        function handleConfirmSave() {
+            if (!currentEditingCopy) return;
+
+            if (currentEditingCopy.geometry.section_widths.length === 0) {
+                askUser('Помилка: Знаряддя повинно мати хоча б одну секцію штанги!', 'danger', 'ОК', null);
+                return;
+            }
+
+            currentEditingCopy.name = document.getElementById('IMPLEMENT_NAME').value.trim();
+            if (!currentEditingCopy.name) {
+                askUser('Помилка: Введіть назву знаряддя!', 'danger', 'ОК', null);
+                return;
+            }
+
+            askUser(`Зберегти конфігурацію знаряддя?<br><b>"${currentEditingCopy.name}"</b>`, 'success', 'ЗБЕРЕГТИ', () => {
+                fetch('/api/implements/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentEditingCopy)
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            const savedId = currentEditingCopy.id;
+                            askUser("Успішно збережено в пам'ять системи!", 'success', 'ОК', () => {
+                                loadImplementsList(savedId);
+                            });
+                        } else {
+                            askUser("Помилка сервера: " + data.message, 'danger', 'ОК');
+                        }
+                    })
+                    .catch(() => askUser("Помилка мережі eMMC!", 'danger', 'ОК'));
+            });
+        }
+
+        // --- 10. ПОВНЕ ВИДАЛЕННЯ ФАЙЛУ ЗАНРЯДДЯ ---
+        function handleDelete() {
+            if (!currentEditingCopy) return;
+
+            askUser(`УВАГА! Повністю видалити знаряддя?<br><b>"${currentEditingCopy.name}"</b>`, 'danger', 'ВИДАЛИТИ', () => {
+                fetch('/api/implements/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: currentEditingCopy.id })
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            originalCopy = null;
+                            currentEditingCopy = null;
+                            document.getElementById('editor-workspace').style.display = 'none';
+                            document.getElementById('editor-placeholder').style.display = 'block';
+                            loadImplementsList();
+                        }
+                    });
+            });
+        }
+
+        function handleGoBack() {
+            if (JSON.stringify(originalCopy) !== JSON.stringify(currentEditingCopy)) {
+                askUser('Вийти без збереження?<br><small>Всі незбережені зміни штанги будуть втрачені.</small>', 'danger', 'ВИЙТИ', () => {
+                    window.location.href = '/';
+                });
+            } else {
+                window.location.href = '/';
+            }
+        }
+
+
+        // Функція зміни типу знаряддя через тач-кнопки
+        function setImplementType(type) {
+            if (!currentEditingCopy) return;
+
+            currentEditingCopy.implement_type = type;
+
+            // Оновлюємо візуальний стан кнопок
+            const btnMounted = document.getElementById('TYPE_MOUNTED');
+            const btnTrailed = document.getElementById('TYPE_TRAILED');
+
+            if (type === 'mounted') {
+                btnMounted.style.borderColor = 'var(--accent)';
+                btnMounted.style.background = '#1a2a1f';
+                btnMounted.style.color = 'var(--accent)';
+
+                btnTrailed.style.borderColor = 'var(--border)';
+                btnTrailed.style.background = '#1e1e1e';
+                btnTrailed.style.color = '#fff';
+            } else {
+                btnTrailed.style.borderColor = 'var(--accent)';
+                btnTrailed.style.background = '#1a2a1f';
+                btnTrailed.style.color = 'var(--accent)';
+
+                btnMounted.style.borderColor = 'var(--border)';
+                btnMounted.style.background = '#1e1e1e';
+                btnMounted.style.color = '#fff';
+            }
+
+            checkChanges(); // Сповіщаємо ОЗУ, що конфіг змінено
+        }
+
+        // Автостарт при завантаженні сторінки
+        document.addEventListener("DOMContentLoaded", () => { loadImplementsList(); });
+
+        function showHelp(paramKey) {
+            const text = HELP_TEXTS[paramKey] || `Описание для параметра "${paramKey}" еще не добавлено.`;
+            askUser(text, 'success', 'ПОНЯТНО', null);
+        }
+        const HELP_TEXTS = {
+            // --- СЕТЬ И ИНТЕРФЕЙС КАРТЫ ---
+            "UDP_PORT": "<b>UDP Порт:</b> Сетевой порт системы для обмена данными по протоколу UDP между модулями навигации и внешними сервисами.",
+            "SECTION_WIDTHS": "<b>Ширина секций:</b> Список рабочей ширины (в метрах) для каждой отдельной секции опрыскивателя.",
+            "DRAW_OFF_SECTIONS": "<b>Отрисовка закрытых секций:</b> Включение или выключение визуального отображения отключенных секций на главном экране.",
+            "LOOK_AHEAD": "<b>Look Ahead (Общий):</b> Базовое системное время упреждения (в секундах) для расчетов геометрических полигонов.",
+            "MIN_SPEED": "<b>Минимальная скорость:</b> Порог скорости (в км/ч), ниже которого автоматика полностью блокирует полив, защищая почву от перелива на месте.",
+            "VISUAL_SCALE": "<b>Масштаб карты:</b> Коэффициент масштабирования графического интерфейса отображения поля на экране планшета.",
+            "OFFSET_BACK": "<b>Вынос штанги назад:</b> Физическое расстояние в метрах от точки установки GPS-антенны назад до линии форсунок опрыскивателя.",
+            "MASTER_SW": "<b>Главный выключатель (Master Switch):</b> Общий флаг программного разрешения работы всей системы полива (Вкл/Выкл).",
+            "SECTION_MODES": "<b>Режимы секций:</b> Массив индивидуальных состояний для каждой секции штанги ('AUTO' — автоматика перекрытий, 'ON' — принудительно открыта, 'OFF' — закрыта).",
+            "SAVE_FILE": "<b>Файл карты покрытия:</b> Имя файла на диске для моментального сохранения бинарной геометрии обработанного поля (.wkb).",
+            "HISTORY_FILE": "<b>Файл истории траектории:</b> Имя файла для сохранения записанных точек пройденного трактором пути в формате JSON.",
+
+            // --- ВРЕМЕННОЕ ОПЕРЕЖЕНИЕ (LOOK AHEAD) ---
+            "LOOK_AHEAD_TIME": "<b>Общее время упреждения:</b> Резервный параметр времени реакции системы на изменение геометрии движения.",
+            "MIN_LOOK_AHEAD_DIST": "<b>Мин. вынос штанги вперед:</b> Минимальное расстояние в метрах, которое автоматика гарантированно сканирует перед собой, предотвращая схлопывание зон детекции на сверхмалых скоростях.",
+            "LOOK_AHEAD_ON_TIME": "<b>Время опережения ON:</b> Время в секундах, за которое система дает команду на открытие клапанов до въезда на необработанную зону, чтобы насос успел поднять рабочее давление.",
+            "LOOK_AHEAD_OFF_TIME": "<b>Время опережения OFF:</b> Время в секундах, за которое система перекрывает клапаны до заезда на старый след, компенсируя физическую инерцию закрытия форсунок.",
+
+            // --- КАРТА, ДОПУСКИ И ПЕРЕКРЫТИЯ ---
+            "AUTO_SECTION_BUFFER": "<b>Допуск заступа (Buffer):</b> Внутренний защитный отступ (в метрах) для полигона секции, нивелирующий флуктуации координат GPS на стыках проходов.",
+            "AUTO_SECTION_MIN_OVERLAP": "<b>Порог перекрытия секции:</b> Доля площади секции (от 0.0 до 1.0), которая должна заехать на уже обработанную зону для её автоматического отключения (например, 0.3 = 30%).",
+
+            // --- АДАПТИВНЫЙ ВЫЛИВ И КУРС (CURVE COMP) ---
+            "CURVE_COMP_MIN_RTK": "<b>Мин. RTK для компенсации:</b> Минимально допустимый статус качества спутникового сигнала (обычно 4 = RTK Fix), необходимый для расчета дифференциального вылива на разворотах.",
+            "CURVE_COMP_LIMITS": "<b>Пределы изменения вылива:</b> Минимальный и максимальный порог регулировки расхода жидкости (в процентах) для крайних секций штанги при крутых маневрах.",
+            "CURVE_COMP_THRESHOLD": "<b>Порог угловой скорости:</b> Минимальная скорость изменения курса (градусы в секунду), начиная с которой активируется расчет разности скоростей левого и правого крыла штанги.",
+            "CURVE_COMP_SMOOTH": "<b>Плавность фильтра курса:</b> Коэффициент фильтрации (Low-Pass Filter) для сглаживания команд управления клапанами, оберегающий гидравлику от резких скачков давления.",
+
+            // --- АППАРАТНОЕ ОБЕСПЕЧЕНИЕ (GPS & BOARD) ---
+            "GPS_PORT": "<b>Имя COM-порта GPS:</b> Идентификатор системного последовательного интерфейса (COM-порт), к которому физически подключен навигационный GNSS-приемник.",
+            "GPS_PORT_SPEED": "<b>Скорость порта GPS:</b> Скорость передачи данных (Baudrate) по шине связи с GPS-приемником (по умолчанию 115200).",
+            "GPS_TIME_RECONNECT": "<b>Таймаут восстановления GPS:</b> Время ожидания в миллисекундах, через которое поток навигации попытается перезапустить порт в случае потери физического контакта с датчиком.",
+            "GPS_ENABLE": "<b>Включение модуля GPS:</b> Главный флаг активации потока чтения реальных спутниковых данных из порта связи.",
+            "CONTROL_BOARD_PORT": "<b>Порт силовой платы:</b> Системный COM-порт, через который компьютер обменивается командами со шкафом реле и клапанами штанги.",
+            "CONTROL_BOARD_PORT_SPEED": "<b>Скорость силовой платы:</b> Скорость обмена данными (Baudrate) по шине связи с исполнительным блоком электроники.",
+            "CONTROL_BOARD_TIME_RECONNECT": "<b>Таймаут силовой платы:</b> Время в миллисекундах, через которое система попытается заново инициализировать плату управления секциями при обрыве связи.",
+            "CONTROL_BOARD_ENABLE": "<b>Включение силовой платы:</b> Программный флаг, разрешающий отправку физических команд на реле открытия и закрытия форсунок.",
+            "SMART_TURN_ENABLED": "<b>Умный разворот:</b> Математический режим динамического моделирования изгиба штанги по дуге круга при маневрах, предотвращающий клиновидные пропуски и перекрытия на углах поля."
+        };
+
+
+    </script>
+</body>
+
+</html>

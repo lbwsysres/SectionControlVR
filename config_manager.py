@@ -1,4 +1,5 @@
 # config_manager.py
+
 import json
 import os
 
@@ -17,6 +18,7 @@ DEFAULT_CONFIG = {
     "OFFSET_BACK": 0.0,
     "MASTER_SW": True,
     "SECTION_MODES": ["AUTO", "AUTO", "AUTO", "AUTO", "AUTO"],
+    "IMPLEMENT_TYPE": "mounted",
     "SAVE_FILE": "coverage.wkb",
     "HISTORY_FILE": "history.json",
     "LOOK_AHEAD_TIME": 0.6,

@@ -65,52 +65,6 @@ def save_lightweight_json(state, filename=None):
         print(f"[DumpManager] Помилка запису JSON: {e}")
         return False
 
-
-# def append_batch_to_track_file(points_batch, filename=None):
-#     """ЗАЛПОВИЙ ЗАПИС ТРЕКУ: Скидає масив точок за один підхід. Економить eMMC."""
-#     if not points_batch:
-#         return True
-
-#     os.makedirs(DUMP_DIR, exist_ok=True)
-#     target_track = filename.replace(".json", ".txt") if filename else CURRENT_TRACK_FILE
-
-#     try:
-#         lines = []
-#         for p in points_batch:
-#             lines.append(f"{p[0]},{p[1]},{p[2]}\n")
-
-#         with open(target_track, "a", encoding="utf-8") as f:
-#             f.writelines(lines)
-
-#         if not filename:
-#             set_session_active()
-#         return True
-#     except Exception as e:
-#         print(f"[DumpManager] Помилка пакетного запису треку: {e}")
-#         return False
-
-# def load_track_history(filename=None):
-#     """Покроково вичитує текстовий трек для вебу після перезавантаження"""
-#     target_track = filename.replace(".json", ".txt") if filename else CURRENT_TRACK_FILE
-#     restored_track = []
-
-#     if os.path.exists(target_track):
-#         try:
-#             with open(target_track, "r", encoding="utf-8") as f:
-#                 for line in f:
-#                     line = line.strip()
-#                     if line:
-#                         try:
-#                             lat_s, lon_s, hdg_s = line.split(",")
-#                             restored_track.append([float(lat_s), float(lon_s), float(hdg_s)])
-#                         except:
-#                             continue
-#         except Exception as e:
-#             print(f"[DumpManager] Помилка читання текстового треку: {e}")
-
-#     return restored_track
-
-
 def append_batch_to_track_file(points_batch, filename=None):
     """ЗАЛПОВИЙ ЗАПИС ТРЕКУ: Зберігає 5 елементів точки (Координати + Секції + Ширини)"""
     if not points_batch:

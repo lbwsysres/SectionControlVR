@@ -1,0 +1,25 @@
+{
+    "dynamics": {
+        "auto_section_min_overlap": 0.3,
+        "look_ahead_off_time": 0.3,
+        "look_ahead_on_time": 0.8,
+        "min_look_ahead_dist": 0.5
+    },
+    "geometry": {
+        "auto_section_buffer": -0.05,
+        "curve_comp_limits": [
+            50,
+            150
+        ],
+        "offset_back": 1.5,
+        "section_widths": [
+            3,
+            3,
+            3,
+            3
+        ]
+    },
+    "id": "impl_1779809714090",
+    "implement_type": "mounted",
+    "name": "Test 4 section"
+}
