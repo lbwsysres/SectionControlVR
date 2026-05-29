@@ -995,90 +995,20 @@ def create_app(data_queue, cmd_queue):
 
     # #     return render_template("hub.html", cfg=cfg)
 
-    # @app.route("/map_data")
-    # def map_data():
-    #     cfg = config_manager.load_config()
-    #     try:
-    #         last_idx = int(request.args.get("last", 0))
-    #     except:
-    #         last_idx = 0
-
-    #     # Забираем срез точек из локального кеша
-    #     new_points = (
-    #         WEB_CACHE["new_points"][last_idx:]
-    #         if last_idx < len(WEB_CACHE["new_points"])
-    #         else []
-    #     )
-
-    #     return jsonify(
-    #         {
-    #             "area": WEB_CACHE["area"],
-    #             "states": WEB_CACHE["states"],
-    #             "pos": WEB_CACHE["pos"],
-    #             "ab_gps": WEB_CACHE["ab_gps"],
-    #             "flow_percents": WEB_CACHE["flow_percents"],
-    #             "vra_flows": WEB_CACHE["vra_flows"],
-    #             "speed": round(WEB_CACHE["speed"], 1),
-    #             "hdg": WEB_CACHE["hdg"],
-    #             "rtk": WEB_CACHE["rtk"],
-    #             "master": cfg.get("MASTER_SW", False),
-    #             "modes": cfg.get("SECTION_MODES", ["AUTO"] * len(WEB_CACHE["states"])),
-    #             "ab_line": {
-    #                 "a": WEB_CACHE["point_a"],
-    #                 "b": WEB_CACHE["point_b"],
-    #                 "error": WEB_CACHE["guidance_error"],
-    #             },
-    #             "ux": WEB_CACHE["ux"],  # Заглушка, фронтенд использует pos
-    #             "uy": WEB_CACHE["uy"],
-    #             "new_points": new_points,
-    #             "total_count": WEB_CACHE["total_count"],
-    #             "gps_mode": WEB_CACHE["gps_mode"],
-    #             "gps_mode_text": WEB_CACHE["gps_mode_text"],
-    #         }
-    #     )
-
-    # @app.route("/panel_data")
-    # def panel_data():
-    #     cfg = config_manager.load_config()
-    #     return jsonify(
-    #         {
-    #             "mo": cfg.get("SECTION_MODES", ["AUTO"] * len(WEB_CACHE["states"])),
-    #             "st": WEB_CACHE["states"],
-    #             "fl": WEB_CACHE["flow_percents"],
-    #             "sp": round(WEB_CACHE["speed"], 1),
-    #             "hd": WEB_CACHE["hdg"],
-    #             "rt": WEB_CACHE["rtk"],
-    #             "er": round(WEB_CACHE["guidance_error"], 2),
-    #             "ar": WEB_CACHE["area"],
-    #             "m_g": WEB_CACHE["gps_mode"],
-    #             "ms": cfg.get("MASTER_SW", False),
-    #         }
-    #     )
     @app.route("/map_data")
     def map_data():
         cfg = config_manager.load_config()
         try:
-            # Фронтенд шле індекс через параметр 'last' (fetch(`/map_data?last=${lastReceivedIndex}`))
             last_idx = int(request.args.get("last", 0))
         except:
             last_idx = 0
 
-        # 1. Захист від гігантського пакету при першому старті сторінки (Правило А)
-        total_points_count = len(WEB_CACHE["new_points"])
-        
-        if last_idx == 0 and total_points_count > 1000:
-            # Примусово зміщуємо стартовий покажчик на останні 1000 точок поля
-            last_idx = total_points_count - 1000
-
-        # 2. Беремо безпечний зріз точок з локального кешу
+        # Забираем срез точек из локального кеша
         new_points = (
             WEB_CACHE["new_points"][last_idx:]
-            if last_idx < total_points_count
+            if last_idx < len(WEB_CACHE["new_points"])
             else []
         )
-
-        # 3. Розраховуємо точний фінальний індекс для синхронізації з фронтендом
-        current_last_index = last_idx + len(new_points)
 
         return jsonify(
             {
@@ -1098,16 +1028,32 @@ def create_app(data_queue, cmd_queue):
                     "b": WEB_CACHE["point_b"],
                     "error": WEB_CACHE["guidance_error"],
                 },
-                "ux": WEB_CACHE["ux"],  
+                "ux": WEB_CACHE["ux"],  # Заглушка, фронтенд использует pos
                 "uy": WEB_CACHE["uy"],
                 "new_points": new_points,
-                "last_index": current_last_index,  # ГАРАНТОВАНО ПЕРЕДАЄМО ТОЧНИЙ ІНДЕКС ДЛЯ JS
                 "total_count": WEB_CACHE["total_count"],
                 "gps_mode": WEB_CACHE["gps_mode"],
                 "gps_mode_text": WEB_CACHE["gps_mode_text"],
             }
         )
 
+    @app.route("/panel_data")
+    def panel_data():
+        cfg = config_manager.load_config()
+        return jsonify(
+            {
+                "mo": cfg.get("SECTION_MODES", ["AUTO"] * len(WEB_CACHE["states"])),
+                "st": WEB_CACHE["states"],
+                "fl": WEB_CACHE["flow_percents"],
+                "sp": round(WEB_CACHE["speed"], 1),
+                "hd": WEB_CACHE["hdg"],
+                "rt": WEB_CACHE["rtk"],
+                "er": round(WEB_CACHE["guidance_error"], 2),
+                "ar": WEB_CACHE["area"],
+                "m_g": WEB_CACHE["gps_mode"],
+                "ms": cfg.get("MASTER_SW", False),
+            }
+        )
 
     # @app.route("/settings")
     # def settings():

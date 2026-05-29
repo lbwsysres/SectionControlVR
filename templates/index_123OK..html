@@ -587,13 +587,16 @@
 
             return { x: rx * zoom, y: ry * zoom };
         }
+
+        // 3. Отпечаток шага шлейфа в RenderTexture со смещением +2000 для старого заліза
         function appendTrackSegmentPixi(lat, lon, heading, states, customWidths) {
             if (refLat === null || !states || !Array.isArray(states)) return;
 
-            // Настраиваем стиль линий один раз на точку (толщина 0 — чистая заливка)
+            tempTrackGraphics.clear();
             tempTrackGraphics.lineStyle(0);
 
             const drawOff = cfg.DRAW_OFF_SECTIONS;
+            let hasSomethingToRender = false;
 
             states.forEach((isActive, i) => {
                 if (!isActive && drawOff === false) {
@@ -615,7 +618,7 @@
                         return;
                     }
 
-                    // Накапливаем полигоны в общем буфере tempTrackGraphics БЕЗ рендеринга
+                    // Запекаем полигон шлейфа со смещением +2000 ровно по центру RenderTexture 4000x4000
                     tempTrackGraphics.beginFill(isActive ? 0x2ecc71 : 0xe74c3c, isActive ? 0.7 : 0.5);
                     tempTrackGraphics.drawPolygon([
                         prev.cL.x + 2000, prev.cL.y + 2000,
@@ -624,75 +627,27 @@
                         prev.cR.x + 2000, prev.cR.y + 2000
                     ]);
                     tempTrackGraphics.endFill();
-
+                    hasSomethingToRender = true;
                     totalPolygonsRendered++;
                 }
 
                 prevSectionsCoords[i] = { cL: cL, cR: cR };
             });
+
+            if (hasSomethingToRender) {
+                app.renderer.render(tempTrackGraphics, {
+                    renderTexture: mapRenderTexture,
+                    clear: false
+                });
+
+                tempTrackGraphics.clear(); // Моментально очищаем векторную память GPU
+
+                const polyElem = document.getElementById('polygon-count');
+                if (polyElem) {
+                    polyElem.innerText = totalPolygonsRendered;
+                }
+            }
         }
-
-        // 3. Отпечаток шага шлейфа в RenderTexture со смещением +2000 для старого заліза
-
-        // function appendTrackSegmentPixi(lat, lon, heading, states, customWidths) {
-        //     if (refLat === null || !states || !Array.isArray(states)) return;
-
-        //     tempTrackGraphics.clear();
-        //     tempTrackGraphics.lineStyle(0);
-
-        //     const drawOff = cfg.DRAW_OFF_SECTIONS;
-        //     let hasSomethingToRender = false;
-
-        //     states.forEach((isActive, i) => {
-        //         if (!isActive && drawOff === false) {
-        //             prevSectionsCoords[i] = null;
-        //             return;
-        //         }
-
-        //         const cL = getGlobalCoordsPixi(lat, lon, heading, i, false, customWidths);
-        //         const cR = getGlobalCoordsPixi(lat, lon, heading, i, true, customWidths);
-
-        //         if (prevSectionsCoords[i]) {
-        //             const prev = prevSectionsCoords[i];
-
-        //             // Защита от линий к старту и разрывов GPS (Прыжок > 5 метров)
-        //             const dx = cL.x - prev.cL.x;
-        //             const dy = cL.y - prev.cL.y;
-        //             if (Math.sqrt(dx * dx + dy * dy) > 50) {
-        //                 prevSectionsCoords[i] = { cL: cL, cR: cR };
-        //                 return;
-        //             }
-
-        //             // Запекаем полигон шлейфа со смещением +2000 ровно по центру RenderTexture 4000x4000
-        //             tempTrackGraphics.beginFill(isActive ? 0x2ecc71 : 0xe74c3c, isActive ? 0.7 : 0.5);
-        //             tempTrackGraphics.drawPolygon([
-        //                 prev.cL.x + 2000, prev.cL.y + 2000,
-        //                 cL.x + 2000, cL.y + 2000,
-        //                 cR.x + 2000, cR.y + 2000,
-        //                 prev.cR.x + 2000, prev.cR.y + 2000
-        //             ]);
-        //             tempTrackGraphics.endFill();
-        //             hasSomethingToRender = true;
-        //             totalPolygonsRendered++;
-        //         }
-
-        //         prevSectionsCoords[i] = { cL: cL, cR: cR };
-        //     });
-
-        //     if (hasSomethingToRender) {
-        //         app.renderer.render(tempTrackGraphics, {
-        //             renderTexture: mapRenderTexture,
-        //             clear: false
-        //         });
-
-        //         tempTrackGraphics.clear(); // Моментально очищаем векторную память GPU
-
-        //         const polyElem = document.getElementById('polygon-count');
-        //         if (polyElem) {
-        //             polyElem.innerText = totalPolygonsRendered;
-        //         }
-        //     }
-        // }
 
         console.log("Часть 3 готова: Оригинальная геометрия из Gist и монолитная штанга зафиксированы.");
 
@@ -709,7 +664,7 @@
                 const firstPoint = newPoints[0];
                 refLat = firstPoint[0];
                 refLon = firstPoint[1];
-                prevSectionsCoords = []; // Полный сброс истории для чистого старта
+                prevSectionsCoords = []; // Повний скид історії для чистого старту
                 console.log(`Базову точку успішно ініціалізовано: ${refLat}, ${refLon}`);
             }
 
@@ -723,12 +678,9 @@
             function processNextChunk() {
                 if (pointsQueue.length === 0) {
                     isProcessingQueue = false;
-                    lastQueueProgressTime = performance.now(); // Оповещаем сторожа (Watchdog), что всё ок
+                    lastQueueProgressTime = performance.now(); // Сповіщаємо сторожа, що все ок
                     return;
                 }
-
-                // 1. Очищаем векторную графику ПЕРЕД началом обсчета всей пачки в 1000 точек
-                tempTrackGraphics.clear();
 
                 const chunk = pointsQueue.splice(0, CHUNK_SIZE);
 
@@ -741,76 +693,14 @@
                     const states = pt[3];
                     const widths = pt[4] || null;
 
-                    // Накапливаем геометрию точек внутри tempTrackGraphics
                     appendTrackSegmentPixi(lat, lon, hdg, states, widths);
                 });
 
-                // 2. ОДНИМ ВЫЗОВОМ запекаем всю накопленную пачку (1000 точек) в RenderTexture!
-                app.renderer.render(tempTrackGraphics, {
-                    renderTexture: mapRenderTexture,
-                    clear: false
-                });
-
-                // 3. Моментально очищаем векторную память GPU после массового запекания
-                tempTrackGraphics.clear();
-
-                // 4. Обновляем счетчик полигонов на UI один раз за чанк, а не за каждую точку
-                const polyElem = document.getElementById('polygon-count');
-                if (polyElem) {
-                    polyElem.innerText = totalPolygonsRendered;
-                }
-
-                // Переходим к следующей пачке
                 setTimeout(processNextChunk, 1);
             }
 
             processNextChunk();
         }
-
-        // function updateFieldMapPixi(newPoints) {
-        //     if (!newPoints || newPoints.length === 0) return;
-
-        //     if (refLat === null) {
-        //         const firstPoint = newPoints[0];
-        //         refLat = firstPoint[0];
-        //         refLon = firstPoint[1];
-        //         prevSectionsCoords = []; // Повний скид історії для чистого старту
-        //         console.log(`Базову точку успішно ініціалізовано: ${refLat}, ${refLon}`);
-        //     }
-
-        //     pointsQueue.push(...newPoints);
-
-        //     if (isProcessingQueue) return;
-        //     isProcessingQueue = true;
-
-        //     const CHUNK_SIZE = 1000;
-
-        //     function processNextChunk() {
-        //         if (pointsQueue.length === 0) {
-        //             isProcessingQueue = false;
-        //             lastQueueProgressTime = performance.now(); // Сповіщаємо сторожа, що все ок
-        //             return;
-        //         }
-
-        //         const chunk = pointsQueue.splice(0, CHUNK_SIZE);
-
-        //         chunk.forEach((pt) => {
-        //             if (!pt || pt.length < 4) return;
-
-        //             const lat = pt[0];
-        //             const lon = pt[1];
-        //             const hdg = pt[2];
-        //             const states = pt[3];
-        //             const widths = pt[4] || null;
-
-        //             appendTrackSegmentPixi(lat, lon, hdg, states, widths);
-        //         });
-
-        //         setTimeout(processNextChunk, 1);
-        //     }
-
-        //     processNextChunk();
-        // }
 
         // 2. ПРИЙМАЄ ДАНІ ВІД СЕРВЕРА 4 РАЗИ НА СЕКУНДУ І ВИЗНАЧАЄ ЦІЛЬ (Без ділення на мс)
         function updateCamera(lat, lon, heading) {
