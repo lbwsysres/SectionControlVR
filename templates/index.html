@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Pixi.js Агронавігатор V2.6 (Фінал)</title>
+    <meta name="referrer" content="no-referrer-when-downgrade">
     <!-- Підключаємо локальну бібліотеку Pixi.js v7 (Без інтернету) -->
     <!--script src="pixi.min.js"></script-->
     <script src="{{ url_for('static', filename='js/pixi.min.js') }}"></script>
@@ -853,7 +854,7 @@
 
             const cosLat = Math.cos(refLat * Math.PI / 180);
 
-            fetch('/api/vra/map')
+            fetch('/api/taskmaps/map')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === "error" || data.status === "no_map" || data.status !== "success") {

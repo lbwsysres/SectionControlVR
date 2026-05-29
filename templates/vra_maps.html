@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer-when-downgrade">
     <title>Керування картами завдань VRA</title>
     <style>
         :root {
@@ -382,7 +383,7 @@
 
     <!-- Нижня панель керування -->
     <div class="bottom-bar">
-        <button class="btn-nav btn-secondary" onclick="window.location.href='/'">НАЗАД ДО НАВІГАЦІЇ</button>
+        <button class="btn-nav btn-secondary" onclick="goBack()">НАЗАД ДО НАВІГАЦІЇ</button>
     </div>
 
     <!-- Твоє Універсальне модальне вікно (введення тексту + повідомлення + клавіатура) -->
@@ -767,7 +768,13 @@
             // Оновлюємо цифру на екрані всередині спіннера
             document.getElementById("cfgRateDefault").innerText = window.vraDefaultRateValue;
         }
-
+        function goBack(fallbackUrl = '/') {
+            if (document.referrer) {
+                window.location.href = document.referrer;
+            } else {
+                window.location.href = fallbackUrl;
+            }
+        }
 
     </script>
 </body>

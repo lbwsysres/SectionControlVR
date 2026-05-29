@@ -118,7 +118,6 @@ def cache_updater_loop(data_queue):
         except:
             pass
 
-
 def create_app(data_queue, cmd_queue):
     """Инициализация фабрики Flask. Объекты state и sc больше НЕ НУЖНЫ."""
     app = Flask(__name__)
@@ -130,7 +129,53 @@ def create_app(data_queue, cmd_queue):
     t = threading.Thread(target=cache_updater_loop, args=(data_queue,), daemon=True)
     t.start()
 
-    # region  СЕКЦІЯ МЕНЕДЖЕРА ЗНАРЯДЬ (IMPLEMENT MANAGER API)
+
+    # region  RENDER TAMPLATE
+    def view_navigation_hub_1():
+        cfg = config_manager.load_config()
+        return render_template("index.html", cfg=cfg)
+        #return render_template("index.html")
+    
+    @app.route("/hub")
+    def view_navigation_hub():
+        return render_template("hub.html")
+
+    
+    @app.route("/settings")
+    def settings():
+        cfg = config_manager.load_config()
+        widths_str = ",".join(map(str, cfg["SECTION_WIDTHS"]))
+        return render_template("settings.html", cfg=cfg, widths=widths_str)
+
+
+    @app.route("/map")
+    def index():
+        cfg = config_manager.load_config()
+        return render_template("board.html", cfg=cfg)
+
+    @app.route("/fields")
+    def fields_page():
+        """Показує сторінку файлового менеджера полів"""
+        return render_template("fields.html")
+
+    @app.route("/vra_control")
+    def vra_control_page():
+        return render_template("vra_maps.html")
+
+
+
+    @app.route("/implement_manager") #МЕНЕДЖЕРА ЗНАРЯДЬ
+    def view_implement_manager():
+        # Завантажуємо базовий порожній конфіг, щоб шаблонізатор не вилітав (якщо потрібно)
+        return render_template("implement_manager.html")
+    
+    
+    @app.route("/taskmaps_manager")
+    def view_taskmaps_manager():
+        return render_template("taskmaps_manager.html")
+    # endregion
+
+    # region  МЕНЕДЖЕРА ЗНАРЯДЬ (IMPLEMENT MANAGER API)
     # =======================================================================
     # СЕКЦІЯ МЕНЕДЖЕРА ЗНАРЯДЬ (IMPLEMENT MANAGER API)
     # =======================================================================
@@ -140,10 +185,10 @@ def create_app(data_queue, cmd_queue):
     if not os.path.exists(IMPLEMENTS_DIR):
         os.makedirs(IMPLEMENTS_DIR, exist_ok=True)
 
-    @app.route("/implement_manager")
-    def view_implement_manager():
-        # Завантажуємо базовий порожній конфіг, щоб шаблонізатор не вилітав (якщо потрібно)
-        return render_template("implement_manager.html")
+    # @app.route("/implement_manager")
+    # def view_implement_manager():
+    #     # Завантажуємо базовий порожній конфіг, щоб шаблонізатор не вилітав (якщо потрібно)
+    #     return render_template("implement_manager.html")
 
     # --- 1. ОТРИМАННЯ СПИСКУ ВСІХ ЗНАРЯДЬ ---
     @app.route("/api/implements/list", methods=["GET"])
@@ -247,9 +292,9 @@ def create_app(data_queue, cmd_queue):
     os.makedirs(TASKMAPS_DIR, exist_ok=True)
 
     # Маршрут для відкриття самої сторінки менеджера карт
-    @app.route("/taskmaps_manager")
-    def view_taskmaps_manager():
-        return render_template("taskmaps_manager.html")
+    # @app.route("/taskmaps_manager")
+    # def view_taskmaps_manager():
+    #     return render_template("taskmaps_manager.html")
 
     # --- 1. ОТРИМАННЯ СПИСКУ ЗАВАНТАЖЕНИХ КАРТ TASKMAPS ---
     @app.route("/api/taskmaps/list", methods=["GET"])
@@ -475,6 +520,103 @@ def create_app(data_queue, cmd_queue):
         except Exception as e:
             print(f"[TaskMap Delete Error] Збій видалення з диска: {e}")
             return jsonify({"status": "error", "message": str(e)}), 500
+    
+    @app.route("/api/taskmaps/map", methods=["GET"]) # Загрузка на ФРОНТЭНД
+    def get_vra_map():
+        """
+        Рідний роут карт VRA з вашим фірмовим парсингом [Lat, Lon] для Canvas.
+        Адаптовано під ізольовану роботу Flask на окремому ядрі CPU.
+        """
+        # 1. Дізнаємося з міжпроцесного кешу, який файл зараз активний у ядрі математики
+        active_file = WEB_CACHE.get("active_vra_file")
+        cfg = config_manager.load_config()
+        rate_default = cfg.get("VRA_RATE_DEFAULT", 0.0)
+
+        if not active_file:
+            return jsonify({"status": "no_map"})
+
+        try:
+            # 2. Швидке ОЗУ-кешування сліду карти, щоб не мучити процесор читанням ZIP-файлу при кожному оновленні
+            if (
+                not hasattr(app, "_vra_polygons_cache")
+                or getattr(app, "_last_polys_file", None) != active_file
+            ):
+                #upload_dir = os.path.join(os.getcwd(), "geodata")
+                upload_dir = os.path.join(os.getcwd(), "taskmaps")
+                file_path = os.path.join(upload_dir, active_file)
+
+                if not os.path.exists(file_path):
+                    return jsonify({"status": "no_map"})
+
+                # Зчитуємо Shapefile силами процесу веб-сервера
+                uri = f"zip://{file_path.replace(os.sep, '/')}"
+                rate_data = gpd.read_file(uri)
+
+                if rate_data.empty:
+                    return jsonify({"status": "no_map"})
+
+                polygons_list = []
+                rate_column = "rate"  # Стандарт вашого Shapefile
+
+                # =======================================================================
+                # ВАША РІДНА ЛОГІКА ПАРСИНГУ КООРДИНАТ ДЛЯ CANVAS (ОДИН В ОДИН)
+                # =======================================================================
+                for _, row in rate_data.iterrows():
+                    try:
+                        raw_val = float(row[rate_column])
+                    except (ValueError, TypeError):
+                        raw_val = float("nan")
+
+                    # Фікс №1: Якщо NaN — ставимо 0.0, інакше — залишаємо значення
+                    rate_val = 0.0 if math.isnan(raw_val) else raw_val
+                    geom = row["geometry"]
+
+                    if geom is None:
+                        continue
+                    elif geom.geom_type == "Polygon":
+                        coords = list(geom.exterior.coords)
+                    elif geom.geom_type == "MultiPolygon":
+                        coords = []
+                        for poly in geom.geoms:
+                            coords.extend(list(poly.exterior.coords))
+                    else:
+                        continue  # Пропускаємо лінії або точки
+
+                    # Зміна порядку з (Lon, Lat) на [Lat, Lon] для Canvas
+                    formatted_coords = [[pt[1], pt[0]] for pt in coords]
+
+                    polygons_list.append({"rate": rate_val, "points": formatted_coords})
+
+                # Фікс №2: Безпечний розрахунок мінімуму і максимума без NaN
+                clean_rates = rate_data[rate_column].dropna()
+
+                if not clean_rates.empty:
+                    min_rate = float(clean_rates.min())
+                    max_rate = float(clean_rates.max())
+                else:
+                    min_rate = 0.0
+                    max_rate = rate_default
+
+                # Захист від однакових значень (делення на 0)
+                if min_rate == max_rate:
+                    min_rate = max_rate * 0.8 if max_rate != 0 else -1.0
+
+                # Зберігаємо сформований результат у локальну ОЗУ-змінну процесу Flask
+                app._vra_polygons_cache = {
+                    "status": "success",
+                    "min_rate": min_rate,
+                    "max_rate": max_rate,
+                    "rate_default": rate_default,
+                    "polygons": polygons_list,
+                }
+                app._last_polys_file = active_file
+
+            # 3. Віддаємо JavaScript-планшету готовий валідний JSON-пакет із кешу ОЗУ
+            return jsonify(app._vra_polygons_cache)
+
+        except Exception as e:
+            print(f"[Web VRA Map Parser Error]: {e}")
+            return jsonify({"status": "error", "message": str(e)})
 
     # endregion
 
@@ -485,13 +627,13 @@ def create_app(data_queue, cmd_queue):
     # --- 1. ОТРИМАННЯ СПИСКУ ПОЛІВ З АВТО-ПІДТЯГУВАННЯМ ПАРАМЕТРІВ ---
     # Роут для відкриття сторінки самого Навігаційного Хабу
     @app.route("/")
-    def view_navigation_hub_1():
-        cfg = config_manager.load_config()
-        return render_template("index.html", cfg=cfg)
-        #return render_template("index.html")
-    @app.route("/hub")
-    def view_navigation_hub():
-        return render_template("hub.html")
+    # def view_navigation_hub_1():
+    #     cfg = config_manager.load_config()
+    #     return render_template("index.html", cfg=cfg)
+    #     #return render_template("index.html")
+    # @app.route("/hub")
+    # def view_navigation_hub():
+    #     return render_template("hub.html")
 
     @app.route("/api/hub_session/fields", methods=["GET"])
     def api_get_hub_fields():
@@ -845,12 +987,12 @@ def create_app(data_queue, cmd_queue):
 
     # =======================================================================
 
-    @app.route("/map")
-    def index():
-        cfg = config_manager.load_config()
-        return render_template("board.html", cfg=cfg)
+    # @app.route("/map")
+    # def index():
+    #     cfg = config_manager.load_config()
+    #     return render_template("board.html", cfg=cfg)
 
-    #     return render_template("hub.html", cfg=cfg)
+    # #     return render_template("hub.html", cfg=cfg)
 
     @app.route("/map_data")
     def map_data():
@@ -912,11 +1054,11 @@ def create_app(data_queue, cmd_queue):
             }
         )
 
-    @app.route("/settings")
-    def settings():
-        cfg = config_manager.load_config()
-        widths_str = ",".join(map(str, cfg["SECTION_WIDTHS"]))
-        return render_template("settings.html", cfg=cfg, widths=widths_str)
+    # @app.route("/settings")
+    # def settings():
+    #     cfg = config_manager.load_config()
+    #     widths_str = ",".join(map(str, cfg["SECTION_WIDTHS"]))
+    #     return render_template("settings.html", cfg=cfg, widths=widths_str)
 
     @app.route("/save_settings", methods=["POST"])
     def save_settings():
@@ -1103,10 +1245,10 @@ def create_app(data_queue, cmd_queue):
             ]
         return jsonify(ports_list), 200
 
-    @app.route("/fields")
-    def fields_page():
-        """Показує сторінку файлового менеджера полів"""
-        return render_template("fields.html")
+    # @app.route("/fields")
+    # def fields_page():
+    #     """Показує сторінку файлового менеджера полів"""
+    #     return render_template("fields.html")
 
     @app.route("/api/files", methods=["GET"])
     def list_files():
@@ -1259,8 +1401,8 @@ def create_app(data_queue, cmd_queue):
                 not hasattr(app, "_vra_polygons_cache")
                 or getattr(app, "_last_polys_file", None) != active_file
             ):
-                #upload_dir = os.path.join(os.getcwd(), "geodata")
-                upload_dir = os.path.join(os.getcwd(), "taskmaps")
+                upload_dir = os.path.join(os.getcwd(), "geodata")
+                #upload_dir = os.path.join(os.getcwd(), "taskmaps")
                 file_path = os.path.join(upload_dir, active_file)
 
                 if not os.path.exists(file_path):
@@ -1336,9 +1478,9 @@ def create_app(data_queue, cmd_queue):
             print(f"[Web VRA Map Parser Error]: {e}")
             return jsonify({"status": "error", "message": str(e)})
 
-    @app.route("/vra_control")
-    def vra_control_page():
-        return render_template("vra_maps.html")
+    # @app.route("/vra_control")
+    # def vra_control_page():
+    #     return render_template("vra_maps.html")
 
     @app.route("/api/vra/list", methods=["GET"])
     def get_vra_list():

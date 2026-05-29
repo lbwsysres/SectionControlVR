@@ -1,67 +1,169 @@
 <!DOCTYPE html>
 <html lang="uk">
+
 <head>
     <meta charset="UTF-8">
+    <meta name="referrer" content="no-referrer-when-downgrade">
     <title>Диспетчер Полів</title>
     <style>
-        :root { 
-            --bg-main: #0a0a0a; 
-            --bg-card: #141414; 
-            --text: #ffffff; 
-            --accent: #00ff7f; 
+        :root {
+            --bg-main: #0a0a0a;
+            --bg-card: #141414;
+            --text: #ffffff;
+            --accent: #00ff7f;
         }
-        body { 
-            background-color: var(--bg-main); 
-            color: var(--text); 
-            font-family: 'Segoe UI', Roboto, sans-serif; 
-            margin: 0; 
-            padding: 10px 40px 120px 40px; 
-            user-select: none; 
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text);
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 10px 40px 120px 40px;
+            user-select: none;
             -webkit-user-select: none;
             overflow-x: hidden;
         }
-        h1 { color: var(--accent); border-bottom: 2px solid #222; padding-bottom: 10px; margin-top: 10px; }
-        h2 { color: var(--accent); border-bottom: 2px solid #222; padding-bottom: 10px; margin-top: 10px; }
-        
+
+        h1 {
+            color: var(--accent);
+            border-bottom: 2px solid #222;
+            padding-bottom: 10px;
+            margin-top: 10px;
+        }
+
+        h2 {
+            color: var(--accent);
+            border-bottom: 2px solid #222;
+            padding-bottom: 10px;
+            margin-top: 10px;
+        }
+
         /* Таблиця файлів */
-        .table-container { background: var(--bg-card); border-radius: 15px; padding: 10px; border: 1px solid #222; max-height: 60vh; overflow-y: auto; }
-        table { width: 100%; border-collapse: collapse; text-align: left; }
-        th { padding: 15px 10px; border-bottom: 2px solid #333; color: #aaa; font-size: 1.1rem; }
-        td { padding: 15px 10px; border-bottom: 1px solid #222; font-size: 1.2rem; }
-        
+        .table-container {
+            background: var(--bg-card);
+            border-radius: 15px;
+            padding: 10px;
+            border: 1px solid #222;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            padding: 15px 10px;
+            border-bottom: 2px solid #333;
+            color: #aaa;
+            font-size: 1.1rem;
+        }
+
+        td {
+            padding: 15px 10px;
+            border-bottom: 1px solid #222;
+            font-size: 1.2rem;
+        }
+
         /* Кнопки в таблиці */
-        .btn { border: none; padding: 12px 24px; border-radius: 10px; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
-        .btn-open { background: var(--accent); color: #000; margin-right: 10px; }
-        .btn-delete { background: #ff4444; color: #fff; }
-        
+        .btn {
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .btn-open {
+            background: var(--accent);
+            color: #000;
+            margin-right: 10px;
+        }
+
+        .btn-delete {
+            background: #ff4444;
+            color: #fff;
+        }
+
         /* Фіксована нижня панель навігації */
-        .bottom-bar { position: fixed; bottom: 0; left: 0; width: 100%; padding: 20px 40px; box-sizing: border-box; display: flex; justify-content: space-between; z-index: 999; pointer-events: none; }
-        .btn-nav { width: 45%; height: 80px; border-radius: 15px; font-size: 1.4rem; font-weight: bold; cursor: pointer; box-shadow: 0 10px 25px rgba(0,0,0,0.5); pointer-events: auto; }
+        .bottom-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px 40px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            z-index: 999;
+            pointer-events: none;
+        }
+
+        .btn-nav {
+            width: 45%;
+            height: 80px;
+            border-radius: 15px;
+            font-size: 1.4rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
+        }
 
         /* Стилі кастомної форми Модального Вікна (TFormModal) */
         .modal {
             display: none;
             position: fixed;
             z-index: 10000;
-            left: 0; top: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.85);
-            align-items: center; justify-content: center;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            align-items: center;
+            justify-content: center;
         }
+
         .modal-content {
             background-color: var(--bg-card);
             border: 2px solid #333;
             padding: 30px;
             border-radius: 20px;
-            width: 90%; max-width: 500px;
+            width: 90%;
+            max-width: 500px;
             text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
             transition: max-width 0.2s ease;
         }
-        .modal-text { font-size: 1.4rem; margin-bottom: 25px; line-height: 1.5; }
-        .modal-buttons { display: flex; gap: 20px; justify-content: center; width: 100%; }
-        .modal-btn { flex: 1; height: 65px; border-radius: 12px; font-size: 1.2rem; font-weight: bold; border: none; cursor: pointer; }
+
+        .modal-text {
+            font-size: 1.4rem;
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .modal-btn {
+            flex: 1;
+            height: 65px;
+            border-radius: 12px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
     </style>
 </head>
+
 <body>
 
     <h2>Менеджер полів</h2>
@@ -85,24 +187,27 @@
 
     <!-- Нижня панель керування екранною формою -->
     <div class="bottom-bar">
-        <button class="btn-nav" style="background: #2c2c2c; color: #fff; border: 2px solid #444;" onclick="window.location.href='/'">НАЗАД ДО НАВІГАЦІЇ</button>
-        <button class="btn-nav" style="background: var(--accent); color: #000; border: none;" onclick="saveCurrentField()">ЗБЕРЕГТИ ПОТОЧНЕ ПОЛЕ</button>
+        <button class="btn-nav" style="background: #2c2c2c; color: #fff; border: 2px solid #444;"
+            onclick="goBack()">НАЗАД ДО НАВІГАЦІЇ</button>
+        <button class="btn-nav" style="background: var(--accent); color: #000; border: none;"
+            onclick="saveCurrentField()">ЗБЕРЕГТИ ПОТОЧНЕ ПОЛЕ</button>
     </div>
 
     <!-- Універсальне модальне вікно (введення тексту + повідомлення + клавіатура) -->
     <div id="customModal" class="modal">
         <div class="modal-content" id="modalContent">
             <div id="modalText" class="modal-text">Повідомлення</div>
-            
+
             <!-- Поле введення тексту (InputBox) -->
             <div id="inputWrapper" style="display: none; margin-bottom: 20px;">
-                <input type="text" id="modalInput" 
-                       style="width: 100%; height: 60px; background: #000; color: #fff; border: 2px solid var(--accent); border-radius: 12px; font-size: 1.6rem; text-align: center; box-sizing: border-box;" 
-                       placeholder="Натискайте кнопки нижче...">
+                <input type="text" id="modalInput"
+                    style="width: 100%; height: 60px; background: #000; color: #fff; border: 2px solid var(--accent); border-radius: 12px; font-size: 1.6rem; text-align: center; box-sizing: border-box;"
+                    placeholder="Натискайте кнопки нижче...">
             </div>
 
             <!-- Велика екранна тач-клавіатура під великі пальці -->
-            <div id="keyboardWrapper" style="display: none; margin-bottom: 25px; background: #1a1a1a; padding: 12px; border-radius: 15px; border: 1px solid #333;">
+            <div id="keyboardWrapper"
+                style="display: none; margin-bottom: 25px; background: #1a1a1a; padding: 12px; border-radius: 15px; border: 1px solid #333;">
                 <div id="virtualKeyboard" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px;">
                     <!-- Кнопки клавіатури згенерує скрипт -->
                 </div>
@@ -110,7 +215,8 @@
 
             <!-- Кнопки керування вікном -->
             <div class="modal-buttons">
-                <button id="modalCancelBtn" class="modal-btn" style="background: #333; color: #fff;" onclick="closeModal()">СКАСУВАТИ</button>
+                <button id="modalCancelBtn" class="modal-btn" style="background: #333; color: #fff;"
+                    onclick="closeModal()">СКАСУВАТИ</button>
                 <button id="modalConfirmBtn" class="modal-btn">ОК</button>
             </div>
         </div>
@@ -119,11 +225,11 @@
     <script>
         // Розкладка символів для промислової екранної клавіатури (Безпечні символи)
         const KB_LAYOUT = [
-            '1','2','3','4','5','6','7','8','9','0',
-            'Й','Ц','У','К','Е','Н','Г','Ш','Щ','З',
-            'Х','Ї','Ф','І','В','А','П','Р','О','Л',
-            'Д','Ж','Є','Я','Ч','С','М','И','Т','Ь',
-            'Б','Ю','_','-','SPACE','BACKSPACE'
+            '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+            'Й', 'Ц', 'У', 'К', 'Е', 'Н', 'Г', 'Ш', 'Щ', 'З',
+            'Х', 'Ї', 'Ф', 'І', 'В', 'А', 'П', 'Р', 'О', 'Л',
+            'Д', 'Ж', 'Є', 'Я', 'Ч', 'С', 'М', 'И', 'Т', 'Ь',
+            'Б', 'Ю', '_', '-', 'SPACE', 'BACKSPACE'
         ];
 
         // Ініціалізація форми (Аналог TForm.FormCreate)
@@ -142,7 +248,7 @@
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.innerText = key;
-                
+
                 // Стилізація тач-зони під пальці водія на ходу
                 btn.style.cssText = `
                     height: 55px; background: #2c2c2c; color: #fff; border: 1px solid #444; 
@@ -183,7 +289,7 @@
 
             if (isPrompt) {
                 // Вмикаємо режим введення тексту (InputBox)
-                input.value = ''; 
+                input.value = '';
                 inputWrapper.style.display = 'block';
                 keyboardWrapper.style.display = 'block';
                 modalContent.style.maxWidth = '750px'; // Розширюємо геометрію під клавіатуру
@@ -195,7 +301,7 @@
                 inputWrapper.style.display = 'none';
                 keyboardWrapper.style.display = 'none';
                 modalContent.style.maxWidth = '500px';
-                
+
                 if (theme === 'danger') {
                     confirmBtn.style.background = '#ff4444';
                     confirmBtn.style.color = '#fff';
@@ -238,7 +344,7 @@
                 .then(files => {
                     const tbody = document.getElementById('files-tbody');
                     tbody.innerHTML = '';
-                    
+
                     if (files.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:40px; color:#555;">Список порожній. Немає збережених треків полів.</td></tr>';
                         return;
@@ -248,7 +354,7 @@
                         const tr = document.createElement('tr');
                         // Екрануємо ім'я файлу, щоб пробіли не ламали параметри функцій в HTML
                         const safeName = encodeURIComponent(file.name);
-                        
+
                         // tr.innerHTML = `
                         //     <td style="font-weight:bold; color:var(--accent);">${file.name.replace('.json', '')}</td>
                         //     <td style="color:#aaa;">${file.date}</td>
@@ -286,11 +392,11 @@
         function loadField(encodedFilename) {
             const filename = decodeURIComponent(encodedFilename);
             const cleanName = filename.replace('.json', '');
-            
+
             askUser(
-                `Завантажити поле<br><b>"${cleanName}"</b><br>в систему водіння?`, 
-                'success', 
-                'ВІДКРИТИ', 
+                `Завантажити поле<br><b>"${cleanName}"</b><br>в систему водіння?`,
+                'success',
+                'ВІДКРИТИ',
                 () => {
                     fetch('/api/load_field', {
                         method: 'POST',
@@ -299,7 +405,8 @@
                     }).then(res => {
                         if (res.ok) {
                             askUser(`Поле "${cleanName}" успішно відновлено!`, 'info', 'ОК', () => {
-                                window.location.href = '/'; // Повернення на головний екран курсоуказателя
+                                //window.location.href = '/'; // Повернення на головний екран курсоуказателя
+                                goBack();
                             });
                         } else {
                             askUser('Помилка завантаження файлу дампу з SBC.', 'danger', 'ОК');
@@ -313,11 +420,11 @@
         function deleteField(encodedFilename) {
             const filename = decodeURIComponent(encodedFilename);
             const cleanName = filename.replace('.json', '');
-            
+
             askUser(
-                `УВАГА!<br>Видалити файл <b>"${cleanName}"</b><br>безповоротно з флеш-пам'яті SBC?`, 
-                'danger', 
-                'ВИДАЛИТИ', 
+                `УВАГА!<br>Видалити файл <b>"${cleanName}"</b><br>безповоротно з флеш-пам'яті SBC?`,
+                'danger',
+                'ВИДАЛИТИ',
                 () => {
                     fetch('/api/delete_field', {
                         method: 'POST',
@@ -333,9 +440,9 @@
         // Збереження поточної сесії через власну On-Screen клавіатуру
         function saveCurrentField() {
             askUser(
-                'Введіть назву для фіксації поточного треку:', 
-                'success', 
-                'ЗБЕРЕГТИ ПОЛЕ', 
+                'Введіть назву для фіксації поточного треку:',
+                'success',
+                'ЗБЕРЕГТИ ПОЛЕ',
                 (typedName) => {
                     if (!typedName) return;
 
@@ -344,20 +451,28 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ field_name: typedName })
                     })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === "success") {
-                            askUser(`Поточну сесію зафіксовано під ім'ям:<br><b>"${typedName}"</b>`, 'info', 'ЧУДОВО', () => {
-                                loadFileList(); // Перемальовуємо список
-                            });
-                        } else {
-                            askUser("Помилка збереження:<br>" + data.error, 'danger', 'ОК');
-                        }
-                    });
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.status === "success") {
+                                askUser(`Поточну сесію зафіксовано під ім'ям:<br><b>"${typedName}"</b>`, 'info', 'ЧУДОВО', () => {
+                                    loadFileList(); // Перемальовуємо список
+                                });
+                            } else {
+                                askUser("Помилка збереження:<br>" + data.error, 'danger', 'ОК');
+                            }
+                        });
                 },
                 true // АКТИВУЄМО РЕЖИМ ТАЧ-КЛАВІАТУРИ
             );
         }
+        function goBack(fallbackUrl = '/') {
+            if (document.referrer) {
+                window.location.href = document.referrer;
+            } else {
+                window.location.href = fallbackUrl;
+            }
+        }
     </script>
 </body>
+
 </html>

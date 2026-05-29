@@ -1013,9 +1013,7 @@ function draw(data) {
         const ty = data.uy; // Поточний Y трактора в метрах
         const dx = bx - ax;
         const dy = by - ay;
-
         const angleAB = Math.atan2(dy, dx);
-
         // Загальна ширина штанги
         const fullWidth = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
         const length = 2000; // Довжина ліній (2 км)
@@ -1030,21 +1028,12 @@ function draw(data) {
         } else {
             _abLineNum = `(${currentPassNum})`;
         }
-
         // --- МАГІЯ ТРАНСФОРМАЦІЇ ДЛЯ ЛІНІЙ А-В ---
         bgCtx.save();
         // 1. Прив'язуємося до центру екрана (де «прибитий» трактор)
         bgCtx.translate(bgCanvas.width / 2, bgCanvas.height / 2);
         // 2. Повертаємо систему координат проти курсу трактора (щоб лінії крутилися навколо нього)
-
         bgCtx.rotate(-data.hdg * Math.PI / 180);
-
-        // let angleAB_nav = (90 - (angleAB * 180 / Math.PI)) % 360;
-        // if (angleAB_nav < 0) angleAB_nav += 360;
-
-        // bgCtx.save();
-        // bgCtx.translate(bgCanvas.width / 2, bgCanvas.height / 2);
-
         // Малюємо сітку ліній навколо ТРАКТОРА (по 3 проходи вліво і вправо)
         for (let i = -3; i <= 3; i++) {
             const absolutePass = currentPassNum + i;
@@ -1059,9 +1048,7 @@ function draw(data) {
             // ці координати відпрацюють ідеально!
             const screenX = (offsetX - tx) * zoom;
             const screenY = -(offsetY - ty) * zoom;
-
             bgCtx.beginPath();
-
             if (i === 0) {
                 bgCtx.lineWidth = 20 / zoom; // Поточний прохід найтовстіший
                 bgCtx.strokeStyle = "rgba(255, 255, 255, 0.9)"; // Яскраво-білий

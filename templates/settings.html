@@ -5,6 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="referrer" content="no-referrer-when-downgrade">
     <title>Настройки Агро-Системы</title>
     <!-- Підключаємо відокремлений CSS файл стилей -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
@@ -538,7 +539,14 @@
             askUser('Сохранить изменения?<br><small>Новые параметры заліза будут применены RAM-потоками немедленно</small>', 'success', 'СОХРАНИТЬ', () => { saveAll(); });
         }
 
-        function goBack() { window.location.href = '/'; }
+        function goBack_1() { window.location.href = '/'; }
+        function goBack(fallbackUrl = '/') {
+            if (document.referrer) {
+                window.location.href = document.referrer;
+            } else {
+                window.location.href = fallbackUrl;
+            }
+        }
 
         function saveAll() {
             const newCfg = {
@@ -642,7 +650,8 @@
                         // Викликаємо як ALERT (без 4-го параметра)
                         // Перенаправлення відбудеться ТОДІ, коли користувач натисне "OK"
                         askUser("Настройки успешно сохранены!", 'success', 'OK', () => {
-                            window.location.href = '/';
+                            //window.location.href = '/';
+                            goBack();
                         });
                     } else {
                         // Замінюємо помилку сервера на кастомну модалку

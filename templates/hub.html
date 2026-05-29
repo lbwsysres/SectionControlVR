@@ -5,6 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="referrer" content="no-referrer-when-downgrade">
     <title>Панель Управління Агро-Системи</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
@@ -874,6 +875,14 @@
             }
         }
         document.addEventListener("DOMContentLoaded", () => { loadHubFields(); });
+
+        function goBack(fallbackUrl = '/') {
+            if (document.referrer) {
+                window.location.href = document.referrer;
+            } else {
+                window.location.href = fallbackUrl;
+            }
+        }
     </script>
 </body>
 

@@ -5,6 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="referrer" content="no-referrer-when-downgrade">
     <title>Менеджер агрегатов</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
@@ -634,10 +635,12 @@
         function handleGoBack() {
             if (JSON.stringify(originalCopy) !== JSON.stringify(currentEditingCopy)) {
                 askUser('Вийти без збереження?<br><small>Всі незбережені зміни штанги будуть втрачені.</small>', 'danger', 'ВИЙТИ', () => {
-                    window.location.href = '/';
+                    //window.location.href = '/';
+                    goBack();
                 });
             } else {
-                window.location.href = '/';
+                //window.location.href = '/';
+                goBack();
             }
         }
 
@@ -722,7 +725,13 @@
             "SMART_TURN_ENABLED": "<b>Умный разворот:</b> Математический режим динамического моделирования изгиба штанги по дуге круга при маневрах, предотвращающий клиновидные пропуски и перекрытия на углах поля."
         };
 
-
+        function goBack(fallbackUrl = '/') {
+            if (document.referrer) {
+                window.location.href = document.referrer;
+            } else {
+                window.location.href = fallbackUrl;
+            }
+        }
     </script>
 </body>
 
