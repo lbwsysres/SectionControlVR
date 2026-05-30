@@ -120,7 +120,7 @@ function updateDiagnosticPanel() {
             const svgBoard = document.getElementById('svg_board');
             const boardSlash = document.getElementById('board_slash');
             const txtBoardStatus = document.getElementById('txt_board_status');
-            const t1 = document.getElementById('board_template_1');
+            //const t1 = document.getElementById('board_template_1');
             const txtEsp_current_flow = document.getElementById('txt_esp_current_flow');
             const txtEsp_pressure = document.getElementById('txt_esp_pressure');
             const txtEsp_pwm = document.getElementById('txt_esp_pwm');
@@ -131,8 +131,8 @@ function updateDiagnosticPanel() {
                 boardSlash.style.opacity = '0';
                 txtBoardStatus.innerText = "CONNECT";
                 txtBoardStatus.style.color = "#2ecc71";
-                t1.innerText = "Вольтаж: —";
-                t1.style.color = "#888";
+                //t1.innerText = "Вольтаж: —";
+                //t1.style.color = "#888";
 
                 txtEsp_current_flow.innerText = `Поток: ${data.esp_current_flow}`;
                 txtEsp_pressure.innerText = `Давление: ${data.esp_pressure}`;
@@ -146,8 +146,8 @@ function updateDiagnosticPanel() {
                 boardSlash.style.opacity = '1';
                 txtBoardStatus.innerText = "OFF LINE";
                 txtBoardStatus.style.color = "#e74c3c";
-                t1.innerText = "Параметр: —";
-                t1.style.color = "#444";
+                //t1.innerText = "Параметр: —";
+                //t1.style.color = "#444";
 
                 txtEsp_current_flow.innerText = "Поток: - ";
                 txtEsp_pressure.innerText = "Давление: - ";
@@ -167,7 +167,7 @@ function updateDiagnosticPanel() {
             document.getElementById('txt_gps_status').innerText = "OFF LINE";
             document.getElementById('txt_board_status').innerText = "OFF LINE";
             document.getElementById('txt_gps_speed').innerText = "-.- km/h";
-            document.getElementById('txtcurrent_file').innerText = "NONE";
+            //document.getElementById('txtcurrent_file').innerText = "NONE";
             document.getElementById('txt_esp_current_flow').innerText = "Поток: ? ";
             document.getElementById('txt_esp_pressure').innerText = "Давление: ? ";
             document.getElementById('txt_esp_pwm').innerText = "ШИМ: ? ";

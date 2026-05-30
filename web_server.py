@@ -134,7 +134,7 @@ def create_app(data_queue, cmd_queue):
     @app.route("/")
     def view_navigation_hub_1():
         cfg = config_manager.load_config()
-        return render_template("index.html", cfg=cfg)
+        return render_template("map.html", cfg=cfg)
         #return render_template("index.html")
     
     @app.route("/hub")

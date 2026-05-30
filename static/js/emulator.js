@@ -12,6 +12,7 @@ let currentY = defaultY;
 let animationFrameId = null;
 
 function initEmulator() {
+    //openEmulator(this);
     joyZone = document.getElementById('joy_zone');
     joyStick = document.getElementById('joy_stick');
     if (!joyZone || !joyStick) return;
@@ -19,6 +20,7 @@ function initEmulator() {
     updateStickPosition(defaultX, defaultY);
     setupEmulatorEvents();
     updateVisualState();
+
 }
 
 function updateEmuUI() {
@@ -46,6 +48,7 @@ function updateVisualState() {
 function updateStickPosition(x, y) {
     joyStick.style.left = `calc(50% + ${x}px)`;
     joyStick.style.top = `calc(50% + ${y}px)`;
+    
 }
 
 function handleMove(clientX, clientY) {
@@ -155,5 +158,35 @@ function setupEmulatorEvents() {
         }
     });
 }
+/**
+ * Разворачивает эмулятор: прячет круглую кнопку, показывает окно джойстика
+ */
+/**
+ * Разворачивает эмулятор: прячет круглую кнопку, показывает фиксированное окно 200px
+ */
+function openEmulator() {
+    const btn = document.getElementById('emu_toggle_btn');
+    const emu = document.getElementById('emulator');
+    
+    if (btn && emu) {
+        btn.style.setProperty('display', 'none', 'important');   // Намертво прячем кнопку
+        emu.style.setProperty('display', 'block', 'important');  // Намертво показываем окно
+    }
+}
+
+/**
+ * Сворачивает эмулятор: прячет окно, возвращает круглую кнопку
+ */
+function closeEmulator() {
+    const btn = document.getElementById('emu_toggle_btn');
+    const emu = document.getElementById('emulator');
+    
+    if (btn && emu) {
+        emu.style.setProperty('display', 'none', 'important');   // Намертво прячем окно
+        btn.style.setProperty('display', 'flex', 'important');   // Возвращаем кнопку (flex для центрирования иконки)
+    }
+}
+
+
 
 document.addEventListener("DOMContentLoaded", initEmulator);

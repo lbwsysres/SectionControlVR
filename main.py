@@ -317,7 +317,10 @@ def main_calculation_loop():
                 # =======================================================================
                 elif cmd == "load_hub_session":
                     print(f"[Main_Engine Hub] Запуск мультипрофільної ")
-                    print(f"\n[CORE THREAD] Отримано команду load_hub_session з Хабу!", flush=True)
+                    print(
+                        f"\n[CORE THREAD] Отримано команду load_hub_session з Хабу!",
+                        flush=True,
+                    )
                     field_name = (
                         cmd_data.get("filename", "").replace(".json", "").strip()
                     )
@@ -469,7 +472,7 @@ def main_calculation_loop():
                         sys_cfg = config_manager.load_config()
                         sys_cfg["VRA_RATE_DEFAULT"] = float(target_rate)
                         if taskmap_file:
-                            
+
                             vra = getattr(state, "vra_manager", None)
                             if vra:
                                 if vra.activate_existing_map(taskmap_file):
@@ -565,6 +568,28 @@ def main_calculation_loop():
                             state.point_a = (mx, my)
                         else:
                             state.point_b = (mx, my)
+                    # elif label == "nudge":
+                    #     try:
+                    #         val = float(request.args.get("value", 0))
+                    #         print(f"NUDGE: {val} m")
+
+                    #         if state.point_a and state.point_b:
+                    #             ax, ay = state.point_a
+                    #             bx, by = state.point_b
+                    #             dx, dy = bx - ax, by - ay
+                    #             dist = math.sqrt(dx**2 + dy**2)
+
+                    #             if dist > 0:
+                    #                 nx, ny = -dy / dist, dx / dist
+                    #                 state.point_a = (ax + nx * val, ay + ny * val)
+                    #                 state.point_b = (bx + nx * val, by + ny * val)
+                    #                 print(f"NEW POINT A: {state.point_a}")
+                    #             else:
+                    #                 print("ERROR AB == 0!")
+                    #         else:
+                    #             print("ERROR AB NOT SET")
+                    #     except Exception as e:
+                    #         print(f"CRITICAL Nudge: {e}")
             except Exception as e:
                 print(f"[Main_Engine Cmd Error] Помилка обробки команди: {e}")
 
@@ -580,6 +605,8 @@ def main_calculation_loop():
             state.guidance_error = 0.0
             state.reset_flag = False
             last_track_x = last_track_y = None
+            active_cfg = config_manager.load_config()
+            sc.cfg = active_cfg
 
         # =======================================================================
         #               (РОЗРАХУНОК РЕЖИМІВ ТА ЗОН VRA В ОЗУ)
