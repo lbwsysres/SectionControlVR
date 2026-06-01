@@ -8,6 +8,7 @@ import time
 from shapely.geometry import Polygon, MultiPolygon
 from shapely.ops import unary_union
 from shapely import wkb
+import struct
 
 
 class SectionControl:
@@ -66,7 +67,7 @@ class SectionControl:
         res_y = by - offset * math.sin(th_rad)
         return (res_x, res_y)
 
-    def save_to_disk(self):
+    def save_to_disk_old(self):
         """
         ЕТАЛОННИЙ ЗАПИС ЕШЕЛОНУ: Пакує буфер ОЗУ в чистий MultiPolygon.
         Один швидкий бінарний запис захищає eMMC від зносу.
@@ -74,10 +75,7 @@ class SectionControl:
         print("[save_to_disk] Start.")
         if not hasattr(self, "buffer_to_disk") or not self.buffer_to_disk:
             return
-
         import dump_manager
-
-        #wkb_path = os.path.join(dump_manager.DUMP_DIR, self.current_wkb_filename)
         wkb_path = os.path.join(dump_manager.DUMP_DIR, self.current_wkb_filename)
 
         try:
@@ -98,6 +96,49 @@ class SectionControl:
                 self.buffer_to_disk = []
         except Exception as e:
             print(f"[SectionControl eMMC-Save Error] Помилка запису ешелону WKB: {e}")
+
+    def save_to_disk(self):
+        """
+        ШВИДКИЙ БІНАРНИЙ ДОЗАПИС (Стиль C++/Delphi).
+        Формат на диску: [4 байти довжини блока (Big-Endian uint32)] + [Самі байти WKB].
+        Ідеально для частоти 10 Гц: миттєво, без читання диска, захищає eMMC.
+        """
+        if not hasattr(self, "buffer_to_disk") or not self.buffer_to_disk:
+            return
+            
+        import dump_manager
+        wkb_path = os.path.join(dump_manager.DUMP_DIR, self.current_wkb_filename)
+
+        try:
+            # Фільтруємо тільки повністю валідні полігони
+            valid_polys = [p for p in self.buffer_to_disk if p.is_valid and not p.is_empty]
+            if not valid_polys:
+                return
+
+            # Пакуємо пачку в один MultiPolygon для цього блоку
+            chunk_multipoly = MultiPolygon(valid_polys)
+            
+            # Перетворюємо геометрію в бінарну строку в пам'яті (ОЗУ)
+            wkb_bytes = wkb.dumps(chunk_multipoly, hex=False)
+            bytes_len = len(wkb_bytes)
+
+            # Відкриваємо файл на дозапис ("ab")
+            with open(wkb_path, "ab") as f:
+                # Записуємо заголовок довжини (4 байти, unsigned int)
+                f.write(struct.pack(">I", bytes_len))
+                # Дописуємо тіло геометрії
+                f.write(wkb_bytes)
+                # Примусово виштовхуємо буфери ОС на флешку (захист від збою живлення трактора)
+                f.flush()
+                os.fsync(f.fileno()) 
+
+            # Очищаємо буфер, пачка успішно пішла на eMMC
+            self.buffer_to_disk = []
+
+        except Exception as e:
+            print(f"[SectionControl eMMC-Save Error] Помилка дозапису блоку WKB: {e}")
+
+
 
     def reset(self):
         """Повне очищення поточної сесії в ОЗУ"""
@@ -320,72 +361,105 @@ class SectionControl:
                 polys_to_save.append(poly)
             l_offset += w
 
-        # 5. Запис історії для відмальовки сліду на Canvas (в ОЗУ)
-        # self.path_history.append(
-        #     [lat, lon, heading_deg, list(res_states), list(widths)]
-        # )
 
         # ==============================================================================
         # МОДЕРНІЗОВАНИЙ ЗАПИС ІСТОРІЇ З КЛЮЧЕМ ЧАНКА
         # ==============================================================================
-        # 5. Запис історії для відмальовки сліду на Canvas (в ОЗУ)
+        # 5. Запис історії для PixiJS на фронтенд (чистий плоский масив масивів)
         self.path_history.append(
             [chunk_key, lat, lon, heading_deg, list(res_states), list(widths)]
         )
 
-        # LBW 
         if len(self.path_history) > 100000:
             self.path_history.pop(0)
-        # --- ЗБЕРІГАЄМО ПОВНУ 5-ЕЛЕМЕНТНУ СТРУКТУРУ ДЛЯ ВЕБ-CANVAS ---
-        # Перетворюємо масив станів [True, False...] у рядок "1-0-1..."
+
+        # Перетворюємо масиви в рядки для текстового логу треку
         states_str = "-".join(["1" if s else "0" for s in res_states])
-        # Перетворюємо ширини [0.8, 0.7...] у рядок "0.8-0.7..."
         widths_str = "-".join([str(w) for w in widths])
 
-        # Кладемо в ОЗУ-буфер для залпового скидання на диск
-        self.track_buffer_to_disk.append([chunk_key,lat, lon, heading_deg, states_str, widths_str])
+        # Кладемо в ОЗУ-буфер текстового треку
+        self.track_buffer_to_disk.append([chunk_key, lat, lon, heading_deg, states_str, widths_str])
 
-        # Додаємо поточну точку треку в текстовий ОЗУ-буфер
-        #self.track_buffer_to_disk.append([lat, lon, heading_deg])
-
-        # 6. ОНОВЛЕННЯ КАРТИ В ОЗУ ТА ЗАЛПОВИЙ ЗАПИС НА ДИСК (Кожні 300 точок)
+        # 6. ОНОВЛЕННЯ ТОЧНОЇ КАРТИ В ОЗУ
         if polys_to_save:
             try:
                 for p in polys_to_save:
                     if p.is_valid and not p.is_empty:
                         self.buffer_to_disk.append(p)
 
-                # Синхронна монолітна карта в ОЗУ для логіки перекриттів
+                # Робоча карта в ОЗУ для логіки перекриттів (завжди 100% точна, БЕЗ simplify)
                 self.covered_area = self.covered_area.union(unary_union(polys_to_save))
             except Exception as e:
                 print(f"[SectionControl RAM Error] Помилка об’єднання карт в ОЗУ: {e}")
 
         # --- СИНХРОННЕ ПАКЕТНЕ ЗБЕРЕЖЕННЯ (ЗАХИСТ eMMC) ---
+        # На столі тестуємо через % 30, на полі міняємо на % 300 (раз на 30 сек при 10 Гц)
         if len(self.path_history) % 30 == 0:
             try:
-                # Оптимізуємо моноліт в пам'яті, щоб інтерфейс вебу не гальмував
-                self.covered_area = self.covered_area.simplify(
-                    0.05, preserve_topology=True
-                )
-
-                # А) Скидаємо бінарні полігони покриття одним махом
+                # А) Скидаємо бінарні полігони покриття новим методом фіксованої довжини
                 if self.buffer_to_disk:
                     self.save_to_disk()
 
-                # Б) Скидаємо 300 текстових точок треку одним махом
+                # Б) Скидаємо текстові точки треку одним махом
                 import dump_manager
-
                 if self.track_buffer_to_disk:
                     dump_manager.append_batch_to_track_file(self.track_buffer_to_disk)
                     self.track_buffer_to_disk = []  # Очищаємо ОЗУ-буфер треку
 
-                print(
-                    f"[SectionControl eMMC-Safe] Пачка з 300 точок успішно зафіксована на диск."
-                )
+                print(f"[SectionControl eMMC-Safe] Пачка успішно зафіксована на диск. Буфери чисті.")
             except Exception as e:
-                print(
-                    f"[SectionControl Sync Error] Помилка синхронізації з диском: {e}"
-                )
+                print(f"[SectionControl Sync Error] Помилка синхронізації з диском: {e}")
+
+
+        # 5. Запис історії для відмальовки сліду на Canvas (в ОЗУ)
+        # self.path_history.append(
+        #     [chunk_key, lat, lon, heading_deg, list(res_states), list(widths)]
+        # )
+
+        # # LBW 
+        # if len(self.path_history) > 100000:
+        #     self.path_history.pop(0)
+        # # --- ЗБЕРІГАЄМО ПОВНУ 5-ЕЛЕМЕНТНУ СТРУКТУРУ ДЛЯ ВЕБ-CANVAS ---
+        # # Перетворюємо масив станів [True, False...] у рядок "1-0-1..."
+        # states_str = "-".join(["1" if s else "0" for s in res_states])
+        # # Перетворюємо ширини [0.8, 0.7...] у рядок "0.8-0.7..."
+        # widths_str = "-".join([str(w) for w in widths])
+
+        # # Кладемо в ОЗУ-буфер для залпового скидання на диск
+        # self.track_buffer_to_disk.append([chunk_key,lat, lon, heading_deg, states_str, widths_str])
+        # # 6. ОНОВЛЕННЯ КАРТИ В ОЗУ ТА ЗАЛПОВИЙ ЗАПИС НА ДИСК (Кожні 300 точок)
+        # if polys_to_save:
+        #     try:
+        #         for p in polys_to_save:
+        #             if p.is_valid and not p.is_empty:
+        #                 self.buffer_to_disk.append(p)
+        #         # Синхронна монолітна карта в ОЗУ для логіки перекриттів
+        #         self.covered_area = self.covered_area.union(unary_union(polys_to_save))
+        #     except Exception as e:
+        #         print(f"[SectionControl RAM Error] Помилка об’єднання карт в ОЗУ: {e}")
+
+        # # --- СИНХРОННЕ ПАКЕТНЕ ЗБЕРЕЖЕННЯ (ЗАХИСТ eMMC) ---
+        # if len(self.path_history) % 30 == 0:
+        #     try:
+        #         # Оптимізуємо моноліт в пам'яті, щоб інтерфейс вебу не гальмував
+        #         self.covered_area = self.covered_area.simplify(
+        #             0.05, preserve_topology=True
+        #         )
+        #         # А) Скидаємо бінарні полігони покриття одним махом
+        #         if self.buffer_to_disk:
+        #             self.save_to_disk()
+        #         # Б) Скидаємо 300 текстових точок треку одним махом
+        #         import dump_manager
+        #         if self.track_buffer_to_disk:
+        #             dump_manager.append_batch_to_track_file(self.track_buffer_to_disk)
+        #             self.track_buffer_to_disk = []  # Очищаємо ОЗУ-буфер треку
+        #         print(
+        #             f"[SectionControl eMMC-Safe] Пачка з 300 точок успішно зафіксована на диск."
+        #         )
+        #     except Exception as e:
+        #         print(
+        #             f"[SectionControl Sync Error] Помилка синхронізації з диском: {e}"
+        #         )
 
         self.last_x, self.last_y = ux, uy
         self.last_p1_list, self.last_p2_list = curr_p1, curr_p2

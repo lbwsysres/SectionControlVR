@@ -51,7 +51,7 @@
     "SMART_TURN_ENABLED": false,
     "LOOK_AHEAD_ON_TIME": 0.8,
     "LOOK_AHEAD_OFF_TIME": 0.3,
-    "VRA_RATE_DEFAULT": 160.0,
+    "VRA_RATE_DEFAULT": 140.0,
     "VRA_CALC_MODE": "sections",
     "CONTROL_BOARD_TYPE": "udp",
     "CONTROL_BOARD_PORT_NUM": 5005,
