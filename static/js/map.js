@@ -96,9 +96,12 @@ world.position.set(app.screen.width / 2, app.screen.height / 2);
 
 // БЕЗПЕЧНИЙ РОЗМІР ДЛЯ СТАРИХ ПЛАНШЕТІВ (Защита Redmi 5 Plus и Samsung)
 // Создаем виртуальное полотно 4000х4000 пикселей в памяти GPU
+const MAP_SIZE = 4000
+const MAP_SIZE_DIV = MAP_SIZE / 2
+
 const mapRenderTexture = PIXI.RenderTexture.create({
-    width: 4000,
-    height: 4000,
+    width: MAP_SIZE,
+    height: MAP_SIZE,
     scaleMode: PIXI.SCALE_MODES.LINEAR
 });
 
@@ -479,10 +482,8 @@ function redrawTractorVehicle_work(states, isMaster, lat, lon, heading) {
 function getGlobalCoordsPixi(lat, lon, heading, sectionIdx, isRightSide, customWidths) {
     let cx = (lon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
     let cy = -(lat - refLat) * metersPerDegree;
-
     let widths = customWidths || cfg.SECTION_WIDTHS;
     const backOffset = cfg.OFFSET_BACK || 0;
-
     let offsetMeters = 0;
     for (let i = 0; i < sectionIdx; i++) {
         if (i < widths.length) offsetMeters += widths[i];
@@ -490,17 +491,13 @@ function getGlobalCoordsPixi(lat, lon, heading, sectionIdx, isRightSide, customW
     if (isRightSide && sectionIdx < widths.length) {
         offsetMeters += widths[sectionIdx];
     }
-
     let totalWidth = widths.reduce((a, b) => a + b, 0);
     offsetMeters -= totalWidth / 2;
-
     // ЧИСТЫЙ КУРС ИЗ ВАШЕГО КОДА БЕЗ КОРЕЖЕНЬЯ ЗНАКОВ:
     let rad = (heading * Math.PI / 180);
-
     // ВАША ЗАЛИЗОБЕТОННАЯ ТРИГОНОМЕТРИЯ ПРОЕКЦИИ:
     let rx = cx + offsetMeters * Math.cos(rad) - backOffset * Math.sin(rad);
     let ry = cy + offsetMeters * Math.sin(rad) + backOffset * Math.cos(rad);
-
     return { x: rx * zoom, y: ry * zoom };
 }
 // Було: function appendTrackSegmentPixi(lat, lon, heading, states, widths)
@@ -511,24 +508,18 @@ function getGlobalCoordsPixi(lat, lon, heading, sectionIdx, isRightSide, customW
 function appendTrackSegmentPixi(lat, lon, heading, states, customWidths) {
     //function appendTrackSegmentPixi(lat, lon, heading, states, customWidths) {
     if (refLat === null || !states || !Array.isArray(states)) return;
-
     // Настраиваем стиль линий один раз на точку (толщина 0 — чистая заливка)
     tempTrackGraphics.lineStyle(0);
-
     const drawOff = cfg.DRAW_OFF_SECTIONS;
-
     states.forEach((isActive, i) => {
         if (!isActive && drawOff === false) {
             prevSectionsCoords[i] = null;
             return;
         }
-
         const cL = getGlobalCoordsPixi(lat, lon, heading, i, false, customWidths);
         const cR = getGlobalCoordsPixi(lat, lon, heading, i, true, customWidths);
-
         if (prevSectionsCoords[i]) {
             const prev = prevSectionsCoords[i];
-
             // Защита от линий к старту и разрывов GPS (Прыжок > 5 метров)
             const dx = cL.x - prev.cL.x;
             const dy = cL.y - prev.cL.y;
@@ -536,20 +527,17 @@ function appendTrackSegmentPixi(lat, lon, heading, states, customWidths) {
                 prevSectionsCoords[i] = { cL: cL, cR: cR };
                 return;
             }
-
             // Накапливаем полигоны в общем буфере tempTrackGraphics БЕЗ рендеринга
             tempTrackGraphics.beginFill(isActive ? 0x2ecc71 : 0xe74c3c, isActive ? 0.7 : 0.5);
             tempTrackGraphics.drawPolygon([
-                prev.cL.x + 2000, prev.cL.y + 2000,
-                cL.x + 2000, cL.y + 2000,
-                cR.x + 2000, cR.y + 2000,
-                prev.cR.x + 2000, prev.cR.y + 2000
+                prev.cL.x + MAP_SIZE_DIV, prev.cL.y + MAP_SIZE_DIV,
+                cL.x + MAP_SIZE_DIV, cL.y + MAP_SIZE_DIV,
+                cR.x + MAP_SIZE_DIV, cR.y + MAP_SIZE_DIV,
+                prev.cR.x + MAP_SIZE_DIV, prev.cR.y + MAP_SIZE_DIV
             ]);
             tempTrackGraphics.endFill();
-
             totalPolygonsRendered++;
         }
-
         prevSectionsCoords[i] = { cL: cL, cR: cR };
     });
 }
@@ -563,31 +551,23 @@ console.log("Часть 3 готова: Оригинальная геометр�
 // 1. Двигун моментального вивантаження історії чанками (last=0)
 function updateFieldMapPixi(newPoints) {
     if (!newPoints || newPoints.length === 0) return;
-
     // 1. Возвращаем твою родную стабильную очередь точек
     pointsQueue.push(...newPoints);
-
     if (isProcessingQueue) return;
     isProcessingQueue = true;
-
     const CHUNK_SIZE = 1000;
-
     function processNextChunk() {
         if (pointsQueue.length === 0) {
             isProcessingQueue = false;
             lastQueueProgressTime = performance.now(); // Сторож (Watchdog) спокоен
             return;
         }
-
         // Очищаем векторную графику перед началом обсчета всей пачки
         tempTrackGraphics.clear();
-
         const chunk = pointsQueue.splice(0, CHUNK_SIZE);
-
         chunk.forEach((pt) => {
             // Защита: массив теперь длиннее, так как первым элементом идет ["0_0", lat, lon...]
             if (!pt || pt.length < 5) return;
-
             // =================================================================
             // СДВИГАЕМ ИНДЕКСЫ НА +1, ЧТОБЫ УЧЕСТЬ КЛЮЧ ЧАНКА ОТ СЕРВЕРА
             // =================================================================
@@ -597,11 +577,9 @@ function updateFieldMapPixi(newPoints) {
             const hdg = pt[3]; // Раньше было pt[2]
             const states = pt[4]; // Раньше было pt[3]
             const customWidths = pt[5] || null; // Раньше было pt[4]
-
             // Вызываем твою оригинальную, нетронутую тригонометрию штанги
             appendTrackSegmentPixi(lat, lon, hdg, states, customWidths);
         });
-
         // 2. Запекаем пачку в твою СТАРУЮ ОРИГИНАЛЬНУЮ текстуру (без матриц смещения)
         if (typeof mapRenderTexture !== 'undefined') {
             app.renderer.render(tempTrackGraphics, {
@@ -609,20 +587,16 @@ function updateFieldMapPixi(newPoints) {
                 clear: false
             });
         }
-
         // Моментально очищаем векторную память GPU после массового запекания
         tempTrackGraphics.clear();
-
         // Обновляем счетчик полигонов на UI
         const polyElem = document.getElementById('total_point');
         if (polyElem) {
             polyElem.innerText = "Poligon count: " + totalPolygonsRendered;
         }
-
         // Переходим к следующей пачке
         setTimeout(processNextChunk, 1);
     }
-
     processNextChunk();
 }
 
@@ -866,7 +840,6 @@ let lastQueueProgressTime = performance.now();
 
 function requestDataFromServer() {
     const now = performance.now();
-
     // Сторож реанімації мережі для Redmi: Якщо графіка заклинила довше 1.5 сек — зриваємо замок!
     if (isProcessingQueue && (now - lastQueueProgressTime > 1500)) {
         console.warn("⚠️ Сторож виявив зависання графіки! Примусове скидання черги для старого заліза.");
@@ -874,12 +847,10 @@ function requestDataFromServer() {
         isProcessingQueue = false;
         lastQueueProgressTime = now;
     }
-
     if (isProcessingQueue) {
         setTimeout(requestDataFromServer, 250);
         return;
     }
-
     fetch(`/map_data?last=${lastReceivedIndex}`)
         .then(response => {
             if (!response.ok) throw new Error(`Помилка сервера: ${response.status}`);
@@ -887,7 +858,6 @@ function requestDataFromServer() {
         })
         .then(data => {
             lastQueueProgressTime = performance.now();
-
             if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
                 hideModal(); // Скрываем окно, если оно было открыто
             }
@@ -896,32 +866,11 @@ function requestDataFromServer() {
                 setTimeout(requestDataFromServer, 250);
                 return;
             }
-
             // Малюємо лінії А-В ЗАВЖДИ, як тільки вони прийшли в JSON
             if (data.ab_line) {
                 globalAbData = data;
                 drawABLines(data);
             }
-
-            // if (data.new_points && data.new_points.length > 0) {
-            //     updateFieldMapPixi(data.new_points);
-
-            //     const lastPointArray = data.new_points[data.new_points.length - 1];
-            //     const lastLat = lastPointArray[0];
-            //     const lastLon = lastPointArray[1];
-            //     const lastHdg = lastPointArray[2];
-            //     const lastStates = lastPointArray[3];
-
-            //     window.lastReceivedStates = lastStates;
-
-            //     updateCamera(lastLat, lastLon, lastHdg);
-            //     redrawTractorVehicle(lastStates, data.master !== undefined ? data.master : true, lastLat, lastLon, lastHdg);
-            // }
-
-            // ==========================================
-            // МОДЕРНІЗОВАНИЙ БЛОК ОБРОБКИ ТЕЛЕМЕТРІЇ ТА ШЛЕЙФУ
-            // ==========================================
-
             // 1. ЖИВА ТЕЛЕМЕТРІЯ (Камера, компас, трактор) — працює ЗАВЖДИ, незалежно від шлейфу!
             if (data.pos && data.pos.length >= 2 && data.hdg !== undefined) {
                 const currentLat = data.pos[0];
@@ -956,29 +905,20 @@ function requestDataFromServer() {
                 updateFieldMapPixi(data.new_points);
             }
 
-
-
             if (data.last_index !== undefined) {
                 lastReceivedIndex = data.last_index;
             } else if (data.new_points) {
                 lastReceivedIndex += data.new_points.length;
             }
-
             updateUI(data);
-
             setTimeout(requestDataFromServer, 250);
         })
         .catch(err => {
             failedAttempts++;
 
             if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-                // const sec = (failedAttempts * 0.2).toFixed(1); // Время отсутствия связи
-                // showModal(`Связь потеряна: ${sec} сек.`);
                 showModal(``);
-
-                // Пищим один раз при достижении порога
                 if (failedAttempts === MAX_FAILED_ATTEMPTS) {
-                    //playAlarmSound();
                 }
             }
             console.error("Connection lost:", err);

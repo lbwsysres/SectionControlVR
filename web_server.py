@@ -182,6 +182,11 @@ def create_app(data_queue, cmd_queue):
         return render_template("map.html", cfg=cfg)
         #return render_template("index.html")
     
+    @app.route("/test")
+    def test_page():
+        cfg = config_manager.load_config()
+        return render_template("test.html", cfg=cfg)
+    
     # @app.route("/settings")
     # def settings():
     #     cfg = config_manager.load_config()
