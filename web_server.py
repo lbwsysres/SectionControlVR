@@ -131,26 +131,33 @@ def create_app(data_queue, cmd_queue):
 
 
     # region  RENDER TAMPLATE
-    @app.route("/")
-    def view_navigation_hub_1():
-        cfg = config_manager.load_config()
-        return render_template("map.html", cfg=cfg)
-        #return render_template("index.html")
+    # @app.route("/")
+    # def view_navigation_hub_1():
+    #     cfg = config_manager.load_config()
+    #     return render_template("map.html", cfg=cfg)
+    #     #return render_template("index.html")
     
-    @app.route("/hub")
-    def view_navigation_hub():
-        return render_template("hub.html")
+    # @app.route("/hub")
+    # def view_navigation_hub():
+    #     return render_template("hub.html")
+    
+    # @app.route("/settings")
+    # def settings():
+    #     cfg = config_manager.load_config()
+    #     widths_str = ",".join(map(str, cfg["SECTION_WIDTHS"]))
+    #     return render_template("settings.html", cfg=cfg, widths=widths_str)
 
-    
+    # =======================================================================
+    # СТАРЫЕ СТРАНИЦИ
+    # =======================================================================
     @app.route("/settings")
-    def settings():
+    def settings_page():
         cfg = config_manager.load_config()
         widths_str = ",".join(map(str, cfg["SECTION_WIDTHS"]))
         return render_template("settings.html", cfg=cfg, widths=widths_str)
-
-
-    @app.route("/map")
-    def index():
+    
+    @app.route("/board")
+    def board_page():
         cfg = config_manager.load_config()
         return render_template("board.html", cfg=cfg)
 
@@ -162,18 +169,35 @@ def create_app(data_queue, cmd_queue):
     @app.route("/vra_control")
     def vra_control_page():
         return render_template("vra_maps.html")
-
-
+    # =======================================================================
+    # НОВЫЕ СТРАНИЦИ
+    # =======================================================================
+    @app.route("/")
+    def hub_page():
+        return render_template("hub.html")
+    
+    @app.route("/map")
+    def map_page():
+        cfg = config_manager.load_config()
+        return render_template("map.html", cfg=cfg)
+        #return render_template("index.html")
+    
+    # @app.route("/settings")
+    # def settings():
+    #     cfg = config_manager.load_config()
+    #     widths_str = ",".join(map(str, cfg["SECTION_WIDTHS"]))
+    #     return render_template("settings.html", cfg=cfg, widths=widths_str)
 
     @app.route("/implement_manager") #МЕНЕДЖЕРА ЗНАРЯДЬ
-    def view_implement_manager():
+    def implement_manager_page():
         # Завантажуємо базовий порожній конфіг, щоб шаблонізатор не вилітав (якщо потрібно)
         return render_template("implement_manager.html")
     
-    
     @app.route("/taskmaps_manager")
-    def view_taskmaps_manager():
+    def taskmaps_manager_page():
         return render_template("taskmaps_manager.html")
+    
+
     # endregion
 
     # region  МЕНЕДЖЕРА ЗНАРЯДЬ (IMPLEMENT MANAGER API)
@@ -627,7 +651,7 @@ def create_app(data_queue, cmd_queue):
     # =======================================================================
     # --- 1. ОТРИМАННЯ СПИСКУ ПОЛІВ З АВТО-ПІДТЯГУВАННЯМ ПАРАМЕТРІВ ---
     # Роут для відкриття сторінки самого Навігаційного Хабу
-    @app.route("/")
+    #@app.route("/")
     # def view_navigation_hub_1():
     #     cfg = config_manager.load_config()
     #     return render_template("index.html", cfg=cfg)
@@ -985,6 +1009,21 @@ def create_app(data_queue, cmd_queue):
             return jsonify({"status": "error", "message": str(e)}), 500
 
     # endregion
+
+    #region РАБОТА С ОТКРЫТЫМ ПОЛЕМ
+
+    @app.route("/reset_area_current_file")
+    def reset_area_current_file():
+        cmd_queue.put({"cmd": "reset_area_current_file"})
+        return jsonify({"status": "ok", "message": "Area cleared"})
+    
+    @app.route("/save_area_current_file_and_back")
+    def save_area_current_file():
+        #cmd_queue.put({"cmd": "save_area_current_file"}) # Замена на полный сброс
+        cmd_queue.put({"cmd": "reset"})
+        return jsonify({"status": "ok", "message": "Area cleared"})
+    #endregion
+
 
     # =======================================================================
 

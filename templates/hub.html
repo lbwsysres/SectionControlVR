@@ -10,19 +10,32 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
     <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            /* Забороняє появу випадкового загального скролу сторінки */
+        }
+
         .hub-layout {
             display: flex;
-            gap: 25px;
-            height: calc(100vh - 150px);
-            margin-bottom: 20px;
+            gap: 15px;
+            height: 100vh;
+            /* Займає рівно 100% висоти екрана */
+            margin-bottom: 0;
+            /* МІНЯЄМО З 20px НА 0, щоб не було зайвого скролу */
+            box-sizing: border-box;
+            /* Враховує внутрішні відступи у висоту */
         }
 
         .sidebar-fields {
-            flex: 0 0 35%;
+            flex: 0 0 30%;
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 15px;
-            padding: 20px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
             gap: 15px;
@@ -122,9 +135,10 @@
         .placeholder-text {
             text-align: center;
             color: #555;
-            font-size: 1.6rem;
+            font-size: 3.0rem;
             margin-top: 150px;
-            font-weight: bold;
+            /* font-weight: bold; */
+            letter-spacing: 0.05em;
         }
 
         /* Велика тач-кнопка, яка імітує селект */
@@ -226,6 +240,108 @@
             background: #1a2a1f;
             color: var(--accent);
         }
+
+        /* Кнопки теперь просто элементы флекс-контейнера */
+        .tool-btn {
+            width: 80px;
+            height: 80px;
+            font-size: 22px;
+            font-weight: bold;
+            border-radius: 12px;
+            background: #1a1a1a;
+            border: 2px solid #444;
+            color: white;
+            cursor: pointer;
+            flex-shrink: 0;
+            /* Чтобы кнопки не сжимались */
+        }
+
+        .tool-btn:active {
+            background: #333;
+            transform: scale(0.95);
+        }
+
+        .toolbar-middle_1 {
+            display: flex;
+            flex-direction: column;
+            /* Розподіляє кнопки: перша вгорі, остання внизу, інші рівномірно між ними */
+            justify-content: space-between;
+            align-items: center;
+            /* Центрує кнопки по горизонталі всередині панелі */
+
+            height: 100%;
+            /* Панель займає всю висоту контейнера hub-layout */
+            width: max-content;
+            /* Ширина строго залежить від найбільшої кнопки всередині */
+            padding: 20px 50px;
+            /* Невеликі відступи зверху і знизу, щоб кнопки не липли до країв */
+        }
+
+        /* Стиль для кнопок (за бажанням), щоб вони мали гарний вигляд */
+        .toolbar-middle button {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .toolbar-middle_11 {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            height: 100%;
+            width: max-content;
+            padding: 30px 0;
+        }
+
+        .toolbar-middle {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+
+            height: 100%;
+            width: max-content;
+
+            /* ЗМІНЕНО: 30px зверху і знизу, 0px зліва і справа */
+            padding: 30px 0;
+
+            /* Гарантує, що padding не роздує загальну висоту додатка */
+            box-sizing: border-box;
+        }
+
+        /* Стиль для великих круглих кнопок */
+        .toolbar-middle .tool-btn {
+            width: 80px;
+            /* Збільшений розмір для легкого тапання */
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-card, #ffffff);
+            border: 2px solid var(--border, #ccc);
+            border-radius: 15%;
+            /* Робить кнопки ідеально круглими */
+            cursor: pointer;
+            transition: all 0.2s ease;
+            padding: 0;
+        }
+
+        /* Ефект підсвічування кнопок при наведенні або тапі */
+        .toolbar-middle .tool-btn:hover {
+            transform: scale(1.05);
+            /* Легке збільшення при наведенні */
+            background: #3c3f42;
+        }
+
+        .toolbar-middle .tool-btn:active {
+            transform: scale(0.95);
+            /* Ефект натискання */
+        }
     </style>
 </head>
 
@@ -235,14 +351,74 @@
 
         <!-- ЛЕВА ПАНЕЛЬ: СПИСОК ЗБЕРЕЖЕНИХ ПОЛІВ НА eMMC -->
         <div class="sidebar-fields">
-            <h2 style="margin:0">Диспетчер полів</h2>
+            <h2 style="margin:0; display: flex; align-items: center; gap: 32px;">
+                <button class="tool-btn" onclick="location.href='/settings'"
+                    style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; padding: 0;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                        </path>
+                    </svg>
+                </button>
+                <span>Диспетчер полів</span>
+            </h2>
+
             <div class="fields-scroller" id="fields-list-container">
                 <!-- Сюди JS нарендерить плитки полів -->
             </div>
             <button type="button" onclick="handleCreateFieldClick()"
-                style="width:100%; height: 75px; background:transparent; color:var(--accent); border:2px dashed var(--accent); border-radius:12px; font-weight:bold; font-size:1.3rem; cursor:pointer;">
-                ➕ СТВОРТИ НОВЕ ПОЛЕ
+                style="display: block; width: 60%; height: 75px; margin: 0 auto; background: transparent; color: var(--accent); border: 2px dashed var(--accent); border-radius: 12px; font-weight: bold; font-size: 1.3rem; cursor: pointer;">
+                СТВОРТИ НОВЕ
             </button>
+        </div>
+
+        <!-- НОВА ЦЕНТРАЛЬНА ПАНЕЛЬ (Toolbar) -->
+        <div class="toolbar-middle">
+            <!-- Кнопка ЗБЕРЕГТИ -->
+            <button id="hub-save-nav-btn" style="opacity: 0.3; pointer-events: none;" class="tool-btn btn-save"
+                onclick="handleStartNavigation(false)" title="ЗБЕРЕГТИ">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                    <polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+            </button>
+            <!-- Кнопка ВИДАЛИТИ -->
+            <button id="hub-delete-nav-btn" class="tool-btn" style="opacity: 0.3; pointer-events: none;"
+                onclick="resetAll()" title="ВИДАЛИТИ">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+            </button>
+            <!-- Кнопка В РОБОТУ (Трактор) -->
+            <button id="hub-start-nav-btn" class="tool-btn" style="opacity: 0.3; pointer-events: none;"
+                onclick="handleStartNavigation(true)" title="В РОБОТУ">
+                <svg width="64" height="64" viewBox="0 0 512 512" fill="#007bff" stroke="#007bff" stroke-width="2">
+                    <path
+                        d="M502 376c7-3 11-11 9-19-1-8-8-13-17-13 5-6 5-14 0-21v-40c0-6-1-12-2-18h-57c-4 0-8-4-8-8s4-8 8-8h53c-14-35-48-60-88-60h-76v-68c0-4-4-8-8-8s-9 4-9 8v60l-39-28 12-19c3-4 2-9-2-12-4-2-9-1-12 3l-34 51c-3 4-2 9 2 12 2 1 3 1 5 1 3 0 5-1 7-4l12-18 49 35v81h32c11 0 19 8 19 19v22c-5 6-5 15 0 21h0c-8 0-15 5-17 13-1 4 0 7 1 10h-70v-25c0-67-42-124-102-145L98 68c-5-8-12-13-21-16-9-2-18-1-26 4C35 65 29 86 39 102l51 89c-25 5-49 16-69 33-4 3-4 8-1 12 3 4 8 4 12 1c24-20 54-31 85-32 2 0 4 0 6 0 73 15 133 75 133 149v25h-24c-1-3-4-6-8-8 8-2 14-9 14-17 0-8-6-15-14-16 7-4 11-12 8-20-2-8-10-13-18-11 6-6 7-15 2-22s-14-9-21-5c4-8 2-16-5-21s-16-5-22 2c2-9-3-16-11-19s-17 1-20 9l0-1c-1-8-8-14-17-14s-15 6-16 14c-4-7-12-11-20-8s-13 10-11 18c-6-6-15-7-22-2s-9 14-5 21c-7-4-16-2-21 5s-4 16 2 22c-8-2-16 3-19 11s1 17 9 20c-8 3-14 10-14 19 0 8 6 15 14 16-7 4-11 12-8 20 2 8 10 13 18 11-6 6-7 15-2 22s14 9 21 5c-4 8-2 16 5 21s16 5 22-2c-2 9 3 16 11 19 8 2 17-1 20-9 1 9 8 14 17 14s15-6 16-14c4 7 12 11 20 8s13-10 11-18c6 6 15 7 22 2s9-14 5-21c7 4 16 2 21-5s4-16-2-22c6 1 12-1 16-6h113c-1 3-2 7-1 10 2 8 9 14 17 13-5 6-5 15 0 21 5 7 14 9 21 5-2 8 2 15 9 19 7 4 16 2 21-5 2 8 9 13 17 13 8 0 15-5 17-13 5 6 14 8 21 4 7-3 11-11 9-19 7 4 16 2 21-5 5-6 5-15 0-21 8 0 15-5 17-13 2-8-2-16-10-19zm-383 34c-37 0-68-31-68-68s31-68 68-68 68 31 68 68-31 68-68 68zm375-19h0c-7 0-13 4-16 10-2 6-2 13 2 17-6-3-13-2-18 2-5 4-7 11-6 17-4-5-11-7-17-6-7 1-12 6-13 13-2-7-7-12-13-13-1 0-3 0-4 0-5 0-10 2-14 7 2-7-1-13-6-17s-12-5-19-2c5-5 5-12 3-18-3-6-9-10-16-9 6-3 10-9 10-16s-4-12-10-15c7 0 13-3 16-10 2-6 2-13-2-17 6 3 13 2 18-2 3-2 5-5 6-8s1-6 0-9c1 1 3 2 4 3 4 3 9 4 13 3 2 0 4-1 6-3 3-2 6-6 7-10l0 0c1 6 6 11 13 13 6 1 13-1 17-6-1 6 1 13 6 17 5 4 12 5 18 2-4 5-5 12-2 18 3 6 9 10 16 9-6 3-10 9-10 16s4 12 10 15z" />
+                    <circle cx="427" cy="376" r="9" />
+                    <path
+                        d="M119 291c-28 0-51 23-51 51s23 51 51 51 51-23 51-51-23-51-51-51zm0 68c-9 0-17-7-17-17s8-17 17-17 17 7 17 17-8 17-17 17z" />
+                    <path
+                        d="M427 334c-24 0-43 19-43 43s19 43 43 43 43-19 43-43-19-43-43-43zm0 68c-14 0-26-11-26-26s12-26 26-26 26 11 26 26-11 26-26 26z" />
+                </svg>
+            </button>
+
+            <!-- <button class="tool-btn" style="opacity: 0.1; pointer-events: none;" onclick="startWork()" title="В роботу">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#3498db" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 17h10l2-4h5v4h1"></path>
+                    <path d="M13 13V9a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4"></path>
+                    <line x1="17" y1="8" x2="17" y2="5"></line>
+                    <circle cx="7" cy="17" r="3"></circle>
+                    <circle cx="17" cy="18" r="2"></circle>
+                </svg>
+            </button> -->
         </div>
 
         <!-- ПРАВА ПАНЕЛЬ: ІНСПЕКТОР ТА НАЛАШТУВАННЯ ВИЇЗДУ -->
@@ -250,7 +426,7 @@
 
             <!-- Заглушка, поки поле не вибрано -->
             <div id="hub-placeholder" class="placeholder-text">
-                ◀ Виберіть робоче поле зі списку зліва<br>або створіть нову загінку
+                ВИБЕРІТЬ РОБОЧЕ ПОЛЕ<br><br>АБО СТВОРІТЬ
             </div>
 
             <!-- Робочий екран конфігурації завдання (по замовчуванню прихований) -->
@@ -264,28 +440,17 @@
                         <span id="HUB_FIELD_AREA" style="color:#888; font-size:1.1rem; font-weight:bold;">Площа: 0.00
                             га</span>
                     </div>
-                    <!--h2>Обрана загінка (Поле)</h2>
-                    <h3 id="HUB_FIELD_NAME" style="color:var(--accent); font-size:1.7rem; margin:10px 0 5px 0;">-</h3>
-                    <span id="HUB_FIELD_AREA" style="color:#888; font-size:1.1rem; font-weight:bold;">Оброблена площа:
-                        0.00 га</span-->
-                    <!--/div -->
-
-                    <!-- <div class="card" style="margin-bottom: 20px;"> -->
-                    <!--h2>Статус навігації та орієнтирів</h2-->
-                    <div class="touch-row" style="margin-top:10px;">
+                    <div class="touch-row" style="margin-top:10px; display: none;">
                         <span class="label-main">Траєкторія розвороту (Лінія А-В):</span>
                         <span id="HUB_AB_STATUS" class="status-badge">-</span>
                     </div>
-                    <!-- </div> -->
-                    <div class="card-divider"></div>
+                    <!--div class="card-divider"></div-->
                     <!-- 1. НОВИЙ ТАЧ-КОМБОБОКС ОБПРИСКУВАЧА -->
-                    <!-- <div class="card" style="margin-bottom: 20px;"> -->
-
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                         <h2>Застосувати агрегат</h2>
                         <button type="button" onclick="window.location.href='/implement_manager'"
-                            style="background:transparent;  /*height: 75px;*/ border:1px solid #444; color:#aaa; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;">
-                            ⚙️ МЕНЕДЖЕР АГРЕГАТИ
+                            style="background:transparent;  height: 65px; border:1px solid #444; color:#aaa; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                            МЕНЕДЖЕР АГРЕГАТИ
                         </button>
                     </div>
                     <!-- Схований інпут для зберігання ID, як у звичайній формі -->
@@ -295,9 +460,6 @@
                         <span id="combo-implement-text">Оберіть обприскувач...</span>
                     </button>
 
-
-
-
                     <!-- </div> -->
                     <div class="card-divider"></div>
                     <!-- 2. НОВИЙ ТАЧ-КОМБОБОКС КАРТ VRA -->
@@ -305,8 +467,8 @@
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                         <h2>Карта диференційованого виливу</h2>
                         <button type="button" onclick="window.location.href='/taskmaps_manager'"
-                            style="background:transparent; border:1px solid #444; color:#aaa; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;">
-                            👁️ МЕНЕДЖЕР КАРТ VRA
+                            style="background:transparent;  height: 65px; border:1px solid #444; color:#aaa; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                            МЕНЕДЖЕР КАРТ VRA
                         </button>
                     </div>
                     <input type="hidden" id="hub-taskmap-select" value="">
@@ -343,27 +505,29 @@
     </div>
 
     <!-- НИЖНЯ ДОК-ПАНЕЛЬ ХАБУ З ГОЛОВНОЮ КНОПКОЮ ДІЇ -->
-    <div class="bottom-dock">
+    <div class="bottom-dock" style="display:none;">
         <button type="button" class="btn-dock-action" onclick="window.location.href='/settings'"
             style="background: #2c2c2c; color: #fff; border: 2px solid #444; width: 250px;">
             ⚙️ Налаштування
         </button>
-        <button type="button" id="hub-save-nav-btn" class="btn-dock-action" onclick="handleStartNavigation(false)"
+        <button type="button" id="hub-save-nav-btn_1" class="btn-dock-action" onclick="handleStartNavigation(false)"
             style="background: #fef102;; color: #000; border: none; width: 40%; font-size:1.5rem; font-weight:900; opacity: 0.3; pointer-events: none; margin-left:auto;">
             ▶▶ Зберігти
         </button>
-        <button type="button" id="hub-start-nav-btn" class="btn-dock-action" onclick="handleStartNavigation(true)"
+        <button type="button" id="hub-start-nav-btn_1" class="btn-dock-action" onclick="handleStartNavigation(true)"
             style="background: var(--accent); color: #000; border: none; width: 40%; font-size:1.5rem; font-weight:900; opacity: 0.3; pointer-events: none; margin-left:auto;">
             ▶▶ Розпочати
         </button>
     </div>
+
+
     <div id="comboModalOverlay" class="combo-modal-overlay" onclick="closeComboModal(event)">
         <div class="combo-modal-card" onclick="event.stopPropagation()">
             <div class="combo-modal-header">
                 <h2 id="combo-modal-title" style="margin:0; font-size:1.5rem;">Вибір параметру</h2>
                 <button type="button" onclick="document.getElementById('comboModalOverlay').classList.remove('show')"
                     style="background:#333; color:white; border:none; padding:12px 25px; font-weight:bold; font-size:1.1rem; border-radius:8px; cursor:pointer;">
-                    ❌ ЗАКРИТИ
+                    ЗАКРИТИ
                 </button>
             </div>
             <div class="combo-modal-body" id="combo-modal-items-container">
@@ -493,7 +657,7 @@
                     triggerImplText.innerText = `${implementsCache[0].name} (${secCount} секц.)`;
                 } else {
                     hiddenImpl.value = "";
-                    triggerImplText.innerText = "🚨 Створіть агрегат в менеджері!";
+                    triggerImplText.innerText = "Створіть агрегат в менеджері!";
                 }
 
 
@@ -503,15 +667,15 @@
 
                 if (foundField.active_taskmap_file && taskmapsCache.some(x => x.filename === foundField.active_taskmap_file)) {
                     hiddenMap.value = foundField.active_taskmap_file;
-                    triggerMapText.innerText = `🔌 Карта: ${foundField.active_taskmap_file}`;
+                    triggerMapText.innerText = `Карта: ${foundField.active_taskmap_file}`;
                 } else {
                     hiddenMap.value = "";
-                    triggerMapText.innerText = "❌ Без карти завдань (Ручний вилив)";
+                    triggerMapText.innerText = "Без карти завдань (Ручний вилив)";
                 }
 
                 toggleRateSpinnerState();
             });
-
+            //#region  HIDE SHOW 
             const startBtn = document.getElementById('hub-start-nav-btn');
             startBtn.style.opacity = '1.0';
             startBtn.style.pointerEvents = 'auto';
@@ -519,6 +683,10 @@
             const saveBtn = document.getElementById('hub-save-nav-btn');
             saveBtn.style.opacity = '1.0';
             saveBtn.style.pointerEvents = 'auto';
+
+            const deleteBtn = document.getElementById('hub-delete-nav-btn');
+            deleteBtn.style.opacity = '1.0';
+            deleteBtn.style.pointerEvents = 'auto';
 
         }
 
@@ -611,7 +779,7 @@
             const el = document.getElementById('HUB_TARGET_RATE');
             let current = parseInt(el.innerText) + val;
             if (current < 10) current = 10;
-            if (current > 60000) current = 60000;
+            if (current > 100000) current = 100000;
             el.innerText = current;
         }
 
@@ -667,7 +835,7 @@
             const targetRate = parseInt(document.getElementById('HUB_TARGET_RATE').innerText);
 
             if (!implId) {
-                askUser('🚨 Помилка: Не вибрано знаряддя! Будь ласка, створить або оберіть штангу.', 'danger', 'ОК');
+                askUser('Помилка: Не вибрано знаряддя!<br>Будь ласка, створить або оберіть штангу.', 'danger', 'ОК');
                 return;
             }
 
@@ -677,11 +845,11 @@
             let actionType = '';
 
             if (isRunMode) {
-                promptText = '💡 Запустити систему в роботу?<br><small>Математика підготує геометрію штанги та завантажить координати.</small>';
+                promptText = 'Запустити систему в роботу?<br><small>Математика підготує геометрію штанги та завантажить координати.</small>';
                 btnText = 'ЗАПУСТИТИ';
                 actionType = 'run';
             } else {
-                promptText = '💾 Зберегти та оновити налаштування сесії?<br><small>Параметри штанги, норми та карти будуть записані у файл поля.</small>';
+                promptText = 'Зберегти та оновити налаштування сесії?<br><small>Параметри штанги, норми та карти будуть записані у файл поля.</small>';
                 btnText = 'ЗБЕРЕГТИ';
                 actionType = 'save';
             }
@@ -706,7 +874,7 @@
                                 window.location.href = '/map';
                             } else {
                                 // Якщо це просто збереження налаштувань — показуємо успіх і не перевантажуємо сторінку
-                                askUser('✅ Налаштування поля успішно збережено!', 'success', 'ОК');
+                                askUser('Налаштування поля успішно збережено!', 'success', 'ОК');
                                 //askUser(data.message, 'success', 'ОК');
                             }
                         } else {
@@ -727,11 +895,11 @@
             const targetRate = parseInt(document.getElementById('HUB_TARGET_RATE').innerText);
 
             if (!implId) {
-                askUser('🚨 Помилка: Не вибрано знаряддя! Будь ласка, створіть або оберіть штангу.', 'danger', 'ОК');
+                askUser('Помилка: Не вибрано знаряддя!<br>Будь ласка, створіть або оберіть штангу.', 'danger', 'ОК');
                 return;
             }
 
-            askUser('💡 Запустити систему в роботу?<br><small>Математика підготує геометрію штанги та завантажить координати.</small>', 'success', 'ЗАПУСТИТИ', () => {
+            askUser('Запустити систему в роботу?<br><small>Математика підготує геометрію штанги та завантажить координати.</small>', 'success', 'ЗАПУСТИТИ', () => {
                 fetch('/api/hub_session/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

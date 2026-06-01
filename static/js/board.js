@@ -427,7 +427,95 @@ function updateFieldMap(newPoints) {
             if (idx === 0) return;
             const prev = pointsToProcess[idx - 1];
 
-            const dist = Math.sqrt(Math.pow((pt[0] - prev[0]) * 111320, 2) + Math.pow((pt[1] - prev[1]) * 111320, 2));
+            // ЗАХИСТ: Перевіряємо новий формат. Оскільки першим елементом йде текст ("0_0"),
+            // довжина масиву точки тепер повинна бути мінімум 5 елементів.
+            if (!pt || pt.length < 5 || !prev || prev.length < 5) return;
+
+            // =================================================================
+            // РОЗПАКОВКА НОВОГО ФОРМАТУ З УРАХУВАННЯМ ЗСУВУ ІНДЕКСІВ НА +1
+            // pt[0] — це тепер текстовий ключ чанка (пропускаємо його тут)
+            // =================================================================
+            const ptLat   = pt[1]; // Раньше было pt[0]
+            const ptLon   = pt[2]; // Раньше было pt[1]
+            const ptHdg   = pt[3]; // Раньше было pt[2]
+            const ptState = pt[4]; // Раньше было pt[3]
+            const ptWidth = pt[5] || null; // Раньше было pt[4]
+
+            const prevLat   = prev[1];
+            const prevLon   = prev[2];
+            const prevHdg   = prev[3];
+            const prevWidths = prev[5] || null;
+
+            // Розрахунок дистанції за новими індексами
+            const dist = Math.sqrt(
+                Math.pow((ptLat - prevLat) * 111320, 2) +
+                Math.pow((ptLon - prevLon) * 111320, 2)
+            );
+            if (dist > 3) return;
+
+            const currentStates = ptState;
+            const currentWidths = ptWidth;
+
+            currentStates.forEach((isActive, i) => {
+                if (!isActive && cfg.DRAW_OFF_SECTIONS === false) return;
+
+                fCtx.fillStyle = isActive ? "rgba(46, 204, 113, 0.7)" : "rgba(231, 76, 60, 0.5)";
+
+                // ПЕРЕДАЄМО ПРАВИЛЬНІ ЗМІННІ В РОЗРАХУНОК КООРДИНАТ КОЖНОЇ СЕКЦІЇ
+                const cL = getGlobalCoords(ptLat, ptLon, ptHdg, i, false, currentWidths);
+                const cR = getGlobalCoords(ptLat, ptLon, ptHdg, i, true, currentWidths);
+                const pL = getGlobalCoords(prevLat, prevLon, prevHdg, i, false, prevWidths);
+                const pR = getGlobalCoords(prevLat, prevLon, prevHdg, i, true, prevWidths);
+
+                fCtx.beginPath();
+                fCtx.moveTo(Math.round(cL.x), Math.round(cL.y));
+                fCtx.lineTo(Math.round(cR.x), Math.round(cR.y));
+                fCtx.lineTo(Math.round(pR.x), Math.round(pR.y));
+                fCtx.lineTo(Math.round(pL.x), Math.round(pL.y));
+                fCtx.fill();
+            });
+        });
+
+        lastPointFromPreviousFetch = chunk[chunk.length - 1];
+        const end = performance.now();
+        _timeRead = end - start;
+
+        setTimeout(processNextChunk, 1);
+    }
+
+    processNextChunk();
+}
+
+function updateFieldMap_old(newPoints) {
+    if (!newPoints || newPoints.length === 0) return;
+
+    // Додаємо нові точки в загальну чергу обробки
+    pointsQueue.push(...newPoints);
+
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+
+    const CHUNK_SIZE = 500;
+
+    function processNextChunk() {
+        if (pointsQueue.length === 0) {
+            isProcessingQueue = false;
+            return;
+        }
+
+        const chunk = pointsQueue.splice(0, CHUNK_SIZE);
+        const pointsToProcess = lastPointFromPreviousFetch
+            ? [lastPointFromPreviousFetch, ...chunk]
+            : chunk;
+
+        const start = performance.now();
+
+        pointsToProcess.forEach((pt, idx) => {
+            if (idx === 0) return;
+            const prev = pointsToProcess[idx - 1];
+
+            const dist = Math.sqrt(Math.pow((pt[0] - prev[0]) * 111320, 2) +
+                Math.pow((pt[1] - prev[1]) * 111320, 2));
             if (dist > 3) return;
 
             // РЕДУКЦІЯ СТРУКТУРИ:
@@ -959,7 +1047,7 @@ function draw(data) {
     // Віднімаємо від центру екрана (cx, cy) зміщення трактора
     //const startX = (cx - offsetX) % gridStep;
     //const startY = (cy - offsetY) % gridStep;
-    
+
     // 🟢 ФІКС МАТЕМАТИКИ ЗНАКІВ:
     // Замість мінуса ставимо ПЛЮС для offsetY та мінус для offsetX. 
     // Це повністю синхронізує рух сітки з напрямком руху трактора!

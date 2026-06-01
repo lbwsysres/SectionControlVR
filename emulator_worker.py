@@ -15,6 +15,12 @@ class EmulatorWorker(threading.Thread):
         while self.running:
             # Працюємо ТІЛЬКИ якщо емулятор увімкнено на фронтенді та є швидкість
             if self.state.emu_enabled and self.state.emu_speed > 0:
+                import math
+                current_time = time.time()
+                    
+                # Кожні 30 секунд трактор буде закладати плавний розворот,
+                # імітуючи рух по великому полю та перетин кордонів чанків
+                self.state.emu_angle = 15.0 * math.sin(current_time / 10.0)
                 
                 # 1. Читаємо кут коліс з нашого нового квадратного пада (-30...+30)
                 wheel_angle = self.state.emu_hdg
@@ -24,7 +30,7 @@ class EmulatorWorker(threading.Thread):
                     turn_rate = 0.0
                 else:
                     # Чим вища швидкість і більший кут — тим швидше міняється курс
-                    turn_rate = (wheel_angle * (self.state.emu_speed / 10.0)) * 0.8 * self.dt
+                    turn_rate = (wheel_angle * (self.state.emu_speed / 20.0)) * 0.8 * self.dt
                 
                 # 2. Оновлюємо курс трактора (Compass Heading)
                 if turn_rate != 0:

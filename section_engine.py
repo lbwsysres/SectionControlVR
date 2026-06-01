@@ -28,6 +28,35 @@ class SectionControl:
         self.buffer_to_disk = []  # Сюди збираємо полігони
         self.track_buffer_to_disk = []  # Сюди збираємо точки треку [lat, lon, hdg]
 
+        # ==========================================
+        # ІНІЦІАЛІЗАЦІЯ СИСТЕМИ ЧАНКІВ
+        # ==========================================
+        self.CHUNK_SIZE_METERS = 400.0  # 400 метрів (при zoom=10 це 4000 пікселів текстури PixiJS)
+        self.base_field_x = None        # Базова координата X найпершої точки поля (для відносного відліку)
+        self.base_field_y = None        # Базова координата Y найпершої точки поля
+
+    def get_chunk_key(self, tx, ty):
+        """
+        Рахує унікальний локальний ключ чанка поля.
+        Якщо базової точки ще немає — поточна позиція фіксується як старт поля (0_0).
+        """
+        if self.base_field_x is None or self.base_field_y is None:
+            self.base_field_x = tx
+            self.base_field_y = ty
+            print(f"[CHUNKS CORE] Базу локальних чанків встановлено: X={tx:.1f}м, Y={ty:.1f}м")
+            
+        # Рахуємо чисті відносні метри всередині нашого поля
+        local_x = tx - self.base_field_x
+        local_y = ty - self.base_field_y
+        
+        # Цілочисельне ділення дає індекс квадрата (може бути і від'ємним, це нормально)
+        chunk_x = int(local_x // self.CHUNK_SIZE_METERS)
+        chunk_y = int(local_y // self.CHUNK_SIZE_METERS)
+        
+        return f"{chunk_x}_{chunk_y}"
+
+
+
     def get_section_point(self, tx, ty, th_rad, offset):
         """Розрахунок координат конкретної форсунки з урахуванням винесення штанги назад."""
         offset_back = self.cfg.get("OFFSET_BACK", 0.0)
@@ -79,6 +108,9 @@ class SectionControl:
         self.last_x = self.last_y = None
         self.last_p1_list = []
         self.last_p2_list = []
+        self.base_field_x = None
+        self.base_field_y = None
+
         print("[SectionControl] Карта покриття та ОЗУ-буфери очищені.")
 
     # =======================================================================
@@ -136,7 +168,13 @@ class SectionControl:
         self.prev_percents = filtered
         return [int(round(x)) for x in filtered]
 
-    def process(self, lat, lon, heading_deg, speed):
+    #def process(self, lat, lon, heading_deg, speed):
+    # Було: def process(self, lat, lon, heading_deg, speed_kmh, master_on):
+    # Стане:
+    #def process(self, lat, lon, heading_deg, speed, master_on, chunk_key="0_0"):
+    def process(self, lat, lon, heading_deg, speed, chunk_key="0_0"):
+
+        # LBW - переделать вызов master_on widths modes - из main
         """Головна логіка секційного контролю"""
         master_on = self.cfg.get("MASTER_SW", False)
         widths = self.cfg.get("SECTION_WIDTHS", [])
@@ -283,10 +321,20 @@ class SectionControl:
             l_offset += w
 
         # 5. Запис історії для відмальовки сліду на Canvas (в ОЗУ)
+        # self.path_history.append(
+        #     [lat, lon, heading_deg, list(res_states), list(widths)]
+        # )
+
+        # ==============================================================================
+        # МОДЕРНІЗОВАНИЙ ЗАПИС ІСТОРІЇ З КЛЮЧЕМ ЧАНКА
+        # ==============================================================================
+        # 5. Запис історії для відмальовки сліду на Canvas (в ОЗУ)
         self.path_history.append(
-            [lat, lon, heading_deg, list(res_states), list(widths)]
+            [chunk_key, lat, lon, heading_deg, list(res_states), list(widths)]
         )
-        if len(self.path_history) > 10000:
+
+        # LBW 
+        if len(self.path_history) > 100000:
             self.path_history.pop(0)
         # --- ЗБЕРІГАЄМО ПОВНУ 5-ЕЛЕМЕНТНУ СТРУКТУРУ ДЛЯ ВЕБ-CANVAS ---
         # Перетворюємо масив станів [True, False...] у рядок "1-0-1..."
@@ -295,7 +343,7 @@ class SectionControl:
         widths_str = "-".join([str(w) for w in widths])
 
         # Кладемо в ОЗУ-буфер для залпового скидання на диск
-        self.track_buffer_to_disk.append([lat, lon, heading_deg, states_str, widths_str])
+        self.track_buffer_to_disk.append([chunk_key,lat, lon, heading_deg, states_str, widths_str])
 
         # Додаємо поточну точку треку в текстовий ОЗУ-буфер
         #self.track_buffer_to_disk.append([lat, lon, heading_deg])

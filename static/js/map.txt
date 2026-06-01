@@ -1,0 +1,520 @@
+function updateFieldMapPixi_6(newPoints) {
+    if (!newPoints || newPoints.length === 0) return;
+
+    // Добавляем новые точки в очередь
+    pointsQueue.push(...newPoints);
+
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+
+    const CHUNK_SIZE = 1000;
+
+    function processNextChunk() {
+        if (pointsQueue.length === 0) {
+            isProcessingQueue = false;
+            lastQueueProgressTime = performance.now(); // Сторож спокоен
+            return;
+        }
+
+        const chunk = pointsQueue.splice(0, CHUNK_SIZE);
+
+        chunk.forEach((pt) => {
+            if (!pt || pt.length < 5) return;
+
+            // Корректно распаковываем массив с учетом ключа чанка от сервера
+            const isNewFormat = typeof pt[0] === 'string';
+            const lat = isNewFormat ? pt[1] : pt[0];
+            const lon = isNewFormat ? pt[2] : pt[1];
+            const hdg = isNewFormat ? pt[3] : pt[2];
+            const states = isNewFormat ? pt[4] : pt[3];
+            const customWidths = (isNewFormat ? pt[5] : pt[4]) || null;
+
+            // 1. ОПРЕДЕЛЯЕМ ЧАНК НА ОСНОВЕ ТЕКУЩЕЙ ПОЗИЦИИ КАРТЫ (targetX, targetY)
+            // Мы берем твои реальные пиксели поля, к которым плавно едет трактор.
+            // Делим их на 4000 (размер холста RenderTexture).
+            const cx = Math.floor(targetX / 4000);
+            const cy = Math.floor(targetY / 4000);
+            const chunkKey = `${cx}_${cy}`;
+
+            // 2. МЕНЕДЖЕР ЧАНКОВ: Если такого квадрата 4000х4000 еще нет — создаем его
+            if (!mapChunks[chunkKey]) {
+                console.log(`[FRONTEND CHUNKS] Создаем холст RenderTexture для локального чанка: ${chunkKey}`);
+
+                mapChunks[chunkKey] = PIXI.RenderTexture.create({ width: 4000, height: 4000 });
+                const chunkSprite = new PIXI.Sprite(mapChunks[chunkKey]);
+
+                // Размещаем спрайт чанка ровно по пиксельной сетке поля
+                chunkSprite.x = cx * 4000;
+                chunkSprite.y = cy * 4000;
+
+                // Добавляем чанк в world, чтобы он двигался и крутился вместе со всем полем!
+                world.addChild(chunkSprite);
+            }
+
+            // 3. Очищаем графику перед отрисовкой сегмента штанги
+            tempTrackGraphics.clear();
+
+            // 4. Твоя родная тригонометрия штанги малює полигон в tempTrackGraphics
+            appendTrackSegmentPixi(lat, lon, hdg, states, customWidths);
+
+            // 5. ЗАПЕКАЕМ СЕГМЕНТ В ТЕКСТУРУ С УЧЕТОМ СДВИГА МАТРИЦЫ CHANKA
+            if (mapChunks[chunkKey]) {
+                const renderMatrix = new PIXI.Matrix();
+                // Сдвигаем матрицу рисования в локальные координаты текущей текстуры чанка
+                renderMatrix.translate(-(cx * 4000), -(cy * 4000));
+
+                app.renderer.render(tempTrackGraphics, {
+                    renderTexture: mapChunks[chunkKey],
+                    clear: false,
+                    matrix: renderMatrix
+                });
+            }
+        });
+
+        // Полностью очищаем векторную память GPU после прохода пачки
+        tempTrackGraphics.clear();
+
+        // Обновляем счетчик полигонов на UI
+        const polyElem = document.getElementById('total_point');
+        if (polyElem) {
+            polyElem.innerText = "Poligon count: " + totalPolygonsRendered;
+        }
+
+        // Переходим к следующей пачке
+        setTimeout(processNextChunk, 1);
+    }
+
+    processNextChunk();
+}
+
+function updateFieldMapPixi_5(newPoints) {
+    if (!newPoints || newPoints.length === 0) return;
+
+    // Добавляем новые точки в очередь
+    pointsQueue.push(...newPoints);
+
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+
+    const CHUNK_SIZE = 1000;
+
+    function processNextChunk() {
+        if (pointsQueue.length === 0) {
+            isProcessingQueue = false;
+            lastQueueProgressTime = performance.now(); // Вочдог спокоен
+            return;
+        }
+
+        const chunk = pointsQueue.splice(0, CHUNK_SIZE);
+
+        chunk.forEach((pt) => {
+            // Читаем данные (игнорируем ключ чанка от сервера, так как посчитаем его точнее в пикселях)
+            if (!pt || pt.length < 5) return;
+
+            // Если сервер прислал новый формат, то под индексом 0 идет текст чанка, сдвигаем индексы:
+            const isNewFormat = typeof pt[0] === 'string';
+            const lat = isNewFormat ? pt[1] : pt[0];
+            const lon = isNewFormat ? pt[2] : pt[1];
+            const hdg = isNewFormat ? pt[3] : pt[2];
+            const states = isNewFormat ? pt[4] : pt[3];
+            const customWidths = (isNewFormat ? pt[5] : pt[4]) || null;
+
+            // 1. Очищаем графику перед просчетом точки
+            tempTrackGraphics.clear();
+
+            // 2. Твоя родная тригонометрия штанги малює полигон прямо в tempTrackGraphics.
+            // Она использует внутренние формулы перевода Lat/Lon в локальные пиксели поля.
+            appendTrackSegmentPixi(lat, lon, hdg, states, customWidths);
+
+            // 3. Узнаем, куда именно твоя математика нарисовала этот полигон.
+            // Функция getBounds() возвращает точные локальные пиксели геометрии на карте!
+            const bounds = tempTrackGraphics.getBounds();
+
+            // Если точка валидная, определяем её чанк на основе холста 4000х4000 пикселей
+            if (bounds && !isNaN(bounds.x) && !isNaN(bounds.y)) {
+                const cx = Math.floor(bounds.x / 4000);
+                const cy = Math.floor(bounds.y / 4000);
+                const chunkKey = `${cx}_${cy}`;
+
+                // 4. МЕНЕДЖЕР ЧАНКОВ: Если такого квадрата 4000х4000 еще нет — создаем его
+                if (!mapChunks[chunkKey]) {
+                    console.log(`[FRONTEND CHUNKS] Автономно создаем RenderTexture для пиксельного чанка: ${chunkKey}`);
+
+                    mapChunks[chunkKey] = PIXI.RenderTexture.create({ width: 4000, height: 4000 });
+                    const chunkSprite = new PIXI.Sprite(mapChunks[chunkKey]);
+
+                    // Размещаем спрайт чанка в пространстве карты (ровно по сетке 4000 пикселей)
+                    chunkSprite.x = cx * 4000;
+                    chunkSprite.y = cy * 4000;
+
+                    world.addChild(chunkSprite);
+                }
+
+                // 5. ЗАПЕКАЕМ СЕГМЕНТ С УЧЕТОМ ЗСУВУ ДЛЯ ЦЕЙ ТЕКСТУРИ
+                if (mapChunks[chunkKey]) {
+                    const renderMatrix = new PIXI.Matrix();
+                    // Сдвигаем матрицу рисования в локальные координаты текстуры (от 0 до 4000)
+                    renderMatrix.translate(-(cx * 4000), -(cy * 4000));
+
+                    app.renderer.render(tempTrackGraphics, {
+                        renderTexture: mapChunks[chunkKey],
+                        clear: false,
+                        matrix: renderMatrix
+                    });
+                }
+            }
+        });
+
+        // Полностью очищаем векторную графику после прохода пачки
+        tempTrackGraphics.clear();
+
+        // Обновляем счетчик полигонов
+        const polyElem = document.getElementById('total_point');
+        if (polyElem) {
+            polyElem.innerText = "Poligon count: " + totalPolygonsRendered;
+        }
+
+        // Переходим к следующей пачке
+        setTimeout(processNextChunk, 1);
+    }
+
+    processNextChunk();
+}
+
+function updateFieldMapPixi_4(newPoints) {
+    if (!newPoints || newPoints.length === 0) return;
+
+    // Додаємо нові точки в чергу
+    pointsQueue.push(...newPoints);
+
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+
+    const CHUNK_SIZE = 1000;
+
+    function processNextChunk() {
+        if (pointsQueue.length === 0) {
+            isProcessingQueue = false;
+            lastQueueProgressTime = performance.now(); // Watchdog спокійний
+            return;
+        }
+
+        const chunk = pointsQueue.splice(0, CHUNK_SIZE);
+
+        chunk.forEach((pt) => {
+            if (!pt || pt.length < 5) return;
+
+            const chunkKey = pt[0]; // "0_0", "1_0" тощо
+            const lat = pt[1];
+            const lon = pt[2];
+            const hdg = pt[3];
+            const states = pt[4];
+            const widths = pt[5] || null;
+            const customWidths = pt[5] || null;
+
+            // 1. МЕНЕДЖЕР ЧАНКІВ: Перевірка та створення текстури 4000х4000
+            if (!mapChunks[chunkKey]) {
+                console.log(`[FRONTEND CHUNKS] Динамічно створюємо RenderTexture для чанка: ${chunkKey}`);
+                mapChunks[chunkKey] = PIXI.RenderTexture.create({ width: 4000, height: 4000 });
+
+                const chunkSprite = new PIXI.Sprite(mapChunks[chunkKey]);
+                const [cx, cy] = chunkKey.split('_').map(Number);
+                chunkSprite.x = cx * CHUNK_SIZE_METERS * 10;
+                chunkSprite.y = cy * CHUNK_SIZE_METERS * 10;
+
+                world.addChild(chunkSprite);
+            }
+
+            // 2. Очищаємо графіку ПЕРЕД малюванням конкретного сегмента
+            tempTrackGraphics.clear();
+
+            // 3. Твоя рідна тригонометрія штанги — малює лінію цієї однієї точки в tempTrackGraphics
+            appendTrackSegmentPixi(lat, lon, hdg, states, customWidths || widths);
+
+            // 4. ЗАПІКАЄМО ЦЕЙ СЕГМЕНТ НЕГАЙНО у правильний чанк з його особистою матрицею
+            if (mapChunks[chunkKey]) {
+                const [cx, cy] = chunkKey.split('_').map(Number);
+                const offsetX = cx * CHUNK_SIZE_METERS * 10;
+                const offsetY = cy * CHUNK_SIZE_METERS * 10;
+
+                const renderMatrix = new PIXI.Matrix();
+                renderMatrix.translate(-offsetX, -offsetY);
+
+                app.renderer.render(tempTrackGraphics, {
+                    renderTexture: mapChunks[chunkKey],
+                    clear: false,
+                    matrix: renderMatrix
+                });
+            }
+        });
+
+        // 5. Повністю звільняємо векторну пам'ять GPU після проходу пачки
+        tempTrackGraphics.clear();
+
+        // Оновлюємо лічильник на UI
+        const polyElem = document.getElementById('total_point');
+        if (polyElem) {
+            polyElem.innerText = "Poligon count: " + totalPolygonsRendered;
+        }
+
+        // Наступна пачка
+        setTimeout(processNextChunk, 1);
+    }
+
+    processNextChunk();
+}
+
+function updateFieldMapPixi_3(newPoints) {
+    if (!newPoints || newPoints.length === 0) return;
+
+    // Додаємо нові точки в чергу
+    pointsQueue.push(...newPoints);
+
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+
+    const CHUNK_SIZE = 1000;
+
+    function processNextChunk() {
+        if (pointsQueue.length === 0) {
+            isProcessingQueue = false;
+            lastQueueProgressTime = performance.now(); // Сповіщаємо Сторожа, що все пройшло успішно
+            return;
+        }
+
+        // Очищаємо векторну графіку перед пачкою
+        tempTrackGraphics.clear();
+
+        const chunk = pointsQueue.splice(0, CHUNK_SIZE);
+
+        // Локальна змінна для фіксації чанка цієї пачки
+        let targetChunkKey = null;
+
+        chunk.forEach((pt) => {
+            if (!pt || pt.length < 5) return;
+
+            const chunkKey = pt[0]; // "0_0", "1_0" тощо
+            const lat = pt[1];
+            const lon = pt[2];
+            const hdg = pt[3];
+            const states = pt[4];
+            const widths = pt[5] || null;
+            const customWidths = pt[5] || null;
+
+            targetChunkKey = chunkKey; // Запам'ятовуємо ключ чанка
+
+            // МЕНЕДЖЕР ЧАНКІВ: Якщо такого квадрата на карті немає — створюємо RenderTexture 4000х4000
+            if (!mapChunks[chunkKey]) {
+                console.log(`[FRONTEND CHUNKS] Динамічно створюємо RenderTexture для чанка: ${chunkKey}`);
+
+                mapChunks[chunkKey] = PIXI.RenderTexture.create({ width: 4000, height: 4000 });
+                const chunkSprite = new PIXI.Sprite(mapChunks[chunkKey]);
+
+                const [cx, cy] = chunkKey.split('_').map(Number);
+                chunkSprite.x = cx * CHUNK_SIZE_METERS * 10;
+                chunkSprite.y = cy * CHUNK_SIZE_METERS * 10;
+
+                world.addChild(chunkSprite);
+            }
+
+            // Твоя рідна тригонометрія штанги — малює прямо в tempTrackGraphics
+            appendTrackSegmentPixi(lat, lon, hdg, states, customWidths || widths);
+        });
+
+        // ОДНИМ ВИЗОВОМ запікаємо накопичену графіку у RenderTexture потрібного чанка
+        // if (targetChunkKey && mapChunks[targetChunkKey]) {
+        //     app.renderer.render(tempTrackGraphics, {
+        //         renderTexture: mapChunks[targetChunkKey],
+        //         clear: false
+        //     });
+        // }
+        // ==============================================================================
+        // МОДЕРНІЗОВАНЕ ЗАПІКАННЯ З АВТОМАТИЧНИМ ЗСУВОМ МАТРИЦІ
+        // ==============================================================================
+        if (targetChunkKey && mapChunks[targetChunkKey]) {
+            // 1. Розбираємо ключ чанка (наприклад, "1_0") на індекси
+            const [cx, cy] = targetChunkKey.split('_').map(Number);
+
+            // 2. Рахуємо, на скільки пікселів цей чанк зсунутий відносно нуля поля
+            const offsetX = cx * CHUNK_SIZE_METERS * 10;
+            const offsetY = cy * CHUNK_SIZE_METERS * 10;
+
+            // 3. Створюємо матрицю PixiJS і зсуваємо її В ПРОТИЛЕЖНИЙ БІК.
+            // Це змусить рендерер малювати глобальні пікселі (наприклад, 4500) 
+            // у локальні координати текстури (4500 - 4000 = 500)!
+            const renderMatrix = new PIXI.Matrix();
+            renderMatrix.translate(-offsetX, -offsetY);
+
+            // 4. Запікаємо пачку графіки у RenderTexture потрібного чанка з урахуванням матриці
+            app.renderer.render(tempTrackGraphics, {
+                renderTexture: mapChunks[targetChunkKey],
+                clear: false,
+                matrix: renderMatrix  // <--- ОСЬ ВІН, ГОЛОВНИЙ СЕКРЕТ ЧАНКІВ!
+            });
+        }
+
+        // Миттєво чистимо векторну графіку, звільняючи GPU
+        tempTrackGraphics.clear();
+
+        // Оновлюємо лічильник на UI
+        const polyElem = document.getElementById('total_point');
+        if (polyElem) {
+            polyElem.innerText = "Poligon count: " + totalPolygonsRendered;
+        }
+
+        // Наступна пачка
+        setTimeout(processNextChunk, 1);
+    }
+
+    processNextChunk();
+}
+
+function updateFieldMapPixi_2(newPoints) {
+    if (!newPoints || newPoints.length === 0) return;
+
+    // 1. Додаємо нові точки з сервера в твою стандартну чергу
+    pointsQueue.push(...newPoints);
+
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+
+    const CHUNK_SIZE = 1000;
+
+    function processNextChunk() {
+        if (pointsQueue.length === 0) {
+            isProcessingQueue = false;
+            lastQueueProgressTime = performance.now(); // Сповіщаємо Сторожа (Watchdog), що все ок
+            return;
+        }
+
+        // Очищаємо векторну графіку перед початком обробки пачки
+        tempTrackGraphics.clear();
+
+        const chunk = pointsQueue.splice(0, CHUNK_SIZE);
+
+        // Будемо групувати точки з пачки за їхніми чанками, щоб правильно запікати в GPU
+        let currentChunkKey = null;
+
+        chunk.forEach((pt) => {
+            // Перевіряємо новий формат від Python: [chunk_key, lat, lon, hdg, states, widths]
+            if (!pt || pt.length < 5) return;
+
+            const chunkKey = pt[0]; // Наприклад: "0_0"
+            const lat = pt[1];
+            const lon = pt[2];
+            const hdg = pt[3];
+            const states = pt[4];
+
+            // ДУБЛЮВАННЯ НАЗВ ДЛЯ ЗАХИСТУ ВІД ПОМИЛОК РЕФАКТОРИНГУ:
+            const widths = pt[5] || null;
+            const customWidths = pt[5] || null;
+
+            // Запам'ятовуємо поточний чанк для запікання пачки в GPU
+            currentChunkKey = chunkKey;
+
+            // МЕНЕДЖЕР ЧАНКІВ: Якщо такого квадрата на карті ще немає — створюємо його холст
+            if (!mapChunks[chunkKey]) {
+                console.log(`[FRONTEND CHUNKS] Створюємо новий холст RenderTexture для чанка: ${chunkKey}`);
+
+                // Текстура 4000х4000 під квадрат 400х400 метрів
+                mapChunks[chunkKey] = PIXI.RenderTexture.create({ width: 4000, height: 4000 });
+
+                const chunkSprite = new PIXI.Sprite(mapChunks[chunkKey]);
+
+                // Розбираємо ключ "0_0" на індекси координат
+                const [cx, cy] = chunkKey.split('_').map(Number);
+
+                // Зсуваємо спрайт чанка на його законне місце в ігровому світі (zoom=10)
+                chunkSprite.x = cx * CHUNK_SIZE_METERS * 10;
+                chunkSprite.y = cy * CHUNK_SIZE_METERS * 10;
+
+                // Додаємо чанк в контейнер world
+                world.addChild(chunkSprite);
+            }
+
+            // Викликаємо твою оригінальну тригонометрію штанги. 
+            // Передаємо купу параметрів, щоб задовольнити будь-яку версію функції:
+            appendTrackSegmentPixi(lat, lon, hdg, states, customWidths || widths);
+        });
+
+
+        // 2. ОДНИМ ВИЗОВОМ запікаємо накопичену пачку у правильний RenderTexture чанка!
+        if (currentChunkKey && mapChunks[currentChunkKey]) {
+            app.renderer.render(tempTrackGraphics, {
+                renderTexture: mapChunks[currentChunkKey],
+                clear: false
+            });
+        }
+
+        // 3. Миттєво очищаємо векторну пам'ять GPU після запікання пачки
+        tempTrackGraphics.clear();
+
+        // 4. Оновлюємо лічильник полігонів на UI (як у тебе і було)
+        const polyElem = document.getElementById('total_point');
+        if (polyElem) {
+            polyElem.innerText = "Poligon count: " + totalPolygonsRendered;
+        }
+
+        // Переходимо до наступної пачки через мінімальний таймаут, щоб не блокувати UI
+        setTimeout(processNextChunk, 1);
+    }
+
+    processNextChunk();
+}
+
+function updateFieldMapPixi_1(newPoints) {
+    if (!newPoints || newPoints.length === 0) return;
+
+    pointsQueue.push(...newPoints);
+
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+
+    const CHUNK_SIZE = 1000;
+
+    function processNextChunk() {
+        if (pointsQueue.length === 0) {
+            isProcessingQueue = false;
+            lastQueueProgressTime = performance.now(); // Оповещаем сторожа (Watchdog), что всё ок
+            return;
+        }
+
+        // 1. Очищаем векторную графику ПЕРЕД началом обсчета всей пачки в 1000 точек
+        tempTrackGraphics.clear();
+
+        const chunk = pointsQueue.splice(0, CHUNK_SIZE);
+
+        chunk.forEach((pt) => {
+            if (!pt || pt.length < 4) return;
+
+            const lat = pt[0];
+            const lon = pt[1];
+            const hdg = pt[2];
+            const states = pt[3];
+            const widths = pt[4] || null;
+
+            // Накапливаем геометрию точек внутри tempTrackGraphics
+            appendTrackSegmentPixi(lat, lon, hdg, states, widths);
+        });
+
+        // 2. ОДНИМ ВЫЗОВОМ запекаем всю накопленную пачку (1000 точек) в RenderTexture!
+        app.renderer.render(tempTrackGraphics, {
+            renderTexture: mapRenderTexture,
+            clear: false
+        });
+
+        // 3. Моментально очищаем векторную память GPU после массового запекания
+        tempTrackGraphics.clear();
+
+        // 4. Обновляем счетчик полигонов на UI один раз за чанк, а не за каждую точку
+        const polyElem = document.getElementById('total_point');
+        if (polyElem) {
+            polyElem.innerText = "Poligon count: " + totalPolygonsRendered;
+        }
+
+        // Переходим к следующей пачке
+        setTimeout(processNextChunk, 1);
+    }
+
+    processNextChunk();
+}

@@ -1,6 +1,14 @@
 // ==============================================================================
 // 1. ГЛОБАЛЬНІ ЗМІННІ ТА ІНІЦІАЛІЗАЦІЯ ГРАФІЧНОГО ДВИГУНА
 // ==============================================================================
+
+// ==========================================
+// НОВЕ СХОВИЩЕ ДЛЯ ДИНАМІЧНИХ ЧАНКІВ КАРТИ
+// ==========================================
+let mapChunks = {}; // Сюди будемо складати створені RenderTexture для кожного квадрата
+const CHUNK_SIZE_METERS = 400.0; // Повинно збігатися з Python!
+
+
 let failedAttempts = 0;
 const MAX_FAILED_ATTEMPTS = 2; // 10 попыток по 200мс = 2 секунды тишины
 
@@ -495,8 +503,13 @@ function getGlobalCoordsPixi(lat, lon, heading, sectionIdx, isRightSide, customW
 
     return { x: rx * zoom, y: ry * zoom };
 }
+// Було: function appendTrackSegmentPixi(lat, lon, heading, states, widths)
+// Стане:
+
+//function appendTrackSegmentPixi(lat, lon, heading, states, widths, currentChunkKey) {
 
 function appendTrackSegmentPixi(lat, lon, heading, states, customWidths) {
+    //function appendTrackSegmentPixi(lat, lon, heading, states, customWidths) {
     if (refLat === null || !states || !Array.isArray(states)) return;
 
     // Настраиваем стиль линий один раз на точку (толщина 0 — чистая заливка)
@@ -551,14 +564,7 @@ console.log("Часть 3 готова: Оригинальная геометр�
 function updateFieldMapPixi(newPoints) {
     if (!newPoints || newPoints.length === 0) return;
 
-    if (refLat === null) {
-        const firstPoint = newPoints[0];
-        refLat = firstPoint[0];
-        refLon = firstPoint[1];
-        prevSectionsCoords = []; // Полный сброс истории для чистого старта
-        console.log(`Базову точку успішно ініціалізовано: ${refLat}, ${refLon}`);
-    }
-
+    // 1. Возвращаем твою родную стабильную очередь точек
     pointsQueue.push(...newPoints);
 
     if (isProcessingQueue) return;
@@ -569,38 +575,45 @@ function updateFieldMapPixi(newPoints) {
     function processNextChunk() {
         if (pointsQueue.length === 0) {
             isProcessingQueue = false;
-            lastQueueProgressTime = performance.now(); // Оповещаем сторожа (Watchdog), что всё ок
+            lastQueueProgressTime = performance.now(); // Сторож (Watchdog) спокоен
             return;
         }
 
-        // 1. Очищаем векторную графику ПЕРЕД началом обсчета всей пачки в 1000 точек
+        // Очищаем векторную графику перед началом обсчета всей пачки
         tempTrackGraphics.clear();
 
         const chunk = pointsQueue.splice(0, CHUNK_SIZE);
 
         chunk.forEach((pt) => {
-            if (!pt || pt.length < 4) return;
+            // Защита: массив теперь длиннее, так как первым элементом идет ["0_0", lat, lon...]
+            if (!pt || pt.length < 5) return;
 
-            const lat = pt[0];
-            const lon = pt[1];
-            const hdg = pt[2];
-            const states = pt[3];
-            const widths = pt[4] || null;
+            // =================================================================
+            // СДВИГАЕМ ИНДЕКСЫ НА +1, ЧТОБЫ УЧЕСТЬ КЛЮЧ ЧАНКА ОТ СЕРВЕРА
+            // =================================================================
+            const chunkKey = pt[0]; // "0_0", "1_0" тощо
+            const lat = pt[1]; // Раньше было pt[0]
+            const lon = pt[2]; // Раньше было pt[1]
+            const hdg = pt[3]; // Раньше было pt[2]
+            const states = pt[4]; // Раньше было pt[3]
+            const customWidths = pt[5] || null; // Раньше было pt[4]
 
-            // Накапливаем геометрию точек внутри tempTrackGraphics
-            appendTrackSegmentPixi(lat, lon, hdg, states, widths);
+            // Вызываем твою оригинальную, нетронутую тригонометрию штанги
+            appendTrackSegmentPixi(lat, lon, hdg, states, customWidths);
         });
 
-        // 2. ОДНИМ ВЫЗОВОМ запекаем всю накопленную пачку (1000 точек) в RenderTexture!
-        app.renderer.render(tempTrackGraphics, {
-            renderTexture: mapRenderTexture,
-            clear: false
-        });
+        // 2. Запекаем пачку в твою СТАРУЮ ОРИГИНАЛЬНУЮ текстуру (без матриц смещения)
+        if (typeof mapRenderTexture !== 'undefined') {
+            app.renderer.render(tempTrackGraphics, {
+                renderTexture: mapRenderTexture,
+                clear: false
+            });
+        }
 
-        // 3. Моментально очищаем векторную память GPU после массового запекания
+        // Моментально очищаем векторную память GPU после массового запекания
         tempTrackGraphics.clear();
 
-        // 4. Обновляем счетчик полигонов на UI один раз за чанк, а не за каждую точку
+        // Обновляем счетчик полигонов на UI
         const polyElem = document.getElementById('total_point');
         if (polyElem) {
             polyElem.innerText = "Poligon count: " + totalPolygonsRendered;
@@ -612,6 +625,8 @@ function updateFieldMapPixi(newPoints) {
 
     processNextChunk();
 }
+
+
 // 2. ПРИЙМАЄ ДАНІ ВІД СЕРВЕРА 4 РАЗИ НА СЕКУНДУ І ВИЗНАЧАЄ ЦІЛЬ (Без ділення на мс)
 function updateCamera(lat, lon, heading) {
     if (refLat === null) return;
@@ -888,27 +903,60 @@ function requestDataFromServer() {
                 drawABLines(data);
             }
 
-            if (data.new_points && data.new_points.length > 0) {
-                updateFieldMapPixi(data.new_points);
+            // if (data.new_points && data.new_points.length > 0) {
+            //     updateFieldMapPixi(data.new_points);
 
-                const lastPointArray = data.new_points[data.new_points.length - 1];
-                const lastLat = lastPointArray[0];
-                const lastLon = lastPointArray[1];
-                const lastHdg = lastPointArray[2];
-                const lastStates = lastPointArray[3];
+            //     const lastPointArray = data.new_points[data.new_points.length - 1];
+            //     const lastLat = lastPointArray[0];
+            //     const lastLon = lastPointArray[1];
+            //     const lastHdg = lastPointArray[2];
+            //     const lastStates = lastPointArray[3];
 
-                window.lastReceivedStates = lastStates;
+            //     window.lastReceivedStates = lastStates;
 
-                updateCamera(lastLat, lastLon, lastHdg);
-                redrawTractorVehicle(lastStates, data.master !== undefined ? data.master : true, lastLat, lastLon, lastHdg);
+            //     updateCamera(lastLat, lastLon, lastHdg);
+            //     redrawTractorVehicle(lastStates, data.master !== undefined ? data.master : true, lastLat, lastLon, lastHdg);
+            // }
+
+            // ==========================================
+            // МОДЕРНІЗОВАНИЙ БЛОК ОБРОБКИ ТЕЛЕМЕТРІЇ ТА ШЛЕЙФУ
+            // ==========================================
+
+            // 1. ЖИВА ТЕЛЕМЕТРІЯ (Камера, компас, трактор) — працює ЗАВЖДИ, незалежно від шлейфу!
+            if (data.pos && data.pos.length >= 2 && data.hdg !== undefined) {
+                const currentLat = data.pos[0];
+                const currentLon = data.pos[1];
+                const currentHdg = data.heading !== undefined ? data.heading : data.hdg; // Захист від різних назв ключів
+
+                // Автоматична ініціалізація бази (refLat/refLon) при першій появі трактора в мережі
+                if (refLat === null || refLon === null) {
+                    refLat = currentLat;
+                    refLon = currentLon;
+                    prevSectionsCoords = []; // Скидаємо хвости з'єднувача
+                    console.log(`[CORE LOG] Карта успішно ініціалізувала БАЗУ поля від поточного pos: Lat=${refLat}, Lon=${refLon}`);
+                }
+
+                // Рухаємо камеру (LERP ціль) за "живими" координатами трактора
+                updateCamera(currentLat, currentLon, currentHdg);
+
+                // Оновлюємо візуал кабіни та штанги на полі
+                const currentStates = data.states || [false, false, false, false, false, false];
+                window.lastReceivedStates = currentStates;
+                redrawTractorVehicle(currentStates, data.master !== undefined ? data.master : true, currentLat, currentLon, currentHdg);
+            } else {
+                // Критичний лог: якщо сервер перестав віддавати базову телеметрію
+                if (failedAttempts === 0) {
+                    console.warn("[CORE LOG] Увага: Сервер прислав пакет без координат 'pos' або курсу 'hdg'!");
+                }
             }
 
-            // if (document.getElementById('area') && data.area !== undefined) {
-            //     document.getElementById('area').innerText = data.area.toFixed(4);
-            // }
-            // if (document.getElementById('lb_gps_mode_text') && data.gps_mode !== undefined) {
-            //     document.getElementById('lb_gps_mode_text').innerText = data.gps_mode;
-            // }
+            // 2. АВТОНОМНИЙ ШЛЕЙФ (Випікання геометрії) — малює тільки тоді, коли є нові точки!
+            if (data.new_points && data.new_points.length > 0) {
+                console.log(`[CORE LOG] Отримано пачку шлейфу: +${data.new_points.length} точок. Відправляємо в PixiJS...`);
+                updateFieldMapPixi(data.new_points);
+            }
+
+
 
             if (data.last_index !== undefined) {
                 lastReceivedIndex = data.last_index;
@@ -991,7 +1039,7 @@ function toggleSectionMode(idx) {
     // Цвет обновится сам через 200мс из setInterval
 }
 
-function askUser(text, theme, confirmText, onConfirm) {
+function askUser_1(text, theme, confirmText, onConfirm) {
     const modal = document.getElementById('customModal');
     const modalText = document.getElementById('modalText');
     const confirmBtn = document.getElementById('modalConfirmBtn');
@@ -1012,6 +1060,8 @@ function askUser(text, theme, confirmText, onConfirm) {
         modal.style.display = 'none';
     };
 }
+// #endregion
+
 // #region ФУНКЦИИ РАБОТЫ С ТОЧКАМИ АВ
 // ==============================================================================
 // ФУНКЦИИ РАБОТЫ С ТОЧКАМИ АВ
@@ -1099,9 +1149,9 @@ function saveAbManual() {
 // Обработчик удаления линии (через твою модалку askUser)
 function abResetHandler() {
     askUser(
-        "Удалить линию А-В?",
+        "Видалити лінію А-В?",
         "danger",
-        "УДАЛИТЬ",
+        "ВИДАЛИТИ",
         () => {
             // Отправляем 'reset' в твой существующий роут /set_point/
             fetch('/set_point/reset').then(r => {
@@ -1118,7 +1168,7 @@ function abResetHandler() {
                     console.log("Линия АВ успешно удалена на сервере");
                 }
             }).catch(err => {
-                askUser("ОШИБКА СВЯЗИ", "danger", "ПРИНЯТЬ", null);
+                askUser("ПОМИЛКА ЗВ'ЯЗКУ", "danger", "ПРИЙНЯТИ", null);
             });
         }
     );
@@ -1128,7 +1178,7 @@ function recordManualCoords(label) {
     const lon = document.getElementById('manual_lon').value;
 
     if (!lat || !lon) {
-        askUser("Введите Lat и Lon!", "danger", "ОК", null);
+        askUser("Введіть Lat та Lon!", "danger", "ОК", null);
         return;
     }
 
@@ -1349,7 +1399,189 @@ function updateUI(d) {
 
 }
 
+
+// #region РАБОТА С ФАЙЛАМИ
+// ==============================================================================
+// ФУНКЦИИ РАБОТА С ФАЙЛАМИ
+// ==============================================================================
+function resetAll() {
+    askUser(
+        "УВАГА! <br>Очистити мапу?",
+        "danger",
+        "ОЧИСТИТИ",
+        () => {
+
+            fetch('/reset_area_current_file')
+                .then(r => {
+                    if (!r.ok) throw new Error("Сервер вернул ошибку при сбросе");
+                    return r.json();
+                })
+                .then(data => {
+                    if (data.status === "ok") {
+                        console.log("Поле и карта задач успешно очищены на сервере");
+                        askUser("Поле та мапа завдань <br> успішно очищені на сервері", "", "ПРИЙНЯТИ", () => {
+                            setTimeout(() => {
+                                location.reload();
+                            }, 500);
+                        });
+                    }
+                })
+                .catch(err => {
+                    console.error("Ошибка сети при вызове /reset_area:", err);
+                    askUser("СЕРВЕР НЕ ВІДПОВІДАЄ<br>Перевірте зв'язок з контролером.", "danger", "ПРИЙНЯТИ", () => { });
+                });
+        }
+    );
+}
+
+function goBack() {
+    askUser(
+        "УВАГА! Ви дійсно хочете <br><br>ЗКІНЧИТИ РОБОТУ?",
+        "danger",
+        "ЗКІНЧИТИ",
+        () => {
+
+            fetch('/save_area_current_file_and_back')
+                .then(r => {
+                    if (!r.ok) throw new Error("Сервер вернул ошибку при выходе из поля");
+                    return r.json();
+                })
+                .then(data => {
+                    if (data.status === "ok") {
+                        console.log("goBack Поле и карта задач успешно сохранены на сервере");
+                        askUser("Поле та мапа завдань <br> успішно збережені на сервері", "", "ВИХІД", () => {
+                            setTimeout(() => {
+                                window.location.href = '/';
+                            }, 500);
+                        });
+                    }
+                })
+                .catch(err => {
+                    console.error("Ошибка сети при вызове /save_field:", err);
+                    askUser("СЕРВЕР НЕ ВІДПОВІДАЄ<br>Перевірте зв'язок з контролером.", "danger", "ПРИЙНЯТИ", () => { });
+                });
+        }
+    );
+}
 // #endregion
+
+//#endregion НОВОЕ ОКНО ASKUSER
+// Розкладка символів для промислової екранної клавіатури (Безпечні символи)
+const KB_LAYOUT = [
+    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+    'Й', 'Ц', 'У', 'К', 'Е', 'Н', 'Г', 'Ш', 'Щ', 'З',
+    'Х', 'Ї', 'Ф', 'І', 'В', 'А', 'П', 'Р', 'О', 'Л',
+    'Д', 'Ж', 'Є', 'Я', 'Ч', 'С', 'М', 'И', 'Т', 'Ь',
+    'Б', 'Ю', '_', '-', 'SPACE', 'BACKSPACE'
+];
+
+// Ініціалізація форми (Аналог TForm.FormCreate)
+document.addEventListener("DOMContentLoaded", () => {
+    //loadFileList();
+    initVirtualKeyboard();
+});
+
+// Генерація матриці кнопок віртуальної клавіатури
+function initVirtualKeyboard() {
+    const kbContainer = document.getElementById('virtualKeyboard');
+    kbContainer.innerHTML = '';
+    const input = document.getElementById('modalInput');
+
+    KB_LAYOUT.forEach(key => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.innerText = key;
+
+        // Стилізація тач-зони під пальці водія на ходу
+        btn.style.cssText = `
+                    height: 55px; background: #2c2c2c; color: #fff; border: 1px solid #444; 
+                    border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer;
+                    user-select: none; -webkit-user-select: none;
+                `;
+
+        // Обробка спеціальних розширених кнопок
+        if (key === 'SPACE') {
+            btn.style.gridColumn = 'span 2';
+            btn.style.background = '#444';
+            btn.onclick = () => input.value += ' ';
+        } else if (key === 'BACKSPACE') {
+            btn.style.gridColumn = 'span 2';
+            btn.style.background = '#d32f2f';
+            btn.onclick = () => input.value = input.value.slice(0, -1);
+        } else {
+            btn.onclick = () => input.value += key;
+        }
+
+        kbContainer.appendChild(btn);
+    });
+}
+
+// Модернізована функція askUser (Підтримує режими ShowMessage, Confirm та InputBox)
+function askUser(text, theme, confirmText, onConfirm, isPrompt = false) {
+    const modal = document.getElementById('customModal');
+    const modalContent = document.getElementById('modalContent');
+    const modalText = document.getElementById('modalText');
+    const confirmBtn = document.getElementById('modalConfirmBtn');
+    const cancelBtn = document.getElementById('modalCancelBtn');
+    const inputWrapper = document.getElementById('inputWrapper');
+    const keyboardWrapper = document.getElementById('keyboardWrapper');
+    const input = document.getElementById('modalInput');
+
+    modalText.innerHTML = text;
+    confirmBtn.innerText = confirmText;
+    if (isPrompt) {
+        // Вмикаємо режим введення тексту (InputBox)
+        input.value = '';
+        inputWrapper.style.display = 'block';
+        keyboardWrapper.style.display = 'block';
+        modalContent.style.maxWidth = '750px'; // Розширюємо геометрію під клавіатуру
+        confirmBtn.style.background = 'var(--accent)';
+        confirmBtn.style.color = '#000';
+        cancelBtn.style.display = 'block';
+    } else {
+        // Стандартний режим інформації або підтвердження дій
+        inputWrapper.style.display = 'none';
+        keyboardWrapper.style.display = 'none';
+        modalContent.style.maxWidth = '500px';
+
+        if (theme === 'danger') {
+            confirmBtn.style.background = '#ff4444';
+            confirmBtn.style.color = '#fff';
+            cancelBtn.style.display = 'block';
+        } else if (theme === 'success') {
+            confirmBtn.style.background = 'var(--accent)';
+            confirmBtn.style.color = '#000';
+            cancelBtn.style.display = 'block';
+        } else {
+            // Режим суто інформаційного алерту (ОК)
+            confirmBtn.style.background = '#3498db';
+            confirmBtn.style.color = '#fff';
+            cancelBtn.style.display = 'none';
+        }
+    }
+
+    // Надійна фіксація єдиного обробника події
+    confirmBtn.onclick = null;
+    confirmBtn.onclick = () => {
+        if (isPrompt && input.value.trim() === "") {
+            return; // Захист від створення порожніх файлів
+        }
+        modal.style.display = 'none';
+        if (onConfirm) {
+            onConfirm(isPrompt ? input.value.trim() : null);
+        }
+    };
+
+    modal.style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('customModal').style.display = 'none';
+}
+//#region 
+
+
+
 function showModal(text) {
     const modal = document.getElementById('connectionModal');
     if (modal) {

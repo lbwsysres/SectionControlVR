@@ -11,8 +11,12 @@
             50,
             150
         ],
-        "offset_back": 1.5,
+        "offset_back": 2,
         "section_widths": [
+            3,
+            3,
+            3,
+            3,
             3,
             3,
             3,
@@ -21,5 +25,5 @@
     },
     "id": "impl_1779809714090",
     "implement_type": "mounted",
-    "name": "Test 4 section"
+    "name": "8 section (24m)"
 }

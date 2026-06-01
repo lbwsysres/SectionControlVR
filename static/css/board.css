@@ -228,7 +228,7 @@ canvas {
 
 /* Фиксированные панели */
 /* Инфо панель */
-.top-left-panel {
+/* .top-left-panel {
     position: fixed;
     top: 10px;
     left: 20px;
@@ -237,7 +237,7 @@ canvas {
     padding: 10px 10px;
     border-radius: 12px;
     min-width: 240px;
-}
+} */
 
 .panel-main-row {
     display: flex;
@@ -329,7 +329,7 @@ canvas {
     display: flex;
     flex-direction: column;
     /* Выстраивает кнопки в колонку */
-    gap: 20px;
+    gap: 40px;
     /* Расстояние между кнопками */
     align-items: center;
     z-index: 10000;
@@ -342,7 +342,8 @@ canvas {
     top: 120px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 40px;
+    /* Збільшено з 20px до 40px */
     align-items: center;
     z-index: 9998;
     /* Виводить на передній план */
@@ -408,10 +409,12 @@ canvas {
 }
 
 .top-left-panel,
+/* .left-panel
+.top-right-panel */
 .bottom-controls,
 .zoom-panel,
 #emulator {
-    z-index: 9998 !important;
+    z-index: 9999 !important;
     /* Максимальный приоритет */
     pointer-events: auto;
     /* Разрешаем клики */
@@ -699,7 +702,7 @@ canvas {
     /* Запрещаем клики сквозь это окно */
 }
 
-.modal-content {
+.modal-content-connect {
     background: #1a1a1a;
     /* Темный фон как у твоих панелей */
     border: 2px solid #e74c3c;
@@ -737,6 +740,54 @@ canvas {
     box-shadow: 0 0 10px #e74c3c;
 }
 
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 10000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background-color: var(--bg-card);
+    border: 2px solid #333;
+    padding: 30px;
+    border-radius: 20px;
+    width: 90%;
+    max-width: 500px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+    transition: max-width 0.2s ease;
+}
+
+.modal-text {
+    font-size: 1.4rem;
+    margin-bottom: 25px;
+    line-height: 1.5;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    width: 100%;
+}
+
+.modal-btn {
+    flex: 1;
+    height: 65px;
+    border-radius: 12px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+}
+
 /* Инфопанель плоцадь скорость GPS */
 .top-left-panel {
     position: fixed;
@@ -748,6 +799,7 @@ canvas {
     border-radius: 12px;
     min-width: 240px;
 }
+
 .top-right-panel {
     position: fixed;
     top: 10px;

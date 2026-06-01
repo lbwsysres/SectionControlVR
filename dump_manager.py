@@ -5,7 +5,7 @@ import json
 import os
 import time
 from pathlib import Path
-
+from pprint import pprint
 # ЖОРСТКА КОРЕНЕВА ПРИВ'ЯЗКА ДО ПАПКИ СКРИПТА
 BASE_SYS_DIR = os.path.dirname(os.path.abspath(__file__)) # папка SYS
 DUMP_DIR = os.path.join(BASE_SYS_DIR, "fields") # СТРОГО SYS/fields/
@@ -37,7 +37,7 @@ def is_session_active():
     return False
 
 
-def save_lightweight_json(state, filename=None):
+def save_lightweight_json(state, sc, filename=None):
     """Зберігає ТІЛЬКИ налаштування (лінії А-В, гектари). Запис атомарний."""
     os.makedirs(DUMP_DIR, exist_ok=True)
     target_file = filename if filename else CURRENT_SESSION_FILE
@@ -49,8 +49,25 @@ def save_lightweight_json(state, filename=None):
             "point_a": getattr(state, "point_a", None),
             "point_b": getattr(state, "point_b", None),
             "guidance_error": getattr(state, "guidance_error", 0.0),
-            "active_vra_file": getattr(state, "active_vra_file", None),
+            # "active_vra_file": getattr(sc, "ACTIVE_TASKMAP_FILE", ""),
+            # "active_implement_id": getattr(sc, "ACTIVE_IMPLEMENT_ID", ""),
+            # "target_rate_default": getattr(sc, "TARGET_RATE_DEFAULT", 0.0),
+            
+            # Пряме звернення до вкладеного словника
+            "active_vra_file": getattr(sc, "cfg", {}).get("ACTIVE_TASKMAP_FILE", ""),
+            "active_implement_id": getattr(sc, "cfg", {}).get("ACTIVE_IMPLEMENT_ID", ""),
+            "target_rate_default": getattr(sc, "cfg", {}).get("VRA_RATE_DEFAULT", 0.0),
         }
+        
+        print("save_lightweight_json:\n")
+        #pprint(sc.__dict__)
+        #print(sc.__dict__['cfg']['ACTIVE_IMPLEMENT_ID'])
+        print(f"ACTIVE_TASKMAP_FILE: {sc.__dict__['cfg']['ACTIVE_TASKMAP_FILE']}")
+        print(f"ACTIVE_IMPLEMENT_ID: {sc.__dict__['cfg']['ACTIVE_IMPLEMENT_ID']}")
+        print(f"VRA_RATE_DEFAULT: {sc.__dict__['cfg']['VRA_RATE_DEFAULT']}")
+
+        #pprint(sc.__dict__)
+        
 
         temp_file = target_file + ".tmp"
         with open(temp_file, "w", encoding="utf-8") as f:
@@ -77,7 +94,7 @@ def append_batch_to_track_file(points_batch, filename=None):
         lines = []
         for p in points_batch:
             # p тепер це [lat, lon, hdg, states_str, widths_str]
-            lines.append(f"{p[0]},{p[1]},{p[2]},{p[3]},{p[4]}\n")
+            lines.append(f"{p[0]},{p[1]},{p[2]},{p[3]},{p[4]},{p[5]}\n")
 
         with open(target_track, "a", encoding="utf-8") as f:
             f.writelines(lines)
@@ -94,7 +111,7 @@ def load_track_history(filename=None):
     """Покроково вичитує трек і повністю відновлює 5-елементну структуру для Canvas вебу"""
     target_track = filename.replace(".json", ".txt") if filename else CURRENT_TRACK_FILE
     restored_track = []
-
+    print(f"[DumpManager] Покроково вичитує трек і повністю відновлює ")
     if os.path.exists(target_track):
         try:
             with open(target_track, "r", encoding="utf-8") as f:
@@ -103,7 +120,7 @@ def load_track_history(filename=None):
                     if line:
                         try:
                             # Розбиваємо рядок на 5 частин
-                            lat_s, lon_s, hdg_s, states_s, widths_s = line.split(",")
+                            chunk_key,lat_s, lon_s, hdg_s, states_s, widths_s = line.split(",")
 
                             # 1. Відновлюємо масив станів секцій pt[3]
                             boolean_states = [
@@ -116,6 +133,7 @@ def load_track_history(filename=None):
                             # Збираємо ПОВНОЦІННУ точку для JS-скрипту updateFieldMap
                             restored_track.append(
                                 [
+                                    chunk_key,
                                     float(lat_s),
                                     float(lon_s),
                                     float(hdg_s),
@@ -188,42 +206,3 @@ def load_session_dump(state, sc, filename=None):
     except Exception as track_err:
         print(f"[DumpManager] Критична помилка відновлення треку: {track_err}")
         return False
-
-# def load_session_dump(state, sc, filename=None):
-#     """
-#     НОВА ЛЕГКА ЗАВАНТАЖЕННЯ: Відновлює конфігурацію з JSON
-#     та автоматично підтягує історію треку для ОЗУ двигуна.
-#     """
-#     target_file = filename if filename else CURRENT_SESSION_FILE
-#     print("!!!!!!!!!!!!!!! - load_session_dump")
-#     print(target_file)
-#     if not os.path.exists(target_file):
-#         return False
-
-#     try:
-#         # 1. Читаємо легкі метадані
-#         with open(target_file, "r", encoding="utf-8") as f:
-#             dump = json.load(f)
-
-#         state.area = dump.get("area", 0.0)
-#         state.point_a = dump.get("point_a")
-#         state.point_b = dump.get("point_b")
-#         state.guidance_error = dump.get("guidance_error", 0.0)
-#         state.active_vra_file = dump.get("active_vra_file", None)
-
-#         state.current_file = os.path.splitext(os.path.basename(target_file))[0]
-
-#         # 2. Викликаємо нашу нову пакетну функцію читання треку
-#         restored_track = load_track_history(filename)
-
-#         # Накатуємо відновлений трек в ОЗУ обох об'єктів
-#         state.path_history = restored_track
-#         sc.path_history = state.path_history  # Синхронізуємо двигун секцій
-
-#         print(
-#             f"[DumpManager] Стан успішно відновлено з сесії. Зчитано {len(restored_track)} точок."
-#         )
-#         return True
-#     except Exception as e:
-#         print(f"[DumpManager] Не вдалося повністю прочитати дамп сесії: {e}")
-#         return False

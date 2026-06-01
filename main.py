@@ -79,9 +79,10 @@ def main_calculation_loop():
         # 1. ОБРОБКА КОМАНД З ВЕБ-ІНТЕРФЕЙСУ (Flask -> Математика)
         while not cmd_queue.empty():
             try:
+                # region CMD
                 cmd_data = cmd_queue.get_nowait()
-
                 cmd = cmd_data.get("cmd")
+                
                 if cmd == "reset" or cmd == "reset_area":
                     # === АВТОМАТИЧНЕ ОНОВЛЕННЯ АРХІВУ ПЕРЕД RESET ===
                     old_file = getattr(state, "current_file", "NEW")
@@ -97,7 +98,7 @@ def main_calculation_loop():
                                 sc.track_buffer_to_disk
                             )
                             sc.track_buffer_to_disk = []
-                        dump_manager.save_lightweight_json(state)
+                        dump_manager.save_lightweight_json(state, sc)
 
                         # Перезаписуємо поверх оригінального архіву, без створення дублікатів
                         try:
@@ -143,6 +144,14 @@ def main_calculation_loop():
                     print(
                         "[Main_Engine] Команда RESET виконана. Робоча сесія видалена, ОЗУ чисте."
                     )
+                elif cmd == "reset_area_current_file":
+                     print(
+                        "[Main_Engine] reset_area_current_file"
+                    )
+                elif cmd == "save_area_current_file":
+                     print(
+                        "[Main_Engine] save_area_current_file -> reset"
+                    )
 
                 elif cmd == "save_field":
                     raw_name = cmd_data.get("filename", f"field_{int(time.time())}")
@@ -161,7 +170,7 @@ def main_calculation_loop():
                     if sc.track_buffer_to_disk:
                         dump_manager.append_batch_to_track_file(sc.track_buffer_to_disk)
                         sc.track_buffer_to_disk = []
-                    dump_manager.save_lightweight_json(state)
+                    dump_manager.save_lightweight_json(state, sc)
 
                     try:
                         shutil.copy2(
@@ -219,7 +228,7 @@ def main_calculation_loop():
                                     sc.track_buffer_to_disk
                                 )
                                 sc.track_buffer_to_disk = []
-                            dump_manager.save_lightweight_json(state)
+                            dump_manager.save_lightweight_json(state, sc)
                             try:
                                 shutil.copy2(
                                     dump_manager.CURRENT_SESSION_FILE,
@@ -350,7 +359,7 @@ def main_calculation_loop():
                                     sc.track_buffer_to_disk
                                 )
                                 sc.track_buffer_to_disk = []
-                            dump_manager.save_lightweight_json(state)
+                            dump_manager.save_lightweight_json(state, sc)
                             try:
                                 shutil.copy2(
                                     dump_manager.CURRENT_SESSION_FILE,
@@ -464,6 +473,7 @@ def main_calculation_loop():
                                     sc.cfg["SECTION_WIDTHS"]
                                 )
                                 config_manager.save_config(sys_cfg)
+                                #print(sys_cfg)
                                 print(
                                     f"[Main_Engine Hub] Штанга знаряддя '{impl_id}' успішно впроваджена в ядро."
                                 )
@@ -592,12 +602,12 @@ def main_calculation_loop():
                     #         print(f"CRITICAL Nudge: {e}")
             except Exception as e:
                 print(f"[Main_Engine Cmd Error] Помилка обробки команди: {e}")
+        # endregion
 
-        # Скидання ОЗУ при прапорі Reset
         active_cfg = config_manager.load_config()
         sc.cfg = active_cfg
 
-        if state.reset_flag:
+        if state.reset_flag:  # Скидання ОЗУ при прапорі Reset
             state.current_file = "NEW"
             sc.reset()
             state.path_history = []
@@ -614,9 +624,32 @@ def main_calculation_loop():
 
         # Перевіряємо наявність базового зв'язку з GPS
         has_gps_signal = state.last_lat != 0 and state.last_lon != 0
+        tx, ty = 0.0, 0.0  # Ініціалізуємо нулями на випадок збою
+        current_chunk = "0_0"
+
         if has_gps_signal:
             is_moving = state.speed >= active_cfg.get("MIN_SPEED", 1.0)
             master_on = active_cfg.get("MASTER_SW", False)
+            # 1. Автоматично ініціалізуємо трансформатор UTM, якщо він ще порожній
+            if sc.transformer_to_m is None:
+                try:
+                    zone = int((state.last_lon + 180) / 6) + 1
+                    sc.transformer_to_m = pyproj.Transformer.from_crs(
+                        "epsg:4326", f"epsg:326{zone}", always_xy=True
+                    )
+                    print(
+                        f"[CHUNKS CORE] Авто-налаштування проекції UTM для зони: {zone}"
+                    )
+                except Exception as proj_err:
+                    print(
+                        f"[CHUNKS CORE Error] Збій ініціалізації проекції: {proj_err}"
+                    )
+
+            # 2. Розраховуємо плоскі метри для всього циклу НАПЕРЕД
+            if sc.transformer_to_m is not None:
+                tx, ty = sc.transformer_to_m.transform(state.last_lon, state.last_lat)
+                # Вираховуємо поточний відносний ключ чанка
+                current_chunk = sc.get_chunk_key(tx, ty)
 
             if is_moving:
                 gps_jump_detected = False
@@ -631,9 +664,20 @@ def main_calculation_loop():
                     state.gps_mode_text = "OK: Full Auto Mode"
 
                     # Прорахунок геометрії перекриттів та поворотів штанги в ОЗУ
+                    # auto_res = sc.process(
+                    #     state.last_lat, state.last_lon, state.hdg, state.speed
+                    # )
+
+                    # LBW - переделать вызов master_on widths modes - из main
                     auto_res = sc.process(
-                        state.last_lat, state.last_lon, state.hdg, state.speed
+                        state.last_lat,
+                        state.last_lon,
+                        state.hdg,
+                        state.speed,
+                        # master_on,
+                        chunk_key=current_chunk,  # Передаємо прорахований чанк
                     )
+
                     state.flow_percents = sc.curve_compensation(
                         state.speed, state.hdg, state.rtk
                     )
@@ -733,9 +777,9 @@ def main_calculation_loop():
 
                     # Розрахунок та запис спрощеного білого треку в ОЗУ
                     if sc.transformer_to_m is not None:
-                        tx, ty = sc.transformer_to_m.transform(
-                            state.last_lon, state.last_lat
-                        )
+                        # tx, ty = sc.transformer_to_m.transform(
+                        #     state.last_lon, state.last_lat
+                        # )
                         dist_moved = (
                             math.sqrt(
                                 (tx - last_track_x) ** 2 + (ty - last_track_y) ** 2
@@ -743,6 +787,7 @@ def main_calculation_loop():
                             if last_track_x is not None
                             else 999.0
                         )
+
                         if dist_moved >= 2.5:
                             pt_blank = [
                                 state.last_lat,
@@ -750,8 +795,9 @@ def main_calculation_loop():
                                 state.hdg,
                                 list(state.current_states),
                             ]
-                            sc.path_history.append(pt_blank)
-                            if len(sc.path_history) > 10000:
+                            # sc.path_history.append(pt_blank)
+                            # LBW - HISTORY LEN
+                            if len(sc.path_history) > 100000:
                                 sc.path_history.pop(0)
                             last_track_x, last_track_y = tx, ty
 
@@ -772,9 +818,9 @@ def main_calculation_loop():
                         sc.transformer_to_m = pyproj.Transformer.from_crs(
                             "epsg:4326", f"epsg:326{zone}", always_xy=True
                         )
-                    tx, ty = sc.transformer_to_m.transform(
-                        state.last_lon, state.last_lat
-                    )
+                    # tx, ty = sc.transformer_to_m.transform(
+                    #     state.last_lon, state.last_lat
+                    # )
                     ax, ay = state.point_a
                     bx, by = state.point_b
                     num = (by - ay) * tx - (bx - ax) * ty + bx * ay - by * ax
@@ -789,6 +835,7 @@ def main_calculation_loop():
                     state.guidance_error = 0
             else:
                 state.guidance_error = 0
+
             state.area = sc.get_area_ha()
             state.path_history = sc.path_history
 
@@ -799,6 +846,12 @@ def main_calculation_loop():
             state.gps_mode = 0
             state.gps_mode_text = "CRITICAL: No GPS Signal! All valves forced closed."
             state.current_states = [False] * len(active_cfg["SECTION_WIDTHS"])
+
+        # Перевіряємо роботу математики чанків перед пакуванням даних
+        # current_chunk = sc.get_chunk_key(tx, ty)
+        # print(
+        #     f"[CHUNKS TEST] Трактор у метрах: X={tx:.1f}м, Y={ty:.1f}м | Поточний чанк: {current_chunk}"
+        # )
 
         # 3. ВІДПРАВКА СНІМКА СТАНУ В ПРОЦЕС FLASK (Математика -> Flask)
         snapshot = {
@@ -835,6 +888,7 @@ def main_calculation_loop():
         # Відправляємо зліпок ОЗУ, наприклад, раз на секунду
         if iteration_counter % 10 == 0:
             try:
+
                 clean_state_dump = {}
 
                 # Автоматично перебираємо ВСІ атрибути твого об'єкта SharedState
