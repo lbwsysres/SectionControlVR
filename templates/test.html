@@ -8,6 +8,7 @@
 
     <!-- Локальне підключення PixiJS v7 через Flask статику -->
     <script src="{{ url_for('static', filename='js/pixi.min.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/board.css') }}">
 
     <style>
         * {
@@ -63,7 +64,29 @@
     <div id="ui-layer">
         <div class="stat-line" id="ui-status">Статус: Підключення...</div>
         <div class="stat-line" id="ui-coords">GPS: --.------, --.------</div>
+        <div class="stat-line" id="total_line">Точок: 0</div>
         <div class="stat-line" id="total_point">Полігонів: 0</div>
+        <div class="stat-line" id="calc_fps">Fps: 0</div>
+        <div class="stat-line" id="calc_drop">Drop: 0</div>
+        <!--div class="stat-line" id="total_point">Полігонів: 0</div -->
+
+    </div>
+    <div class="zoom-panel">
+        <!-- button class="tool-btn" onclick="changeWorldScale(1.2)">➕</button -->
+        <button class="tool-btn" onclick="changeWorldScale(-1)"> <!-- Z + -->
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                stroke-linecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+        </button>
+        <!-- button class="tool-btn" onclick="zoom *= 0.7">➖</button -->
+        <button class="tool-btn" onclick="changeWorldScale(1)"> <!-- Z - -->
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                stroke-linecap="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+        </button>
     </div>
 
     <script>
@@ -76,6 +99,7 @@
         let refLon = null;
         let lastReceivedIndex = 0;
         let totalPolygonsRendered = 0;
+        let totalLineRendered = 0;
         let prevSectionsCoords = [];
         let pointsQueue = [];
         let isProcessingQueue = false;
@@ -103,14 +127,17 @@
         if (typeof isVraMapRendered === 'undefined') window.isVraMapRendered = false;
         if (typeof isVraLoading === 'undefined') window.isVraLoading = false;
 
-//#region  PIXI
+        //#region  PIXI
         // Ініціалізація PixiJS програми
+        PIXI.settings.PREFER_ENV = PIXI.ENV.WEBGL2; // LBW 
         const app = new PIXI.Application({
             resizeTo: window,
             autoDensity: true,
-            resolution: window.devicePixelRatio || 1,
+            //resolution: window.devicePixelRatio || 1,
+            resolution: Math.min(window.devicePixelRatio || 1, 2), // LBW
             backgroundColor: 0x1a1d24,
-            antialias: true
+            antialias: false, // new
+            powerPreference: "high-performance", // LBW
         });
         document.getElementById('canvas-container').appendChild(app.view);
         class AgroChunkManager {
@@ -592,6 +619,13 @@
             agroMap.container.rotation = -headingRad;
         }
 
+        const TARGET_FPS = 20; // LBW
+        let fpsDropCounter = 0;      // Скільки разів поспіль зафіксовано низький FPS
+        const FPS_THRESHOLD = TARGET_FPS - 1;    // Критична межа FPS (все, що нижче — вважається лагами)
+        const CHECK_INTERVAL = 2000; // Як часто перевіряти FPS (кожні 2000 мс = 2 секунди)
+        let lastCheckTime = performance.now();
+
+        app.ticker.maxFPS = TARGET_FPS; // LBW
         app.ticker.add(() => {
             // Камера працює ЗАВЖДИ, як тільки ініціалізована база поля refLat!
             if (refLat === null || refLon === null || targetX === null || targetY === null) return;
@@ -614,6 +648,42 @@
 
             // Викликаємо оновлення камери
             updateCameraSmooth(interpolatedX, interpolatedY, interpolatedHdg);
+
+
+            const currentTime = performance.now();
+
+            // Перевіряємо продуктивність лише один раз на інтервал (кожні 2 секунди)
+            if (currentTime - lastCheckTime >= CHECK_INTERVAL) {
+                // Отримуємо поточний FPS від PixiJS Ticker
+                const currentFPS = app.ticker.FPS;
+
+                if (currentFPS < FPS_THRESHOLD) {
+                    fpsDropCounter++;
+                } else {
+                    // Якщо все добре, повільно скидаємо лічильник помилок
+                    fpsDropCounter = Math.max(0, fpsDropCounter - 1);
+                }
+
+                // Якщо гра стабільно гальмує протягом 3 перевірок поспіль (6 секунд лагів)
+                if (fpsDropCounter >= 20) {
+                    //optimizeResolution();
+                    fpsDropCounter = 0; // Скидаємо лічильник після оптимізації
+                }
+
+                // <div class="stat-line" id="calc_fps">Полігонів: 0</div>
+                // <div class="stat-line" id="calc_drop">Полігонів: 0</div>
+                lastCheckTime = currentTime;
+                const fpsElem = document.getElementById('calc_fps');
+                if (fpsElem) {
+                    fpsElem.innerText = "Fps: " + currentFPS.toFixed(1);
+                }
+                const dropElem = document.getElementById('calc_drop');
+                if (dropElem) {
+                    dropElem.innerText = "Drop: " + fpsDropCounter;
+                }
+            }
+
+
         });
 
         function updateFieldMapPixi(newPoints) {
@@ -623,7 +693,7 @@
             if (isProcessingQueue) return;
             isProcessingQueue = true;
 
-            const BATCH_SIZE = 400;
+            const BATCH_SIZE = 1000;
 
             function processNextBatch() {
                 if (pointsQueue.length === 0) {
@@ -634,6 +704,7 @@
 
                 const batch = pointsQueue.splice(0, BATCH_SIZE);
                 const drawingsByChunk = new Map();
+                
                 batch.forEach((pt) => {
                     // Перевірка структури: масив повинен мати мінімум 5 елементів
                     if (!pt || !Array.isArray(pt) || pt.length < 5) return;
@@ -728,6 +799,7 @@
                             // --- КОНЕЦ ОПТИМИЗАЦИИ СТЫКОВ ---
                         }
                         prevSectionsCoords[i] = { cL, cR };
+                        
                     });
 
                 });
@@ -758,6 +830,10 @@
                 const polyElem = document.getElementById('total_point');
                 if (polyElem) {
                     polyElem.innerText = "Полігонів: " + totalPolygonsRendered;
+                }
+                const lineElem = document.getElementById('total_line');
+                if (lineElem) {
+                    lineElem.innerText = "Ліній: " + totalLineRendered;
                 }
 
                 setTimeout(processNextBatch, 1);
@@ -798,67 +874,6 @@
                         return;
                     }
 
-                    // Жива телеметрія (Позиція трактора в реальному часі)
-                    // if (data.pos && data.pos.length >= 2) {
-                    //     const currentLat = data.pos[0];
-                    //     const shiftLon = data.pos[1];
-                    //     const currentHdg = data.hdg !== undefined ? data.hdg : (data.heading || 0);
-                    //     // Автоматична ініціалізація бази при першій появі координат
-                    //     if (refLat === null || refLon === null) {
-                    //         refLat = currentLat;
-                    //         refLon = shiftLon;
-                    //         prevSectionsCoords = [];
-                    //         console.log(`[CORE] База поля успішно ініціалізована: Lat=${refLat}, Lon=${refLon}`);
-
-                    //         // Центруємо карту на тракторі при старті
-                    //         agroMap.container.position.set(app.screen.width / 2, app.screen.height / 2);
-                    //     }
-
-                    //     updateCamera(currentLat, shiftLon, currentHdg);
-
-                    //     // 2. Оновлюємо колір штанги та статус кабіни в центрі екрана
-                    //     const currentStates = data.states || [false, false, false, false, false, false, false, false];
-                    //     const isMaster = data.master !== undefined ? data.master : true;
-
-                    //     redrawTractorVehicle(currentStates, isMaster, currentLat, shiftLon, currentHdg);
-
-                    //     // Оновлюємо текстовий UI
-                    //     const uiCoords = document.getElementById('ui-coords');
-                    //     if (uiCoords) uiCoords.innerText = `GPS: ${currentLat.toFixed(6)}, ${shiftLon.toFixed(6)}`;
-                    //     const uiStatus = document.getElementById('ui-status');
-                    //     if (uiStatus) uiStatus.innerText = "Статус: Працює (10 Гц)";
-                    // }
-                    // Обробка живої телеметрії в requestDataFromServer:
-                    // if (data.pos && data.pos.length >= 2) {
-                    //     const currentLat = data.pos[0];
-                    //     const shiftLon = data.pos[1];
-                    //     const currentHdg = data.hdg !== undefined ? data.hdg : (data.heading || 0);
-
-                    //     if (refLat === null || refLon === null) {
-                    //         refLat = currentLat;
-                    //         refLon = shiftLon;
-                    //         prevSectionsCoords = [];
-                    //         console.log(`[CORE] База поля успішно ініціалізована: Lat=${refLat}, Lon=${refLon}`);
-                    //     }
-
-                    //     // Оновлюємо колір штанги та статус кабіни в центрі екрана
-                    //     const currentStates = data.states || [false, false, false, false, false, false, false, false];
-                    //     const isMaster = data.master !== undefined ? data.master : true;
-                    //     redrawTractorVehicle(currentStates, isMaster, currentLat, shiftLon, currentHdg);
-
-                    //     // ЗАПИСУЄМО ЦІЛЬОВІ КООРДИНАТИ ДЛЯ ТІКЕРА В ЧИСТИХ МЕТРАХ Поля:
-                    //     targetX = (shiftLon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
-                    //     targetY = -(currentLat - refLat) * metersPerDegree;
-                    //     targetHdg = currentHdg;
-
-                    //     // Зберігаємо для ліній А-В (якщо потрібно)
-                    //     tractorMetersX = targetX;
-                    //     tractorMetersY = targetY;
-
-                    //     // Оновлюємо текстовий UI
-                    //     const uiCoords = document.getElementById('ui-coords');
-                    //     if (uiCoords) uiCoords.innerText = `GPS: ${currentLat.toFixed(6)}, ${shiftLon.toFixed(6)}`;
-                    // }
                     if (data.pos && data.pos.length >= 2) {
                         const currentLat = data.pos[0];
                         const shiftLon = data.pos[1];
@@ -891,16 +906,18 @@
                         if (uiStatus) uiStatus.innerText = "Статус: Працює (10 Гц)";
                     }
 
-
+                    // LBW
                     // Шлейф покриття — відправляємо в наш автономний менеджер
-                    if (data.new_points && data.new_points.length > 0) {
-                        updateFieldMapPixi(data.new_points);
-                    }
+                    // if (data.new_points && data.new_points.length > 0) {
+                    //     updateFieldMapPixi(data.new_points);
+                    //     totalLineRendered += new_points.length;
+                    // }
 
                     // ЗАМІНІТЬ ЙОГО НА ЦЕЙ НАДІЙНИЙ ВАРІАНТ:
                     if (data.new_points && data.new_points.length > 0) {
                         // Збільшуємо індекс на кількість точок, які ми РЕАЛЬНО щойно отримали від сервера
                         lastReceivedIndex += data.new_points.length;
+                        totalLineRendered += data.new_points.length;
                         updateFieldMapPixi(data.new_points);
                     }
 
@@ -909,7 +926,7 @@
 
                     }
 
-                    setTimeout(requestDataFromServer, 100); // Опитування кожні 100мс для 10 Гц
+                    setTimeout(requestDataFromServer, 250); // Опитування кожні 100мс для 10 Гц
                 })
                 .catch(err => {
                     failedAttempts++;
@@ -958,24 +975,26 @@
         app.stage.on('pointerupoutside', () => isDragging = false);
 
         // Обновленный и точный Zoom, сохраняющий пропорции штанги и шлейфа
-        window.addEventListener('wheel', (e) => {
-            if (e.deltaY < 0) {
+
+        function changeWorldScale(factor) {
+            if (factor < 0) {
                 currentZoom *= 1.1; // Увеличение
             } else {
                 currentZoom /= 1.1; // Уменьшение
             }
-
             // Ограничение зума (от х0.2 до х30)
-            currentZoom = Math.max(0.1, Math.min(currentZoom, 5));
-
+            currentZoom = Math.max(0.1, Math.min(currentZoom, 2));
             // 1. Масштабируем контейнер бесконечной карты шлейфа через GPU
             agroMap.container.scale.set(currentZoom);
-
             // 2. Находим контейнер трактора в центре экрана и задаем ему ТОЧНО ТАКОЙ ЖЕ масштаб
             const vehicle = app.stage.getChildByName("vehicle-ui-layer");
             if (vehicle) {
                 vehicle.scale.set(currentZoom);
             }
+        }
+
+        window.addEventListener('wheel', (e) => {
+            changeWorldScale(e.deltaY);
         }, { passive: true });
 
 
@@ -986,6 +1005,7 @@
                 vehicle.x = app.screen.width / 2;
                 vehicle.y = app.screen.height / 2;
             }
+
         });
 
 
@@ -995,7 +1015,7 @@
             requestDataFromServer();
         };
 
-//#endregion
+        //#endregion
 
 
 

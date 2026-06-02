@@ -55,7 +55,7 @@ let sectionSprites = [];
 
 
 // Форсуємо використання сумісного WebGL2 рушія (захист від зависань на Android)
-PIXI.settings.PREFER_ENV = PIXI.ENV.WEBGL2;
+
 
 const app = new PIXI.Application({
     width: window.innerWidth,
