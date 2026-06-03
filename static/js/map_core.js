@@ -1,9 +1,10 @@
 function buildManual() {
-    const container = document.getElementById('manual_ctrl');
-    if (!container) return;
     let h = "";
-    cfg.SECTION_WIDTHS.forEach((_, i) => {
-        h += `
+    let c = 0;
+    const container = document.getElementById('manual_ctrl');
+    if (container) {
+        cfg.SECTION_WIDTHS.forEach((_, i) => {
+            h += `
             <div class="section-column">
                 <div id="lamp_${i}" class="lamp-indicator"></div>
                 <!-- div class="section-label">S${i + 1}</div -->
@@ -11,9 +12,20 @@ function buildManual() {
                 <div id="vra_flows_${i}" class="section-label">0</div>
                 <button id="btn_sec_${i}" class="mode-btn mode-btn-${i} active" data-mode="AUTO" onclick="toggleSectionMode(${i})">AUTO</button>
             </div>`;
-    });
-    container.innerHTML = h;
+        });
+        container.innerHTML = h;
+    }
 
+
+    let totalWidth = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
+    const container_current_implements = document.getElementById('current_implements');
+    if (container_current_implements) {
+        h = ` Ширина: ${totalWidth} метра ( ${cfg.SECTION_WIDTHS.length} секций ) 
+    
+    `;
+        container_current_implements.innerHTML = h;
+    }
+    document.getElementById('current_file').innerText = `Поле: ${d.file}`;
 }
 
 // #region ПЕРЕМИКАЧ MASTER SWITCH 
@@ -375,6 +387,7 @@ function updateUI(d) {
     switch (updateIndexCount) {
         case 0:
             updateUISection(d);
+            document.getElementById('area').innerText = d.area.toFixed(2);
             break;
         case 1:
             updateUICompassLineAB(d);
@@ -392,7 +405,8 @@ function updateUI(d) {
         updateIndexCount = 0;
     }
 
-    document.getElementById('area').innerText = d.area.toFixed(4);
+
+
 }
 
 // #endregion

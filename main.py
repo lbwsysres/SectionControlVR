@@ -719,8 +719,7 @@ def main_calculation_loop():
                         # Завантажуємо базову геометрію поля, якщо воно вже оброблялося раніше
                         if os.path.exists(src_json):
                             dump_manager.load_session_dump(state, sc, filename=src_json)
-                        
-                        
+
                         # if os.path.exists(src_wkb):
                         #     try:
                         #         all_chunks = []
@@ -745,9 +744,13 @@ def main_calculation_loop():
                         #         )
                         print(f"[WKB] " + "=" * 58)
                         sc.covered_area = dump_manager.load_wkb_geometry_safely(src_wkb)
-                        #dump_manager.log_multipolygon_details(sc.covered_area)
-                        #dump_manager.save_multipolygon_to_kml(sc.covered_area, "d:\\poli.kml")
-                        #dump_manager.save_dynamic_sections_to_kml(sc.path_history,"d:\\path.kml")
+
+                        dump_manager.save_multi_to_kml(
+                            sc.covered_area, sc.zone, "d:\\poli.kml"
+                        )
+                        # dump_manager.log_multipolygon_details(sc.covered_area)
+                        # dump_manager.save_multipolygon_to_kml(sc.covered_area, "d:\\poli.kml")
+                        # dump_manager.save_dynamic_sections_to_kml(sc.path_history,"d:\\path.kml")
                         print(f"[WKB] " + "=" * 58)
 
                         # 3. ДИНАМІЧНА ПІДМІНА ШТАНГИ В ОЗУ SectionControl (sc)
@@ -841,7 +844,6 @@ def main_calculation_loop():
                             pass
 
                         state.current_file = field_name
-
 
                         print(
                             f"[Main_Engine Hub] Мультипрофільна сесія успішно запущена в ОЗУ математики."
@@ -1115,8 +1117,8 @@ def main_calculation_loop():
                             ]
                             # sc.path_history.append(pt_blank)
                             # LBW - HISTORY LEN
-                            if len(sc.path_history) > 100000:
-                                sc.path_history.pop(0)
+                            # if len(sc.path_history) > 100000:
+                            #     sc.path_history.pop(0)
                             last_track_x, last_track_y = tx, ty
 
             # =======================================================================

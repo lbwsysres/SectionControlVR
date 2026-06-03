@@ -10,15 +10,16 @@ import struct
 from shapely import wkb
 from shapely.geometry import MultiPolygon, Polygon
 from shapely.ops import unary_union
+#import simplekml
+import pyproj
 
 # ЖОРСТКА КОРЕНЕВА ПРИВ'ЯЗКА ДО ПАПКИ СКРИПТА
-BASE_SYS_DIR = os.path.dirname(os.path.abspath(__file__)) # папка SYS
-DUMP_DIR = os.path.join(BASE_SYS_DIR, "fields") # СТРОГО SYS/fields/
+BASE_SYS_DIR = os.path.dirname(os.path.abspath(__file__))  # папка SYS
+DUMP_DIR = os.path.join(BASE_SYS_DIR, "fields")  # СТРОГО SYS/fields/
 
 CURRENT_SESSION_FILE = os.path.join(DUMP_DIR, "current_session.json")
 CURRENT_TRACK_FILE = os.path.join(DUMP_DIR, "current_session.txt")
 STATUS_FILE = os.path.join(DUMP_DIR, "session_status.txt")
-
 
 
 def set_session_active():
@@ -29,6 +30,7 @@ def set_session_active():
             f.write("ACTIVE")
     except:
         pass
+
 
 def is_session_active():
     """Перевіряє, чи була активна сесія до перезавантаження"""
@@ -42,9 +44,11 @@ def is_session_active():
 
 def save_lightweight_json(state, sc, filename=None):
     """Зберігає ТІЛЬКИ налаштування (лінії А-В, гектари). Запис атомарний."""
-    #print(f"[RESET] " + "="*58)
+    # print(f"[RESET] " + "="*58)
     print(f"[DumpManager] save_lightweight_json")
-    print(f"[DumpManager] Зберігає ТІЛЬКИ налаштування (лінії А-В, гектари). Запис атомарний.")
+    print(
+        f"[DumpManager] Зберігає ТІЛЬКИ налаштування (лінії А-В, гектари). Запис атомарний."
+    )
     os.makedirs(DUMP_DIR, exist_ok=True)
     target_file = filename if filename else CURRENT_SESSION_FILE
 
@@ -58,18 +62,18 @@ def save_lightweight_json(state, sc, filename=None):
             # "active_vra_file": getattr(sc, "ACTIVE_TASKMAP_FILE", ""),
             # "active_implement_id": getattr(sc, "ACTIVE_IMPLEMENT_ID", ""),
             # "target_rate_default": getattr(sc, "TARGET_RATE_DEFAULT", 0.0),
-            
             # Пряме звернення до вкладеного словника
             "active_vra_file": getattr(sc, "cfg", {}).get("ACTIVE_TASKMAP_FILE", ""),
-            "active_implement_id": getattr(sc, "cfg", {}).get("ACTIVE_IMPLEMENT_ID", ""),
+            "active_implement_id": getattr(sc, "cfg", {}).get(
+                "ACTIVE_IMPLEMENT_ID", ""
+            ),
             "target_rate_default": getattr(sc, "cfg", {}).get("VRA_RATE_DEFAULT", 0.0),
         }
-        
+
         # print("save_lightweight_json:\n")
         # print(f"ACTIVE_TASKMAP_FILE: {sc.__dict__['cfg']['ACTIVE_TASKMAP_FILE']}")
         # print(f"ACTIVE_IMPLEMENT_ID: {sc.__dict__['cfg']['ACTIVE_IMPLEMENT_ID']}")
         # print(f"VRA_RATE_DEFAULT: {sc.__dict__['cfg']['VRA_RATE_DEFAULT']}")
-
 
         temp_file = target_file + ".tmp"
         with open(temp_file, "w", encoding="utf-8") as f:
@@ -122,7 +126,9 @@ def load_track_history(filename=None):
                     if line:
                         try:
                             # Розбиваємо рядок на 5 частин
-                            chunk_key,lat_s, lon_s, hdg_s, states_s, widths_s = line.split(",")
+                            chunk_key, lat_s, lon_s, hdg_s, states_s, widths_s = (
+                                line.split(",")
+                            )
 
                             # 1. Відновлюємо масив станів секцій pt[3]
                             boolean_states = [
@@ -167,18 +173,18 @@ def clear_current_dump():
 def load_session_dump(state, sc, filename=None):
     """
     НЕВБИВАНЕ ЗАВАНТАЖЕННЯ СЕСІЇ:
-    Намагається прочитати JSON, але якщо його немає — все одно 
+    Намагається прочитати JSON, але якщо його немає — все одно
     гарантовано завантажує текстовий трек .txt для вебу!
     """
     target_file = filename if filename else CURRENT_SESSION_FILE
     print(f"[DumpManager] Спроба завантаження метаданих з: {target_file}")
-    
+
     # 1. Намагаємося прочитати легкі налаштування з JSON
     if os.path.exists(target_file):
         try:
             with open(target_file, "r", encoding="utf-8") as f:
                 dump = json.load(f)
-                
+
             state.area = dump.get("area", 0.0)
             state.point_a = dump.get("point_a")
             state.point_b = dump.get("point_b")
@@ -186,9 +192,13 @@ def load_session_dump(state, sc, filename=None):
             state.active_vra_file = dump.get("active_vra_file", None)
             print("[DumpManager] Налаштування поля та лінії А-В успішно відновлено.")
         except Exception as json_err:
-            print(f"[DumpManager] Файл JSON знайдено, але сталася помилка читання: {json_err}")
+            print(
+                f"[DumpManager] Файл JSON знайдено, але сталася помилка читання: {json_err}"
+            )
     else:
-        print("[DumpManager] Файл налаштувань .json відсутній (перший проїзд). Працюємо за замовчуванням.")
+        print(
+            "[DumpManager] Файл налаштувань .json відсутній (перший проїзд). Працюємо за замовчуванням."
+        )
 
     # Фіксуємо чисте ім'я для інтерфейсу (беремо ліву частину кортежу)
     state.current_file = os.path.splitext(os.path.basename(target_file))[0]
@@ -197,17 +207,19 @@ def load_session_dump(state, sc, filename=None):
     # Навіть якщо JSON немає, файл .txt з точками вже точно на диску!
     try:
         restored_track = load_track_history(filename)
-        
+
         # Накатуємо відновлений 5-елементний трек в ОЗУ системи
         state.path_history = restored_track
         sc.path_history = state.path_history  # Синхронізуємо з двигуном штанги
-        
-        print(f"[DumpManager] УСПІХ: Траєкторія відновлена. Зчитано {len(restored_track)} точок для Canvas вебу.")
+
+        print(
+            f"[DumpManager] УСПІХ: Траєкторія відновлена. Зчитано {len(restored_track)} точок для Canvas вебу."
+        )
         return True
     except Exception as track_err:
         print(f"[DumpManager] Критична помилка відновлення треку: {track_err}")
         return False
-    
+
 def load_wkb_geometry_safely_old(filepath):
     """
     Безопасный потоковый парсер "слоеного пирога" WKB.
@@ -219,16 +231,20 @@ def load_wkb_geometry_safely_old(filepath):
     from shapely.ops import unary_union
 
     print(f"[WKB_PARSER] [START] Попытка чтения геометрии из: {filepath}")
-    
+
     if not os.path.exists(filepath):
-        print(f"[WKB_PARSER] [WARN] Файл не найден: {filepath}. Возвращаем пустой MultiPolygon.")
+        print(
+            f"[WKB_PARSER] [WARN] Файл не найден: {filepath}. Возвращаем пустой MultiPolygon."
+        )
         return MultiPolygon()
 
     # Проверяем, не пустой ли файл на диске
     file_size = os.path.getsize(filepath)
     print(f"[WKB_PARSER] [INFO] Размер файла на диске: {file_size} байт.")
     if file_size == 0:
-        print("[WKB_PARSER] [WARN] Файл имеет нулевой размер. Возвращаем пустой MultiPolygon.")
+        print(
+            "[WKB_PARSER] [WARN] Файл имеет нулевой размер. Возвращаем пустой MultiPolygon."
+        )
         return MultiPolygon()
 
     all_chunks = []
@@ -245,30 +261,46 @@ def load_wkb_geometry_safely_old(filepath):
                         chunks_count += 1
                         # Логируем каждые 50 блоков, чтобы не забивать консоль, но видеть прогресс
                         if chunks_count % 50 == 0:
-                            print(f"[WKB_PARSER] [PROGRESS] Успешно прочитано блоков: {chunks_count}...")
+                            print(
+                                f"[WKB_PARSER] [PROGRESS] Успешно прочитано блоков: {chunks_count}..."
+                            )
                 except EOFError:
-                    print(f"[WKB_PARSER] [SUCCESS] Достигнут конец файла (EOF). Всего блоков найдено: {chunks_count}")
+                    print(
+                        f"[WKB_PARSER] [SUCCESS] Достигнут конец файла (EOF). Всего блоков найдено: {chunks_count}"
+                    )
                     break
                 except Exception as chunk_err:
                     # Если один блок побит, логируем и пытаемся читать дальше, если это возможно
-                    print(f"[WKB_PARSER] [ERROR] Сбой чтения блока №{chunks_count + 1}: {chunk_err}")
-                    break # Прерываем, так как битый бинарный поток обычно не восстановить в рамках одной сессии
+                    print(
+                        f"[WKB_PARSER] [ERROR] Сбой чтения блока №{chunks_count + 1}: {chunk_err}"
+                    )
+                    break  # Прерываем, так как битый бинарный поток обычно не восстановить в рамках одной сессии
     except Exception as file_err:
-        print(f"[WKB_PARSER] [CRITICAL] Не удалось открыть или прочитать файл: {file_err}")
+        print(
+            f"[WKB_PARSER] [CRITICAL] Не удалось открыть или прочитать файл: {file_err}"
+        )
         return MultiPolygon()
 
     # Сшиваем все пачки полигонов в один монолит
     if all_chunks:
-        print(f"[WKB_PARSER] [UNION] Запуск объединения (unary_union) для {len(all_chunks)} элементов...")
+        print(
+            f"[WKB_PARSER] [UNION] Запуск объединения (unary_union) для {len(all_chunks)} элементов..."
+        )
         try:
             merged_geometry = unary_union(all_chunks)
-            print(f"[WKB_PARSER] [UNION_SUCCESS] Геометрия успешно объединена в ОЗУ. Тип: {merged_geometry.geom_type}")
+            print(
+                f"[WKB_PARSER] [UNION_SUCCESS] Геометрия успешно объединена в ОЗУ. Тип: {merged_geometry.geom_type}"
+            )
             return merged_geometry
         except Exception as union_err:
-            print(f"[WKB_PARSER] [UNION_CRITICAL] Ошибка сшивания shapely полигонов: {union_err}")
+            print(
+                f"[WKB_PARSER] [UNION_CRITICAL] Ошибка сшивания shapely полигонов: {union_err}"
+            )
             return MultiPolygon()
     else:
-        print("[WKB_PARSER] [INFO] Валидных геометрических блоков в файле не обнаружено.")
+        print(
+            "[WKB_PARSER] [INFO] Валидных геометрических блоков в файле не обнаружено."
+        )
         return MultiPolygon()
 
 def load_wkb_geometry_safely(filepath):
@@ -278,9 +310,11 @@ def load_wkb_geometry_safely(filepath):
     Якщо файл частково побитий, врятує та завантажить усі вцілілі блоки.
     """
     print(f"[WKB_PARSER] [START] Читання геометрії з: {filepath}")
-    
+
     if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
-        print(f"[WKB_PARSER] [WARN] Файл порожній або відсутній. Повертаємо порожній MultiPolygon.")
+        print(
+            f"[WKB_PARSER] [WARN] Файл порожній або відсутній. Повертаємо порожній MultiPolygon."
+        )
         return MultiPolygon()
 
     all_chunks = []
@@ -294,16 +328,18 @@ def load_wkb_geometry_safely(filepath):
                 if not len_bytes or len(len_bytes) < 4:
                     # Чистий і коректний кінець файлу (EOF)
                     break
-                
+
                 # Розпаковуємо довжину наступного WKB-блоку
                 block_len = struct.unpack(">I", len_bytes)[0]
-                
+
                 # 2. Викушуємо з потоку суворо block_len байтів
                 wkb_bytes = f.read(block_len)
                 if len(wkb_bytes) < block_len:
-                    print(f"[WKB_PARSER] [WARN] Файл раптово обірвався на блоці №{chunks_count + 1}. Хвіст пошкоджено.")
-                    break # Що встигли прочитати раніше — те врятовано!
-                
+                    print(
+                        f"[WKB_PARSER] [WARN] Файл раптово обірвався на блоці №{chunks_count + 1}. Хвіст пошкоджено."
+                    )
+                    break  # Що встигли прочитати раніше — те врятовано!
+
                 try:
                     # Розпаковуємо геометрію суворо з цього масиву байт
                     chunk = wkb.loads(wkb_bytes)
@@ -312,10 +348,14 @@ def load_wkb_geometry_safely(filepath):
                         chunks_count += 1
                 except Exception as chunk_err:
                     # Якщо блок всередині бітий, ми знаємо його довжину, тому просто переступаємо його!
-                    print(f"[WKB_PARSER] [ERROR] Пропуск бітого блоку №{chunks_count + 1}: {chunk_err}")
+                    print(
+                        f"[WKB_PARSER] [ERROR] Пропуск бітого блоку №{chunks_count + 1}: {chunk_err}"
+                    )
                     continue
 
-        print(f"[WKB_PARSER] [SUCCESS] Читання завершено. Валідних блоків знайдено: {chunks_count}")
+        print(
+            f"[WKB_PARSER] [SUCCESS] Читання завершено. Валідних блоків знайдено: {chunks_count}"
+        )
 
     except Exception as file_err:
         print(f"[WKB_PARSER] [CRITICAL] Помилка файлової системи: {file_err}")
@@ -326,20 +366,26 @@ def load_wkb_geometry_safely(filepath):
         print(f"[WKB_PARSER] [UNION] Об'єднання {len(all_chunks)} елементів в ОЗУ...")
         try:
             merged_geometry = unary_union(all_chunks)
-            print(f"[WKB_PARSER] [UNION_SUCCESS] Тип завантаженої карти: {merged_geometry.geom_type}")
-            
+            print(
+                f"[WKB_PARSER] [UNION_SUCCESS] Тип завантаженої карти: {merged_geometry.geom_type}"
+            )
+
             # Стандартизуємо вихідний тип до суворого MultiPolygon
             if isinstance(merged_geometry, Polygon):
                 return MultiPolygon([merged_geometry])
             elif isinstance(merged_geometry, MultiPolygon):
                 return merged_geometry
             else:
-                polygons = [geom for geom in merged_geometry.geoms if isinstance(geom, Polygon)]
+                polygons = [
+                    geom for geom in merged_geometry.geoms if isinstance(geom, Polygon)
+                ]
                 return MultiPolygon(polygons)
         except Exception as union_err:
-            print(f"[WKB_PARSER] [UNION_CRITICAL] Помилка сшивания shapely: {union_err}")
+            print(
+                f"[WKB_PARSER] [UNION_CRITICAL] Помилка сшивания shapely: {union_err}"
+            )
             return MultiPolygon()
-    
+
     return MultiPolygon()
 
 def log_multipolygon_details(mp: MultiPolygon):
@@ -352,20 +398,20 @@ def log_multipolygon_details(mp: MultiPolygon):
 
     # Загальна кількість окремих полігонів (островів/кілець)
     polygons_count = len(mp.geoms)
-    
+
     total_interiors = 0  # Кількість "дірок" у полігонах
-    total_vertices = 0   # Загальна кількість точок (координат) на карті
+    total_vertices = 0  # Загальна кількість точок (координат) на карті
 
     holes_areas = [Polygon(hole).area for poly in mp.geoms for hole in poly.interiors]
-    micro_holes = [a for a in holes_areas if a < 1.0] # Дірки менше 1 кв.м.
+    micro_holes = [a for a in holes_areas if a < 1.0]  # Дірки менше 1 кв.м.
 
     for polygon in mp.geoms:
         # Рахуємо внутрішні контури ("дірки")
         total_interiors += len(polygon.interiors)
-        
+
         # Рахуємо вершини зовнішньої межі
         total_vertices += len(polygon.exterior.coords)
-        
+
         # Додаємо вершини всіх внутрішніх контурів
         for interior in polygon.interiors:
             total_vertices += len(interior.coords)
@@ -381,11 +427,15 @@ def log_multipolygon_details(mp: MultiPolygon):
     print(f" 🔹 Загальний периметр контурів: {mp.length:,.2f}")
     print(f" 🔹 Максимальна дірка: {max(holes_areas):.2f} кв.м.")
     print(f" 🔹 Середня площа дірки: {sum(holes_areas)/len(holes_areas):.2f} кв.м.")
-    print(f" 🔹 Кількість мікро-пропусків <1 кв.м.: {len(micro_holes)} підозрілі брязкання секцій")
-    
+    print(
+        f" 🔹 Кількість мікро-пропусків <1 кв.м.: {len(micro_holes)} підозрілі брязкання секцій"
+    )
+
     # Опціонально: межі всієї карти (Bounding Box)
     minx, miny, maxx, maxy = mp.bounds
-    print(f" 🔹 Охоплюючий прямокутник (Bounds): [{minx:.4f}, {miny:.4f}] -> [{maxx:.4f}, {maxy:.4f}]")
+    print(
+        f" 🔹 Охоплюючий прямокутник (Bounds): [{minx:.4f}, {miny:.4f}] -> [{maxx:.4f}, {maxy:.4f}]"
+    )
     print("=" * 50)
 
 def check_sections_stability(track_file):
@@ -397,32 +447,35 @@ def check_sections_stability(track_file):
     total_records = 0
 
     for line in lines:
-        parts = line.strip().split(',')
+        parts = line.strip().split(",")
         if len(parts) < 6:
             continue
-        
+
         total_records += 1
         # Розпаршуємо рядок секцій: '0-0-0-1-0-0-0-0' -> [0, 0, 0, 1, 0, 0, 0, 0]
-        current_states = [int(x) for x in parts[4].split('-')]
-        
+        current_states = [int(x) for x in parts[4].split("-")]
+
         if last_states is not None:
             for i in range(8):
                 if current_states[i] != last_states[i]:
                     section_changes[i] += 1
-                    
+
         last_states = current_states
 
     print(f"=== ФІНАЛЬНИЙ АНАЛІЗ РОБОТИ SECTION CONTROL ===")
     print(f"Всього точок записано: {total_records}")
     print("Кількість перемикань по кожній секції (1..8):")
     for idx, changes in enumerate(section_changes):
-        status = "СТАБІЛЬНО" if changes < total_records * 0.05 else "БРЯЗКАННЯ (Часті перемикання!)"
+        status = (
+            "СТАБІЛЬНО"
+            if changes < total_records * 0.05
+            else "БРЯЗКАННЯ (Часті перемикання!)"
+        )
         print(f"  🔹 Секція №{idx+1}: {changes} разів змінила стан ({status})")
     print("==============================================")
 
 # Запуск тесту перед релізом:
 # check_sections_stability("your_track_file.txt")
-
 def save_multipolygon_to_kml(mp: MultiPolygon, output_kml_path: str):
     """
     Конвертує об'єкт MultiPolygon (з урахуванням усіх 185 дірок) у файл KML.
@@ -462,20 +515,32 @@ def save_multipolygon_to_kml(mp: MultiPolygon, output_kml_path: str):
 
             for polygon in mp.geoms:
                 f.write("        <Polygon>\n")
-                
+
                 # 1. Записуємо зовнішній контур (Exterior)
-                f.write("          <outerBoundaryIs>\n            <LinearRing>\n              <coordinates>\n")
+                f.write(
+                    "          <outerBoundaryIs>\n            <LinearRing>\n              <coordinates>\n"
+                )
                 # У KML координати йдуть у форматі: Довгота,Широта,Висота (Lon,Lat,0)
-                ext_coords = " ".join([f"{lon},{lat},0" for lon, lat in polygon.exterior.coords])
+                ext_coords = " ".join(
+                    [f"{lon},{lat},0" for lon, lat in polygon.exterior.coords]
+                )
                 f.write(f"                {ext_coords}\n")
-                f.write("              </coordinates>\n            </LinearRing>\n          </outerBoundaryIs>\n")
+                f.write(
+                    "              </coordinates>\n            </LinearRing>\n          </outerBoundaryIs>\n"
+                )
 
                 # 2. Записуємо всі 185 внутрішніх вирізів (Interiors / Дірки)
                 for interior in polygon.interiors:
-                    f.write("          <innerBoundaryIs>\n            <LinearRing>\n              <coordinates>\n")
-                    int_coords = " ".join([f"{lon},{lat},0" for lon, lat in interior.coords])
+                    f.write(
+                        "          <innerBoundaryIs>\n            <LinearRing>\n              <coordinates>\n"
+                    )
+                    int_coords = " ".join(
+                        [f"{lon},{lat},0" for lon, lat in interior.coords]
+                    )
                     f.write(f"                {int_coords}\n")
-                    f.write("              </coordinates>\n            </LinearRing>\n          </innerBoundaryIs>\n")
+                    f.write(
+                        "              </coordinates>\n            </LinearRing>\n          </innerBoundaryIs>\n"
+                    )
 
                 f.write("        </Polygon>\n")
 
@@ -486,17 +551,15 @@ def save_multipolygon_to_kml(mp: MultiPolygon, output_kml_path: str):
         print(f"[KML_EXPORT] Помилка запису KML карти: {e}")
         return False
 
-import math
-
 def calculate_offset_point(lat, lon, heading, distance_meters):
     """Розраховує зміщення точки по перпендикуляру до курсу руху."""
     R = 6378137.0
     dn = distance_meters * math.cos(heading)
     de = distance_meters * math.sin(heading)
-    
+
     dLat = dn / R
     dLon = de / (R * math.cos(math.radians(lat)))
-    
+
     return lat + math.degrees(dLat), lon + math.degrees(dLon)
 
 def save_dynamic_sections_to_kml(track_txt_path: str, output_kml_path: str):
@@ -522,23 +585,23 @@ def save_dynamic_sections_to_kml(track_txt_path: str, output_kml_path: str):
 
     try:
         with open(track_txt_path, "r", encoding="utf-8") as f:
-            lines = [line.strip().split(',') for line in f if line.strip()]
+            lines = [line.strip().split(",") for line in f if line.strip()]
 
         kml_polygons = []
-        
+
         for idx in range(len(lines) - 1):
             p1, p2 = lines[idx], lines[idx + 1]
             if len(p1) < 6 or len(p2) < 6:
                 continue
-                
+
             try:
                 lat1, lon1, hdg1 = float(p1[1]), float(p1[2]), float(p1[3])
-                states1 = [int(x) for x in p1[4].split('-')]
-                widths1 = [float(x) for x in p1[5].split('-')]
-                
+                states1 = [int(x) for x in p1[4].split("-")]
+                widths1 = [float(x) for x in p1[5].split("-")]
+
                 lat2, lon2, hdg2 = float(p2[1]), float(p2[2]), float(p2[3])
-                states2 = [int(x) for x in p2[4].split('-')]
-                widths2 = [float(x) for x in p2[5].split('-')]
+                states2 = [int(x) for x in p2[4].split("-")]
+                widths2 = [float(x) for x in p2[5].split("-")]
             except (ValueError, IndexError):
                 continue
 
@@ -549,34 +612,42 @@ def save_dynamic_sections_to_kml(track_txt_path: str, output_kml_path: str):
 
             perp_angle1 = math.radians(hdg1 + 90)
             perp_angle2 = math.radians(hdg2 + 90)
-            
+
             # Розрахунок початкового зміщення від лівого краю штанги
             total_width = sum(widths1[:sections_count])
             current_offset1 = -total_width / 2.0
             current_offset2 = -total_width / 2.0
-            
+
             for s_idx in range(sections_count):
                 sec_w1 = widths1[s_idx]
-                
+
                 start_offset1 = current_offset1
                 end_offset1 = current_offset1 + sec_w1
                 start_offset2 = current_offset2
                 end_offset2 = current_offset2 + sec_w1
-                
+
                 current_offset1 = end_offset1
                 current_offset2 = end_offset2
-                
+
                 # Секція активна, якщо вона увімкнена хоча б на одному кроці
-                is_active = (states1[s_idx] == 1 or states2[s_idx] == 1)
+                is_active = states1[s_idx] == 1 or states2[s_idx] == 1
                 style_url = "#sec_active" if is_active else "#sec_disabled"
                 status_text = "АКТИВНА" if is_active else "ВИМКНЕНА"
 
                 # Координати 4 кутів полігона для цієї секції
-                l1_lat, l1_lon = calculate_offset_point(lat1, lon1, perp_angle1, start_offset1)
-                r1_lat, r1_lon = calculate_offset_point(lat1, lon1, perp_angle1, end_offset1)
-                r2_lat, r2_lon = calculate_offset_point(lat2, lon2, perp_angle2, end_offset2)
-                l2_lat, l2_lon = calculate_offset_point(lat2, lon2, perp_angle2, start_offset2)
-                
+                l1_lat, l1_lon = calculate_offset_point(
+                    lat1, lon1, perp_angle1, start_offset1
+                )
+                r1_lat, r1_lon = calculate_offset_point(
+                    lat1, lon1, perp_angle1, end_offset1
+                )
+                r2_lat, r2_lon = calculate_offset_point(
+                    lat2, lon2, perp_angle2, end_offset2
+                )
+                l2_lat, l2_lon = calculate_offset_point(
+                    lat2, lon2, perp_angle2, start_offset2
+                )
+
                 poly_xml = f"""    <Placemark>
       <name>Секція {s_idx+1} ({status_text})</name>
       <styleUrl>{style_url}</styleUrl>
@@ -601,10 +672,292 @@ def save_dynamic_sections_to_kml(track_txt_path: str, output_kml_path: str):
             f.write(kml_header)
             f.writelines(kml_polygons)
             f.write(kml_footer)
-            
+
         print(f"[READY] Універсальний KML успішно згенеровано: {output_kml_path}")
         return True
     except Exception as e:
         print(f"[ERROR] Помилка генерації KML: {e}")
         return False
 
+    return (lon, lat)  # KML вимагає формат (на довгота, широта)
+import os
+import pyproj
+from shapely.geometry import MultiPolygon
+
+def save_multi_to_kml(mp: MultiPolygon, zone: int, filename: str = None) -> bool:
+    """
+    Конвертує MultiPolygon з метрів (UTM) у градуси та зберігає в KML.
+    Зафарбовує полігони напівпрозорим зеленим кольором.
+    """
+    if not isinstance(mp, MultiPolygon) or mp.is_empty:
+        print("Помилка: Переданий об'єкт не є валідним або порожнім MultiPolygon.")
+        return False
+
+    if filename is None:
+        filename = f"polygon_zone_{zone}.kml"
+
+    # Ініціалізуємо зворотний трансформер з UTM у градуси WGS84
+    transformer_to_deg = pyproj.Transformer.from_crs(
+        f"epsg:326{zone}", "epsg:4326", always_xy=True
+    )
+
+    try:
+        with open(filename, 'w', encoding='utf-8') as writer:
+            # Заголовок KML (суворо за вашим шаблоном)
+            writer.write('<?xml version = "1.0" encoding = "utf-8" ?>\n')
+            writer.write('<kml xmlns="http://www.opengis.net/kml/2.2">\n')
+            writer.write('<Document id="root_doc">\n')
+            writer.write('<Schema name="" id="">\n')
+            writer.write('   <SimpleField name="MAIN" type="int"></SimpleField>\n')
+            writer.write('</Schema>\n')
+            writer.write('<Folder><name></name>\n')
+
+            # Проходимо по кожному полігону всередині нашого MultiPolygon
+            for poly in mp.geoms:
+                writer.write('   <Placemark>\n')
+                # Налаштування стилю: зелений контур (ff00ff00) та напівпрозоре зелене заливання (6400ff00)
+                writer.write('      <Style>\n')
+                writer.write('         <LineStyle><color>ff00ff00</color><width>2</width></LineStyle>\n')
+                writer.write('         <PolyStyle><color>6400ff00</color><fill>1</fill></PolyStyle>\n')
+                writer.write('      </Style>\n')
+                
+                # Блок метаданих (ExtendedData)
+                writer.write('         <ExtendedData><SchemaData schemaUrl="#">\n')
+                writer.write('            <SimpleData name="SEED">0</SimpleData>\n')
+                writer.write('            <SimpleData name="FERTILIZER">0</SimpleData>\n')
+                writer.write('            <SimpleData name="WATER">0</SimpleData>\n')
+                writer.write('         </SchemaData></ExtendedData>\n')
+                
+                # Початок тегу полігону
+                writer.write('            <Polygon><tessellate>1</tessellate>\n')
+                
+                # --- 1. ЗАПИСУЄМО ЗОВНІШНЮ МЕЖУ ---
+                writer.write('              <outerBoundaryIs><LinearRing><coordinates>')
+                ext_coords = [transformer_to_deg.transform(x, y) for x, y in poly.exterior.coords]
+                ext_strings = [f"{lon},{lat}" for lon, lat in ext_coords]
+                writer.write(" ".join(ext_strings))
+                writer.write('</coordinates></LinearRing></outerBoundaryIs>\n')
+                
+                # --- 2. ЗАПИСУЄМО ВНУТРІШНІ ВИРІЗИ (ДІРКИ) ---
+                for interior in poly.interiors:
+                    writer.write('              <innerBoundaryIs><LinearRing><coordinates>')
+                    int_coords = [transformer_to_deg.transform(x, y) for x, y in interior.coords]
+                    int_strings = [f"{lon},{lat}" for lon, lat in int_coords]
+                    writer.write(" ".join(int_strings))
+                    writer.write('</coordinates></LinearRing></innerBoundaryIs>\n')
+                
+                # Закриваємо тег полігону та Placemark
+                writer.write('            </Polygon>\n')
+                writer.write('   </Placemark>\n')
+
+            # Закриваємо всі теги структури
+            writer.write('</Folder>\n')
+            writer.write('</Document></kml>\n')
+            
+        print(f"Файл успішно збережено: {os.path.abspath(filename)}")
+        return True
+
+    except Exception as e:
+        print(f"Сталася помилка при записі KML: {e}")
+        return False
+
+
+
+def save_multi_to_kml_ok_kontur_all(mp: MultiPolygon, zone: int, filename: str = None) -> bool:
+    """
+    Конвертує MultiPolygon з метрів (UTM) у градуси та зберігає в KML.
+    Підтримує як зовнішні контури, так і внутрішні вирізи (дірки).
+    """
+    if not isinstance(mp, MultiPolygon) or mp.is_empty:
+        print("Помилка: Переданий об'єкт не є валідним або порожнім MultiPolygon.")
+        return False
+
+    if filename is None:
+        filename = f"polygon_zone_{zone}.kml"
+
+    # Ініціалізуємо зворотний трансформер з UTM у градуси WGS84
+    transformer_to_deg = pyproj.Transformer.from_crs(
+        f"epsg:326{zone}", "epsg:4326", always_xy=True
+    )
+
+    try:
+        with open(filename, 'w', encoding='utf-8') as writer:
+            # Заголовок KML
+            writer.write('<?xml version = "1.0" encoding = "utf-8" ?>\n')
+            writer.write('<kml xmlns="http://www.opengis.net/kml/2.2">\n')
+            writer.write('<Document id="root_doc">\n')
+            writer.write('<Schema name="" id="">\n')
+            writer.write('   <SimpleField name="MAIN" type="int"></SimpleField>\n')
+            writer.write('</Schema>\n')
+            writer.write('<Folder><name></name>\n')
+
+            # Проходимо по кожному полігону всередині нашого MultiPolygon
+            for poly in mp.geoms:
+                writer.write('   <Placemark>\n')
+                writer.write('      <Style><LineStyle><color>ff0000ff</color></LineStyle><PolyStyle><fill>0</fill></PolyStyle></Style>\n')
+                
+                # Блок метаданих (ExtendedData)
+                writer.write('         <ExtendedData><SchemaData schemaUrl="#">\n')
+                writer.write('            <SimpleData name="SEED">0</SimpleData>\n')
+                writer.write('            <SimpleData name="FERTILIZER">0</SimpleData>\n')
+                writer.write('            <SimpleData name="WATER">0</SimpleData>\n')
+                writer.write('         </SchemaData></ExtendedData>\n')
+                
+                # Початок тегу полігону
+                writer.write('            <Polygon><tessellate>1</tessellate>\n')
+                
+                # --- 1. ЗАПИСУЄМО ЗОВНІШНЮ МЕЖУ ---
+                writer.write('              <outerBoundaryIs><LinearRing><coordinates>')
+                ext_coords = [transformer_to_deg.transform(x, y) for x, y in poly.exterior.coords]
+                ext_strings = [f"{lon},{lat}" for lon, lat in ext_coords]
+                writer.write(" ".join(ext_strings))
+                writer.write('</coordinates></LinearRing></outerBoundaryIs>\n')
+                
+                # --- 2. ЗАПИСУЄМО ВНУТРІШНІ ВИРІЗИ (ДІРКИ), ЯКЩО ВОНИ Є ---
+                for interior in poly.interiors:
+                    writer.write('              <innerBoundaryIs><LinearRing><coordinates>')
+                    int_coords = [transformer_to_deg.transform(x, y) for x, y in interior.coords]
+                    int_strings = [f"{lon},{lat}" for lon, lat in int_coords]
+                    writer.write(" ".join(int_strings))
+                    writer.write('</coordinates></LinearRing></innerBoundaryIs>\n')
+                
+                # Закриваємо тег полігону та Placemark
+                writer.write('            </Polygon>\n')
+                writer.write('   </Placemark>\n')
+
+            # Закриваємо всі теги структури
+            writer.write('</Folder>\n')
+            writer.write('</Document></kml>\n')
+            
+        print(f"Файл успішно збережено з внутрішніми полігонами: {os.path.abspath(filename)}")
+        return True
+
+    except Exception as e:
+        print(f"Сталася помилка при записі KML: {e}")
+        return False
+
+def save_multi_to_kml_only_outerBound(mp: MultiPolygon, zone: int, filename: str = None) -> bool:
+    """
+    Конвертує MultiPolygon з метрів (UTM) у градуси та зберігає в KML
+    за точною структурою робочого C# скрипту.
+    """
+    if not isinstance(mp, MultiPolygon) or mp.is_empty:
+        print("Помилка: Переданий об'єкт не є валідним або порожнім MultiPolygon.")
+        return False
+
+    if filename is None:
+        filename = f"polygon_zone_{zone}.kml"
+
+    # Ініціалізуємо зворотний трансформер з UTM у градуси WGS84
+    transformer_to_deg = pyproj.Transformer.from_crs(
+        f"epsg:326{zone}", "epsg:4326", always_xy=True
+    )
+
+    try:
+        # Відкриваємо файл на запис із фіксованим UTF-8 кодуванням
+        with open(filename, 'w', encoding='utf-8') as writer:
+            # Записуємо заголовок точно як у C# (без зайвих пробілів попереду)
+            writer.write('<?xml version = "1.0" encoding = "utf-8" ?>\n')
+            writer.write('<kml xmlns="http://www.opengis.net/kml/2.2">\n')
+            writer.write('<Document id="root_doc">\n')
+            writer.write('<Schema name="" id="">\n')
+            writer.write('   <SimpleField name="MAIN" type="int"></SimpleField>\n')
+            writer.write('</Schema>\n')
+            writer.write('<Folder><name></name>\n')
+
+            # Проходимо по кожному полігону всередині нашого MultiPolygon
+            for poly in mp.geoms:
+                writer.write('   <Placemark>\n')
+                writer.write('      <Style><LineStyle><color>ff0000ff</color></LineStyle><PolyStyle><fill>0</fill></PolyStyle></Style>\n')
+                
+                # Додаємо блок даних (залишаємо порожнім або дефолтним, якщо у вас немає цих полів)
+                writer.write('         <ExtendedData><SchemaData schemaUrl="#">\n')
+                writer.write('            <SimpleData name="SEED">0</SimpleData>\n')
+                writer.write('            <SimpleData name="FERTILIZER">0</SimpleData>\n')
+                writer.write('            <SimpleData name="WATER">0</SimpleData>\n')
+                writer.write('         </SchemaData></ExtendedData>\n')
+                
+                # Початок тегу полігону з тесселяцією
+                writer.write('            <Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>')
+                
+                # Конвертуємо метричні координати зовнішньої межі (exterior)
+                ext_coords = [transformer_to_deg.transform(x, y) for x, y in poly.exterior.coords]
+                
+                # Формуємо рядок координат: "lon,lat lon,lat lon,lat"
+                coord_strings = []
+                for lon, lat in ext_coords:
+                    # Важливо: використовуємо f-рядки, які за замовчуванням пишуть крапку як розділювач дробової частини
+                    coord_strings.append(f"{lon},{lat}")
+                
+                # Об'єднуємо точки суворо через ОДИН пробіл (як у вашому C# циклі)
+                writer.write(" ".join(coord_strings))
+                
+                writer.write('</coordinates></LinearRing></outerBoundaryIs></Polygon>\n')
+                writer.write(' </Placemark>\n')
+
+            # Закриваємо всі теги структури
+            writer.write('</Folder>\n')
+            writer.write('</Document></kml>\n')
+            
+        print(f"Файл успішно збережено: {os.path.abspath(filename)}")
+        return True
+
+    except Exception as e:
+        print(f"Сталася помилка при записі KML: {e}")
+        return False
+
+
+
+
+# def save_multi_to_kml(mp: MultiPolygon, zone: int, filename: str = None) -> str:
+#     """
+#     Конвертує MultiPolygon з метрів (UTM) у градуси (WGS84) та зберігає в KML.
+    
+#     :param mp: Об'єкт shapely.geometry.MultiPolygon у метричних координатах.
+#     :param zone: Номер UTM зони (наприклад, 35).
+#     :param filename: Шлях до файлу для збереження. Якщо None, створить автоматично.
+#     :return: Шлях до збереженого файлу.
+#     """
+#     # 1. Перевірка вхідних даних
+#     if not isinstance(mp, MultiPolygon) or mp.is_empty:
+#         raise ValueError("Переданий об'єкт не є валідним або порожнім MultiPolygon.")
+
+#     # 2. Якщо ім'я файлу не вказано, створюємо дефолтне
+#     if filename is None:
+#         filename = f"polygon_zone_{zone}.kml"
+
+#     # 3. Створюємо зворотний трансформер з UTM (метри) у WGS84 (градуси)
+#     transformer_to_deg = pyproj.Transformer.from_crs(
+#         f"epsg:326{zone}", "epsg:4326", always_xy=True
+#     )
+
+#     # Внутрішня функція для трансформації однієї точки
+#     def transform_vertex(x, y):
+#         lon, lat = transformer_to_deg.transform(x, y)
+#         return (lon, lat)  # KML вимагає формат (довгота, широта)
+
+#     # 4. Ініціалізуємо KML документ
+#     kml = simplekml.Kml()
+
+#     # 5. Обходимо всі полігони всередині MultiPolygon
+#     for poly in mp.geoms:
+#         # Конвертуємо зовнішню межу полігону
+#         ext_coords = [transform_vertex(x, y) for x, y in poly.exterior.coords]
+        
+#         # Конвертуємо внутрішні вирізи (дірки), якщо вони є
+#         int_coords = []
+#         for interior in poly.interiors:
+#             int_coords.append([transform_vertex(x, y) for x, y in interior.coords])
+            
+#         # Додаємо полігон у KML
+#         kml_poly = kml.newpolygon(outerboundaryis=ext_coords, innerboundaryis=int_coords)
+        
+#         # Базовий стиль для Google Maps (червоний контур, напівпрозоре заливання)
+#         kml_poly.style.linestyle.color = simplekml.Color.red
+#         kml_poly.style.linestyle.width = 2
+#         kml_poly.style.polystyle.color = simplekml.Color.changealphaint(50, simplekml.Color.red)
+
+#     # 6. Зберігаємо файл
+#     kml.save(filename)
+#     print(f"Файл успішно збережено: {os.path.abspath(filename)}")
+#     return filename

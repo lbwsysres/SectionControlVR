@@ -12,7 +12,7 @@ function updateDiagnosticPanel() {
             const txtcurrent_file = document.getElementById('current_file');
             
 
-            txtcurrent_file.innerText = `Field: ${data.file}`;
+            txtcurrent_file.innerText = `Поле: ${data.file}`;
             txtGpsSats.innerText = `Sattelite: ${data.sats}`;
             txtGpsSpeed.innerText = `Speed: ${data.speed} km/h`;
             // 2. Получаем ссылки на новые элементы DOP

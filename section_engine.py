@@ -36,6 +36,8 @@ class SectionControl:
         self.base_field_x = None        # Базова координата X найпершої точки поля (для відносного відліку)
         self.base_field_y = None        # Базова координата Y найпершої точки поля
 
+        self.zone = 35
+
     def get_chunk_key(self, tx, ty):
         """
         Рахує унікальний локальний ключ чанка поля.
@@ -242,6 +244,7 @@ class SectionControl:
         # 1. Проекція координат WGS84 у метри (UTM)
         if not self.transformer_to_m:
             zone = int((lon + 180) / 6) + 1
+            self.zone = zone;
             self.transformer_to_m = pyproj.Transformer.from_crs(
                 "epsg:4326", f"epsg:326{zone}", always_xy=True
             )
@@ -370,6 +373,7 @@ class SectionControl:
             [chunk_key, lat, lon, heading_deg, list(res_states), list(widths)]
         )
 
+        # LBW
         if len(self.path_history) > 100000:
             self.path_history.pop(0)
 
@@ -414,57 +418,6 @@ class SectionControl:
                 print(f"[SectionControl eMMC-Safe] Пачка успішно зафіксована на диск. Буфери чисті.")
             except Exception as e:
                 print(f"[SectionControl Sync Error] Помилка синхронізації з диском: {e}")
-
-
-        # 5. Запис історії для відмальовки сліду на Canvas (в ОЗУ)
-        # self.path_history.append(
-        #     [chunk_key, lat, lon, heading_deg, list(res_states), list(widths)]
-        # )
-
-        # # LBW 
-        # if len(self.path_history) > 100000:
-        #     self.path_history.pop(0)
-        # # --- ЗБЕРІГАЄМО ПОВНУ 5-ЕЛЕМЕНТНУ СТРУКТУРУ ДЛЯ ВЕБ-CANVAS ---
-        # # Перетворюємо масив станів [True, False...] у рядок "1-0-1..."
-        # states_str = "-".join(["1" if s else "0" for s in res_states])
-        # # Перетворюємо ширини [0.8, 0.7...] у рядок "0.8-0.7..."
-        # widths_str = "-".join([str(w) for w in widths])
-
-        # # Кладемо в ОЗУ-буфер для залпового скидання на диск
-        # self.track_buffer_to_disk.append([chunk_key,lat, lon, heading_deg, states_str, widths_str])
-        # # 6. ОНОВЛЕННЯ КАРТИ В ОЗУ ТА ЗАЛПОВИЙ ЗАПИС НА ДИСК (Кожні 300 точок)
-        # if polys_to_save:
-        #     try:
-        #         for p in polys_to_save:
-        #             if p.is_valid and not p.is_empty:
-        #                 self.buffer_to_disk.append(p)
-        #         # Синхронна монолітна карта в ОЗУ для логіки перекриттів
-        #         self.covered_area = self.covered_area.union(unary_union(polys_to_save))
-        #     except Exception as e:
-        #         print(f"[SectionControl RAM Error] Помилка об’єднання карт в ОЗУ: {e}")
-
-        # # --- СИНХРОННЕ ПАКЕТНЕ ЗБЕРЕЖЕННЯ (ЗАХИСТ eMMC) ---
-        # if len(self.path_history) % 30 == 0:
-        #     try:
-        #         # Оптимізуємо моноліт в пам'яті, щоб інтерфейс вебу не гальмував
-        #         self.covered_area = self.covered_area.simplify(
-        #             0.05, preserve_topology=True
-        #         )
-        #         # А) Скидаємо бінарні полігони покриття одним махом
-        #         if self.buffer_to_disk:
-        #             self.save_to_disk()
-        #         # Б) Скидаємо 300 текстових точок треку одним махом
-        #         import dump_manager
-        #         if self.track_buffer_to_disk:
-        #             dump_manager.append_batch_to_track_file(self.track_buffer_to_disk)
-        #             self.track_buffer_to_disk = []  # Очищаємо ОЗУ-буфер треку
-        #         print(
-        #             f"[SectionControl eMMC-Safe] Пачка з 300 точок успішно зафіксована на диск."
-        #         )
-        #     except Exception as e:
-        #         print(
-        #             f"[SectionControl Sync Error] Помилка синхронізації з диском: {e}"
-        #         )
 
         self.last_x, self.last_y = ux, uy
         self.last_p1_list, self.last_p2_list = curr_p1, curr_p2
