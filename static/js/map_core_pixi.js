@@ -1,0 +1,924 @@
+// Залізобетонна синхронізація конфігу з Flask
+//const cfg = {{ cfg | tojson }};
+
+// Константи та змінні для математики треку
+const metersPerDegree = 111320.0;
+let refLat = null;
+let refLon = null;
+let lastReceivedIndex = 0;
+let totalPolygonsRendered = 0;
+let totalLineRendered = 0;
+let prevSectionsCoords = [];
+let pointsQueue = [];
+let isProcessingQueue = false;
+let lastQueueProgressTime = performance.now();
+let failedAttempts = 0;
+const MAX_FAILED_ATTEMPTS = 5;
+
+let tractorMetersX = 0;
+let tractorMetersY = 0;
+let tractorHeadingRad = 0;
+
+let tractorGraphics = new PIXI.Graphics();
+let boomGraphics = new PIXI.Container();
+let sectionSprites = [];
+
+let lastRenderedPassNum = null;
+
+let targetX = null, targetY = null, targetHdg = 0;
+let interpolatedX = null, interpolatedY = null, interpolatedHdg = 0;
+
+let lastProcessedLat = null;
+let lastProcessedLon = null;
+
+
+if (typeof isVraMapRendered === 'undefined') window.isVraMapRendered = false;
+if (typeof isVraLoading === 'undefined') window.isVraLoading = false;
+
+//#region  PIXI
+// Ініціалізація PixiJS програми
+PIXI.settings.PREFER_ENV = PIXI.ENV.WEBGL2; // LBW 
+const app = new PIXI.Application({
+    resizeTo: window,
+    autoDensity: true,
+    //resolution: window.devicePixelRatio || 1,
+    resolution: Math.min(window.devicePixelRatio || 1, 2), // LBW
+    backgroundColor: 0x1a1d24,
+    antialias: false, // new
+    powerPreference: "high-performance", // LBW
+});
+document.getElementById('canvas-container').appendChild(app.view);
+class AgroChunkManager {
+    constructor(app, scaleFactor = 10) {
+        this.app = app;
+        this.scale = scaleFactor; // 10 пікселів на 1 метр (1 піксель = 10 см)
+
+        // Автономний розмір чанка: 102.4 метри
+        this.chunkSizeMeters = 102.4;
+        this.chunkSizePx = 1024; // 1024x1024 пікселів — ідеально для планшетів
+
+        this.chunks = new Map();  // Хранилище: "X_Y" -> { sprite, renderTexture }
+
+        // Головний контейнер карти. Його ми будемо масштабувати (Zoom) та рухати (Pan)
+        this.container = new PIXI.Container();
+        this.app.stage.addChild(this.container);
+
+        // Тимчасовий графічний буфер для накопичення полігонів перед запіканням
+        this.scratchGraphics = new PIXI.Graphics();
+
+        this.container = new PIXI.Container();
+        this.app.stage.addChild(this.container);
+
+        this.vraGraphics = new PIXI.Graphics();
+        this.container.addChild(this.vraGraphics); // Добавляем первым, чтобы он стал подложкой!
+
+        // СОЗДАЕМ ПОСТОЯННЫЙ СЛОЙ ДЛЯ ЛИНИЙ А-В ВНУТРИ КАРТЫ
+        this.abLinesGraphics = new PIXI.Graphics();
+        this.container.addChild(this.abLinesGraphics); // Они будут двигаться и зумиться вместе с полем!
+
+    }
+
+    // Автономно визначаємо ключ чанка за чистими координатами в метрах
+    getOrCreateChunkByMeters(meterX, meterY) {
+        // Обчислюємо індекс чанка в просторі (може бути як додатним, так і від'ємним)
+        const cx = Math.floor(meterX / this.chunkSizeMeters);
+        const cy = Math.floor(meterY / this.chunkSizeMeters);
+        const chunkKey = `${cx}_${cy}`;
+
+        if (this.chunks.has(chunkKey)) {
+            return this.chunks.get(chunkKey);
+        }
+
+        // Створюємо легку текстуру 1024x1024
+        const renderTexture = PIXI.RenderTexture.create({
+            width: this.chunkSizePx,
+            height: this.chunkSizePx,
+            scaleMode: PIXI.SCALE_MODES.LINEAR
+        });
+
+        const sprite = new PIXI.Sprite(renderTexture);
+
+        // Точне позиціонування спрайту в координатах PixiJS
+        sprite.x = cx * this.chunkSizePx;
+        sprite.y = cy * this.chunkSizePx;
+
+        this.container.addChild(sprite);
+
+        const chunkData = { sprite, renderTexture, cx, cy };
+        this.chunks.set(chunkKey, chunkData);
+
+        console.log(`[MAP] Автономний чанк створено: ${chunkKey} (Метри: ${cx * 102}m, ${cy * 102}m)`);
+        return chunkData;
+    }
+
+    clearAll() {
+        this.chunks.forEach(chunk => {
+            chunk.sprite.destroy();
+            chunk.renderTexture.destroy(true);
+        });
+        this.chunks.clear();
+    }
+}
+// Створюємо глобальний екземпляр менеджера карти
+const agroMap = new AgroChunkManager(app);
+//==================================================================================//
+function renderVraPolygonsToPixi(polygons, cosLat, getColorForRateHex) {
+    if (refLat === null || refLon === null) return;
+    if (!polygons || !Array.isArray(polygons)) return;
+
+    // Очищаем старые контуры VRA перед новым рендером
+    agroMap.vraGraphics.clear();
+
+    const SCALE = agroMap.scale; // Фиксированные 10 пикселей на 1 метр
+
+    // Задаём фиксированный стиль тонкой обводки границ зон (1.5 пикселя карты поля)
+    agroMap.vraGraphics.lineStyle(1.5, 0xffffff, 0.2);
+
+    polygons.forEach(poly => {
+        if (!poly.points || poly.points.length < 3) return;
+
+        // Рассчитываем цвет зоны на основе нормы вылива в Hex формате
+        const hexColor = getColorForRateHex(poly.rate);
+
+        // Начинаем заливку полигона на видеокарте с прозрачностью 0.35 (35%)
+        agroMap.vraGraphics.beginFill(hexColor, 0.35);
+
+        const pixiPointsArray = [];
+
+        poly.points.forEach(point => {
+            const lat = point[0];
+            const lon = point[1];
+
+            // ВАША ОРИГИНАЛЬНАЯ ГЕОГРАФИЧЕСКАЯ ПРОЕКЦИЯ МЕТРОВ ОТ БАЗЫ КАРТЫ:
+            const gx = (lon - refLon) * metersPerDegree * cosLat;
+            const gy = -(lat - refLat) * metersPerDegree; // Инвертируем Y под экран Pixi
+
+            // Переводим в базовые пиксели бесконечной карты поля (SCALE = 10)
+            pixiPointsArray.push(gx * SCALE, gy * SCALE);
+        });
+
+        // Выжигаем полигон на WebGL одной быстрой аппаратной командой
+        agroMap.vraGraphics.drawPolygon(pixiPointsArray);
+        agroMap.vraGraphics.endFill();
+    });
+
+    // Фиксируем статусы: карта успешно зарендерена на земле поля!
+    isVraMapRendered = true;
+    isVraLoading = false;
+    console.log(`[VRA PIXI] Карта заданий успешно выжжена на GPU! Нарисовано зон: ${polygons.length}.`);
+}
+function initVraBuffer() {
+    if (isVraMapRendered || isVraLoading) return;
+
+    // Автоматический сторож базы: если GPS еще не поймал refLat/refLon — ждем 1 секунду и пробуем снова
+    if (refLat === null || refLon === null) {
+        setTimeout(initVraBuffer, 1000);
+        return;
+    }
+
+    isVraLoading = true;
+    console.log("[VRA] База поля найдена. Загружаем карту предписания VRA с Flask...");
+
+    const cosLat = Math.cos(refLat * Math.PI / 180);
+
+    // Ваш точный сетевой роут к Flask API
+    fetch('/api/taskmaps/map')
+        .then(response => response.json())
+        .then(data => {
+            if (!data || data.status === "error" || data.status === "no_map" || data.status !== "success") {
+                console.log("[VRA] Карта на сервере отсутствует или повреждена.");
+                isVraLoading = false;
+                return;
+            }
+
+            if (!data.polygons || !Array.isArray(data.polygons)) {
+                console.error("[VRA] Данные полигонов повреждены.");
+                isVraLoading = false;
+                return;
+            }
+
+            const minR = data.min_rate;
+            const maxR = data.max_rate;
+            const rateRange = maxR - minR;
+
+            // ВАША ОРИГИНАЛЬНАЯ МАТЕМАТИКА ГРАДИЕНТА ЦВЕТА (ВЫЧИСЛЯЕТСЯ В HEX ДЛЯ GPU)
+            function getColorForRateHex(rate) {
+                if (rate <= minR || rateRange <= 0) return 0x2ecc71; // Зелёный (норма)
+                if (rate >= maxR) return 0xe74c3c;                  // Красный (максимум)
+
+                const percent = (rate - minR) / rateRange;
+
+                if (percent < 0.5) {
+                    const factor = percent * 2;
+                    const r = Math.round(46 + (241 - 46) * factor);
+                    const g = Math.round(204 + (196 - 204) * factor);
+                    const b = Math.round(113 + (15 - 113) * factor);
+                    return (r << 16) + (g << 8) + b; // Быстрая сборка в Hex формат
+                } else {
+                    const factor = (percent - 0.5) * 2;
+                    const r = Math.round(241 + (231 - 241) * factor);
+                    const g = Math.round(196 + (76 - 196) * factor);
+                    const b = Math.round(15 + (60 - 15) * factor);
+                    return (r << 16) + (g << 8) + b; // Быстрая сборка in Hex формат
+                }
+            }
+
+            // Отправляем полигоны на выжигание в статичный слой подложки
+            renderVraPolygonsToPixi(data.polygons, cosLat, getColorForRateHex);
+            //updateUI();
+        })
+        .catch(err => {
+            console.error("Ошибка загрузки карты VRA предписания:", err);
+            isVraLoading = false;
+            setTimeout(initVraBuffer, 3000); // При сбое сети циклично пробуем через 3 секунды
+        });
+}
+// Запускаем автоматический триггер проверки VRA при старте страницы
+
+//==================================================================================//
+function initVehicleGraphics() {
+    const SCALE = agroMap.scale; // 10 пікселів = 1 метр
+
+    // 1. Малюємо жовту кабіну трактора (Ніс дивиться вгору)
+    tractorGraphics.clear();
+    tractorGraphics.lineStyle(2, 0xffffff, 1.0);
+    tractorGraphics.beginFill(0xf1c40f, 1.0);
+    tractorGraphics.drawPolygon([
+        0, -15,   // Ніс
+        8, 5,     // Праве крило
+        -8, 5     // Ліве крило
+    ]);
+    tractorGraphics.endFill();
+
+    // 2. Будуємо білу рамку-підкладку для штанги
+    const totalWidthMeters = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
+
+    // Зсув штанги назад від антени (в пікселях)
+    // У PixiJS вісь Y напрямлена вниз, тому зсув назад — це ПЛЮС по Y, оскільки ніс дивиться вгору (-Y)
+    const bDistPixels = (cfg.OFFSET_BACK || 0) * SCALE;
+    let currentStartX = -(totalWidthMeters / 2) * SCALE;
+
+    const bgOutline = new PIXI.Graphics();
+    bgOutline.lineStyle(1, 0xffffff, 1.0);
+    bgOutline.beginFill(0xffffff, 1.0);
+    bgOutline.drawRect(currentStartX, bDistPixels, totalWidthMeters * SCALE, 6);
+    bgOutline.endFill();
+
+    boomGraphics.removeChildren(); // Очищаємо контейнер перед заповненням
+    boomGraphics.addChild(bgOutline);
+    sectionSprites = [];
+
+    // 3. Наповнюємо штангу кольоровими секціями
+    cfg.SECTION_WIDTHS.forEach((width, i) => {
+        const sw = width * SCALE; // Ширина секції в пікселях карти
+
+        const secSprite = new PIXI.Sprite(PIXI.Texture.WHITE);
+        secSprite.position.set(currentStartX + 1, bDistPixels + 1);
+        secSprite.width = sw - 2;
+        secSprite.height = 4;
+
+        // Стартовий колір (темно-сірий — вимкнено)
+        secSprite.tint = 0x1a1a1a;
+        secSprite.alpha = 0.8;
+
+        boomGraphics.addChild(secSprite);
+        sectionSprites.push(secSprite);
+
+        currentStartX += sw;
+    });
+
+    // 4. Створюємо окремий контейнер для кабіни та штанги трактора
+    // Він додається безпосередньо на сцену додатка (app.stage), а НЕ в контейнер карти!
+    // Завдяки цьому трактор завжди буде стояти нерухомо по центру екрана.
+    const vehicleContainer = new PIXI.Container();
+    vehicleContainer.id = "vehicle-ui-layer";
+    vehicleContainer.addChild(boomGraphics);
+    vehicleContainer.addChild(tractorGraphics);
+
+    // Центруємо візуальний трактор на екрані планшета
+    vehicleContainer.x = app.screen.width / 2;
+    vehicleContainer.y = app.screen.height / 2;
+
+    // Видаляємо старий контейнер трактора, якщо він був (наприклад, при зміні розміру вікна)
+    const oldVehicle = app.stage.getChildByName("vehicle-ui-layer");
+    if (oldVehicle) app.stage.removeChild(oldVehicle);
+
+    vehicleContainer.name = "vehicle-ui-layer";
+    app.stage.addChild(vehicleContainer);
+}
+
+function redrawTractorVehicle(states, isMaster, lat, lon, heading) {
+    if (refLat === null || refLon === null) return;
+
+    // 1. Керування прозорістю кабіни трактора залежно від Master-тумблера
+    tractorGraphics.alpha = isMaster ? 1.0 : 0.4;
+
+    // 2. БЕЗПЕЧНЕ КЕРУВАННЯ СЕКЦІЯМИ ШТАНГИ (через GPU)
+    // Перевіряємо масив станів, який прийшов від сервера Flask
+    const currentStates = Array.isArray(states) ? states : [];
+
+    sectionSprites.forEach((sec, i) => {
+        // Якщо сервер прислав менше секцій, ніж у нас ініціалізовано, гасимо зайві
+        const isActive = i < currentStates.length ? currentStates[i] : false;
+
+        if (isActive) {
+            sec.tint = 0x2ecc71; // Зелений колір (секція ввімкнена, йде обприскування)
+            sec.alpha = 0.9;
+        } else {
+            // Якщо секція вимкнена, дивимось на конфіг: малювати червоним чи темно-сірим
+            sec.tint = cfg.DRAW_OFF_SECTIONS ? 0xe74c3c : 0x1a1a1a;
+            sec.alpha = cfg.DRAW_OFF_SECTIONS ? 0.7 : 0.6;
+        }
+    });
+
+    // 3. СИНХРОНІЗАЦІЯ ПОВОРУ ТРАКТОРА В ЦЕНТРІ ЕКРАНА
+    // Оскільки ми крутимо САМУ КАРТУ (AgroMap.container), візуальний контейнер трактора 
+    // повинен залишатися нерухомим, дивлячись строго вгору (rotation = 0).
+    const vehicle = app.stage.getChildByName("vehicle-ui-layer");
+    if (vehicle) {
+        vehicle.rotation = 0; // Трактор завжди зафіксований «носом догори»
+    }
+}
+
+function drawABLines(data) {
+    // Якщо база ще не готова — малювати немає сенсу, чекаємо
+    if (refLat === null || refLon === null) return;
+    if (!data || !data.ab_line || !data.ab_line.a || !data.ab_line.b || data.ux === null || data.uy === null) return;
+
+    const [ax, ay] = data.ab_line.a;
+    const [bx, by] = data.ab_line.b;
+    const tx = data.ux;
+    const ty = data.uy;
+
+    const dx = bx - ax;
+    const dy = by - ay;
+    if (dx === 0 && dy === 0) return;
+
+    const angleAB = Math.atan2(dy, dx);
+    const fullWidth = cfg.SECTION_WIDTHS.reduce((a, b) => a + b, 0);
+    const length = 4000;
+
+    // Точний розрахунок номера гону
+    const distToAB = ((by - ay) * tx - (bx - ax) * ty + bx * ay - by * ax) / Math.sqrt(dx * dx + dy * dy);
+    const currentPassNum = Math.round(distToAB / fullWidth);
+    if (currentPassNum > 0) {
+        _abLineNum = `(+${currentPassNum})`;
+    } else {
+        _abLineNum = `(${currentPassNum})`;
+    }
+    // console.log(distToAB)
+    // console.log(currentPassNum)
+
+    const passText = currentPassNum >= 0 ? `(+${currentPassNum})` : `(${currentPassNum})`;
+    const uiStatus = document.getElementById('ui-status');
+    if (uiStatus && window.lastReceivedStates) {
+        uiStatus.innerText = `Статус: Гон ${passText}`;
+    }
+
+    // Тимчасово прибираємо оптимізацію return, щоб лінії гарантовано малювалися при кожній зміні даних
+    lastRenderedPassNum = currentPassNum;
+
+    // Очищаємо графіку ліній
+    agroMap.abLinesGraphics.clear();
+
+    const SCALE = agroMap.scale; // 10 пікселів на метр
+    const thinWidth = 1.5;
+    const thickWidth = 3.5;
+
+    // 1. СИНІ СУСІДНІ ЛІНІЇ
+    agroMap.abLinesGraphics.lineStyle(thinWidth, 0x64c8ff, 0.4);
+
+    for (let i = -3; i <= 3; i++) {
+        if (i === 0) continue;
+
+        const absolutePass = currentPassNum + i;
+        const offset = absolutePass * fullWidth;
+
+        const offsetX = ax + offset * Math.sin(angleAB);
+        const offsetY = ay - offset * Math.cos(angleAB);
+
+        // СИНХРОНІЗАЦІЯ СЕРВЕРНИХ МЕТРІВ З НУЛЕМ ФРОНТЕНДУ:
+        // Від серверної координати лінії віднімаємо серверну позицію трактора (tx/ty)
+        // і додаємо поточні "живі" метри трактора на фронтенді (tractorMetersX/Y)
+        let mx = (offsetX - tx) + tractorMetersX;
+        let my = -(offsetY - ty) + tractorMetersY; // Інвертуємо Y під правила PixiJS
+
+        let startMetersX = mx - Math.cos(angleAB) * length;
+        let startMetersY = my + Math.sin(angleAB) * length;
+        let endMetersX = mx + Math.cos(angleAB) * length;
+        let endMetersY = my - Math.sin(angleAB) * length;
+
+        agroMap.abLinesGraphics.moveTo(startMetersX * SCALE, startMetersY * SCALE);
+        agroMap.abLinesGraphics.lineTo(endMetersX * SCALE, endMetersY * SCALE);
+    }
+
+    // 2. ЦЕНТРАЛЬНИЙ ПОТОЧНИЙ БІЛИЙ ГОН (i === 0)
+    agroMap.abLinesGraphics.lineStyle(thickWidth, 0xffffff, 0.8);
+
+    const offsetZero = currentPassNum * fullWidth;
+    const offsetXZero = ax + offsetZero * Math.sin(angleAB);
+    const offsetYZero = ay - offsetZero * Math.cos(angleAB);
+
+    // Точно така ж синхронізація для нульової лінії
+    let mxZero = (offsetXZero - tx) + tractorMetersX;
+    let myZero = -(offsetYZero - ty) + tractorMetersY;
+
+    let startZeroX = mxZero - Math.cos(angleAB) * length;
+    let startZeroY = myZero + Math.sin(angleAB) * length;
+    let endZeroX = mxZero + Math.cos(angleAB) * length;
+    let endZeroY = myZero - Math.sin(angleAB) * length;
+
+    // ЛОГУВАННЯ ДЛЯ ПЕРЕВІРКИ (цифри мають стати маленькими і адекватними):
+    //         console.log(`[AB-LINE FIXED] 
+    //     Трактор: X=${tractorMetersX.toFixed(1)}, Y=${tractorMetersY.toFixed(1)}
+    //     Старт лінії в пікселях: X=${(startZeroX * SCALE).toFixed(1)}, Y=${(startZeroY * SCALE).toFixed(1)}
+    // `);
+
+    agroMap.abLinesGraphics.moveTo(startZeroX * SCALE, startZeroY * SCALE);
+    agroMap.abLinesGraphics.lineTo(endZeroX * SCALE, endZeroY * SCALE);
+
+
+
+}
+
+function updateCamera(lat, lon, heading) {
+    if (refLat === null || refLon === null) return;
+
+    // 1. Переводим текущие GPS координаты трактора в чистые метры от нуля поля
+    let cx = (lon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
+    let cy = -(lat - refLat) * metersPerDegree;
+
+    // Сохраняем в глобальные переменные (пригодится для отрисовки иконки трактора)
+    tractorMetersX = cx;
+    tractorMetersY = cy;
+    tractorHeadingRad = (heading * Math.PI / 180);
+
+    // Масштаб отрисовки карты шлейфа (1 метр = 10 пикселей)
+    const SCALE = agroMap.scale;
+
+    // 2. Центр экрана планшета
+    const screenCenterX = app.screen.width / 2;
+    const screenCenterY = app.screen.height / 2;
+
+    // 3. Устанавливаем точку вращения (Pivot) карты строго на трактор (в пикселях запекания)
+    agroMap.container.pivot.x = tractorMetersX * SCALE;
+    agroMap.container.pivot.y = tractorMetersY * SCALE;
+
+    // 4. Помещаем эту точку вращения ровно в центр экрана
+    agroMap.container.x = screenCenterX;
+    agroMap.container.y = screenCenterY;
+
+    // 5. Вращаем карту в противоположную сторону, чтобы трактор всегда смотрел ВВЕРХ
+    // В PixiJS вращение идет по часовой стрелке в радианах. 
+    // Добавляем Math.PI (180 градусов), если нужно, чтобы трактор ехал «вверх» экрана
+    agroMap.container.rotation = -tractorHeadingRad;
+}
+
+function getGlobalCoordsMeters(lat, lon, heading, sectionIdx, isRightSide, customWidths) {
+    if (refLat === null || refLon === null) return { x: 0, y: 0 };
+
+    // Переведення GPS координат у чисті метри відносно refLat/refLon
+    let cx = (lon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
+    let cy = -(lat - refLat) * metersPerDegree;
+
+    let widths = customWidths || cfg.SECTION_WIDTHS;
+    const backOffset = cfg.OFFSET_BACK || 0;
+    let offsetMeters = 0;
+
+    // Розрахунок зміщення конкретної секції відносно центру трактора
+    for (let i = 0; i < sectionIdx; i++) {
+        if (i < widths.length) offsetMeters += widths[i];
+    }
+    if (isRightSide && sectionIdx < widths.length) {
+        offsetMeters += widths[sectionIdx];
+    }
+    let totalWidth = widths.reduce((a, b) => a + b, 0);
+    offsetMeters -= totalWidth / 2;
+
+    // Курс у радіанах
+    let rad = (heading * Math.PI / 180);
+
+    // Обертання штанги за курсом трактора (Метри на полі)
+    let rx = cx + offsetMeters * Math.cos(rad) - backOffset * Math.sin(rad);
+    let ry = cy + offsetMeters * Math.sin(rad) + backOffset * Math.cos(rad);
+
+    return { x: rx, y: ry };
+}
+// Функція плавної камери, яка працює на частоті екрана планшета (60+ FPS)
+function updateCameraSmooth(mx, my, headingDeg) {
+    const SCALE = agroMap.scale; // Фіксовані 10 пікселів на метр
+
+    // Переводимо інтерпольовані метри у глобальні пікселі запікання шлейфу
+    const pxX = mx * SCALE;
+    const pxY = my * SCALE;
+
+    const screenCenterX = app.screen.width / 2;
+    const screenCenterY = app.screen.height / 2;
+
+    // 1. Встановлюємо точку вращення (Pivot) карти строго на плавні координати трактора
+    agroMap.container.pivot.x = pxX;
+    agroMap.container.pivot.y = pxY;
+
+    // 2. Утримуємо точку вращення рівно по центру екрана планшета
+    agroMap.container.x = screenCenterX;
+    agroMap.container.y = screenCenterY;
+
+    // 3. Плавно обертаємо карту в протилежну сторону (трактор завжди дивиться строго вгору)
+    const headingRad = headingDeg * Math.PI / 180;
+    agroMap.container.rotation = -headingRad;
+}
+
+const TARGET_FPS = 20; // LBW
+let fpsDropCounter = 0;      // Скільки разів поспіль зафіксовано низький FPS
+const FPS_THRESHOLD = TARGET_FPS - 1;    // Критична межа FPS (все, що нижче — вважається лагами)
+const CHECK_INTERVAL = 2000; // Як часто перевіряти FPS (кожні 2000 мс = 2 секунди)
+let lastCheckTime = performance.now();
+
+app.ticker.maxFPS = TARGET_FPS; // LBW
+app.ticker.add(() => {
+    // Камера працює ЗАВЖДИ, як тільки ініціалізована база поля refLat!
+    if (refLat === null || refLon === null || targetX === null || targetY === null) return;
+
+    // Скидаємо початкові координати інтерполяції на старті
+    if (interpolatedX === null && interpolatedY === null) {
+        interpolatedX = targetX;
+        interpolatedY = targetY;
+        interpolatedHdg = targetHdg;
+    }
+
+    // М'яко наздоганяємо ціль GPS (LERP 10%)
+    interpolatedX += (targetX - interpolatedX) * 0.10;
+    interpolatedY += (targetY - interpolatedY) * 0.10;
+
+    // Захист компаса від стрибків 0/360
+    let angleDiff = targetHdg - interpolatedHdg;
+    angleDiff = Math.atan2(Math.sin(angleDiff * Math.PI / 180), Math.cos(angleDiff * Math.PI / 180)) * 180 / Math.PI;
+    interpolatedHdg += angleDiff * 0.10;
+
+    // Викликаємо оновлення камери
+    updateCameraSmooth(interpolatedX, interpolatedY, interpolatedHdg);
+
+
+    const currentTime = performance.now();
+
+    // Перевіряємо продуктивність лише один раз на інтервал (кожні 2 секунди)
+    if (currentTime - lastCheckTime >= CHECK_INTERVAL) {
+        // Отримуємо поточний FPS від PixiJS Ticker
+        const currentFPS = app.ticker.FPS;
+
+        if (currentFPS < FPS_THRESHOLD) {
+            fpsDropCounter++;
+        } else {
+            // Якщо все добре, повільно скидаємо лічильник помилок
+            fpsDropCounter = Math.max(0, fpsDropCounter - 1);
+        }
+
+        // Якщо гра стабільно гальмує протягом 3 перевірок поспіль (6 секунд лагів)
+        if (fpsDropCounter >= 20) {
+            //optimizeResolution();
+            fpsDropCounter = 0; // Скидаємо лічильник після оптимізації
+        }
+
+        // <div class="stat-line" id="calc_fps">Полігонів: 0</div>
+        // <div class="stat-line" id="calc_drop">Полігонів: 0</div>
+        lastCheckTime = currentTime;
+        const fpsElem = document.getElementById('calc_fps');
+        if (fpsElem) {
+            fpsElem.innerText = "Fps: " + currentFPS.toFixed(1);
+        }
+        const dropElem = document.getElementById('calc_drop');
+        if (dropElem) {
+            dropElem.innerText = "Drop: " + fpsDropCounter;
+        }
+    }
+
+
+});
+
+function updateFieldMapPixi(newPoints) {
+    if (!newPoints || newPoints.length === 0) return;
+
+    pointsQueue.push(...newPoints);
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+
+    const BATCH_SIZE = 1000;
+
+    function processNextBatch() {
+        if (pointsQueue.length === 0) {
+            isProcessingQueue = false;
+            lastQueueProgressTime = performance.now();
+            return;
+        }
+
+        const batch = pointsQueue.splice(0, BATCH_SIZE);
+        const drawingsByChunk = new Map();
+
+        batch.forEach((pt) => {
+            // Перевірка структури: масив повинен мати мінімум 5 елементів
+            if (!pt || !Array.isArray(pt) || pt.length < 5) return;
+
+            const lat = Number(pt[1]);
+            const lon = Number(pt[2]);
+
+            if (lat === lastProcessedLat && lon === lastProcessedLon) {
+                return;
+            }
+            lastProcessedLat = lat;
+            lastProcessedLon = lon;
+
+            // Читаємо дані прямо з JSON-масиву БЕЗ жодних сплітів!
+            //const lat = Number(pt[1]);
+            //const lon = Number(pt[2]);
+            const hdg = Number(pt[3]);
+            const states = pt[4];        // Це вже готовий масив [true, true, ...]
+            const customWidths = pt[5];  // Це вже готовий масив [3.0, 3.0, ...]
+
+            const drawOff = cfg.DRAW_OFF_SECTIONS;
+            const SCALE = agroMap.scale;
+
+            states.forEach((isActive, i) => {
+                if (!isActive && drawOff === false) {
+                    prevSectionsCoords[i] = null;
+                    return;
+                }
+
+                // Чистые метры на поле от нуля поля
+                const cL = getGlobalCoordsMeters(lat, lon, hdg, i, false, customWidths);
+                const cR = getGlobalCoordsMeters(lat, lon, hdg, i, true, customWidths);
+
+                if (prevSectionsCoords[i]) {
+                    const prev = prevSectionsCoords[i];
+
+                    const dx = cL.x - prev.cL.x;
+                    const dy = cL.y - prev.cL.y;
+                    if (Math.sqrt(dx * dx + dy * dy) > 5) {
+                        prevSectionsCoords[i] = { cL, cR };
+                        return;
+                    }
+
+                    const pointsToCheck = [
+                        { x: prev.cL.x, y: prev.cL.y },
+                        { x: cL.x, y: cL.y },
+                        { x: cR.x, y: cR.y },
+                        { x: prev.cR.x, y: prev.cR.y }
+                    ];
+
+                    const affectedChunks = new Map();
+
+                    pointsToCheck.forEach(p => {
+                        // Жесткая математическая привязка к сетке AgroChunkManager
+                        const cx = Math.floor(p.x / agroMap.chunkSizeMeters);
+                        const cy = Math.floor(p.y / agroMap.chunkSizeMeters);
+                        const key = `${cx}_${cy}`;
+
+                        if (!affectedChunks.has(key)) {
+                            affectedChunks.set(key, agroMap.getOrCreateChunkByMeters(p.x, p.y));
+                        }
+                    });
+
+                    // Рендерим полигон в затронутые чанки
+                    affectedChunks.forEach((chunkData, currentChunkKey) => {
+                        const chunkOriginMetersX = chunkData.cx * agroMap.chunkSizeMeters;
+                        const chunkOriginMetersY = chunkData.cy * agroMap.chunkSizeMeters;
+
+                        const pLx = (cL.x - chunkOriginMetersX) * SCALE;
+                        const pLy = (cL.y - chunkOriginMetersY) * SCALE;
+                        const pRx = (cR.x - chunkOriginMetersX) * SCALE;
+                        const pRy = (cR.y - chunkOriginMetersY) * SCALE;
+
+                        const prevLx = (prev.cL.x - chunkOriginMetersX) * SCALE;
+                        const prevLy = (prev.cL.y - chunkOriginMetersY) * SCALE;
+                        const prevRx = (prev.cR.x - chunkOriginMetersX) * SCALE;
+                        const prevRy = (prev.cR.y - chunkOriginMetersY) * SCALE;
+
+                        if (!drawingsByChunk.has(currentChunkKey)) {
+                            drawingsByChunk.set(currentChunkKey, { chunkData, polygons: [] });
+                        }
+
+                        drawingsByChunk.get(currentChunkKey).polygons.push({
+                            points: [prevLx, prevLy, pLx, pLy, pRx, pRy, prevRx, prevRy],
+                            color: isActive ? 0x2ecc71 : 0xe74c3c,
+                            alpha: isActive ? 0.7 : 0.5
+                        });
+                    });
+
+                    // Счётчик увеличиваем ОДИН РАЗ на одну физическую точку шлейфа
+                    totalPolygonsRendered++;
+                    // --- КОНЕЦ ОПТИМИЗАЦИИ СТЫКОВ ---
+                }
+                prevSectionsCoords[i] = { cL, cR };
+
+            });
+
+        });
+
+
+
+        // 4. Запікаємо накопичену геометрію в текстури відповідних чанків
+        drawingsByChunk.forEach((renderGroup) => {
+            const { chunkData, polygons } = renderGroup;
+
+            agroMap.scratchGraphics.clear();
+            agroMap.scratchGraphics.lineStyle(0);
+
+            polygons.forEach(poly => {
+                agroMap.scratchGraphics.beginFill(poly.color, poly.alpha);
+                agroMap.scratchGraphics.drawPolygon(poly.points);
+                agroMap.scratchGraphics.endFill();
+            });
+
+            app.renderer.render(agroMap.scratchGraphics, {
+                renderTexture: chunkData.renderTexture,
+                clear: false
+            });
+        });
+
+        agroMap.scratchGraphics.clear();
+
+        const polyElem = document.getElementById('total_point');
+        if (polyElem) {
+            polyElem.innerText = "Полігонів: " + totalPolygonsRendered;
+        }
+        const lineElem = document.getElementById('total_line');
+        if (lineElem) {
+            lineElem.innerText = "Ліній: " + totalLineRendered;
+        }
+
+        setTimeout(processNextBatch, 1);
+    }
+
+    processNextBatch();
+}
+// =================================================================
+// 1. МЕРЕЖЕВИЙ КОНВЕЄР (Зв'язок з Flask)
+// =================================================================
+function requestDataFromServer() {
+    const now = performance.now();
+
+    // Захист від зависання черги: якщо графіка заклинила довше 1.5 сек — скидаємо замок
+    if (isProcessingQueue && (now - lastQueueProgressTime > 1500)) {
+        console.warn("⚠️ Watchdog виявив затримку! Скидання черги для плавності.");
+        pointsQueue = [];
+        isProcessingQueue = false;
+        lastQueueProgressTime = now;
+    }
+
+    if (isProcessingQueue) {
+        setTimeout(requestDataFromServer, 250);
+        return;
+    }
+
+    fetch(`/map_data?last=${lastReceivedIndex}`)
+        .then(response => {
+            if (!response.ok) throw new Error(`Помилка сервера: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            lastQueueProgressTime = performance.now();
+            failedAttempts = 0;
+
+            if (!data) {
+                setTimeout(requestDataFromServer, 250);
+                return;
+            }
+
+            if (data.pos && data.pos.length >= 2) {
+                const currentLat = data.pos[0];
+                const shiftLon = data.pos[1];
+                const currentHdg = data.hdg !== undefined ? data.hdg : (data.heading || 0);
+
+                if (refLat === null || refLon === null) {
+                    refLat = currentLat;
+                    refLon = shiftLon;
+                    prevSectionsCoords = [];
+                    console.log(`[CORE] База поля успішно ініціалізована: Lat=${refLat}, Lon=${refLon}`);
+                }
+
+                // Оновлюємо колір штанги
+                const currentStates = data.states || [false, false, false, false, false, false, false, false];
+                const isMaster = data.master !== undefined ? data.master : true;
+                redrawTractorVehicle(currentStates, isMaster, currentLat, shiftLon, currentHdg);
+
+                // Розраховуємо цільові метри (навіть якщо вони дорівнюють 0.0 при старті)
+                targetX = (shiftLon - refLon) * metersPerDegree * Math.cos(refLat * Math.PI / 180);
+                targetY = -(currentLat - refLat) * metersPerDegree;
+                targetHdg = currentHdg;
+
+                tractorMetersX = targetX;
+                tractorMetersY = targetY;
+
+                // Оновлюємо текстовий UI
+                const uiCoords = document.getElementById('ui-coords');
+                if (uiCoords) uiCoords.innerText = `GPS: ${currentLat.toFixed(6)}, ${shiftLon.toFixed(6)}`;
+                const uiStatus = document.getElementById('ui-status');
+                if (uiStatus) uiStatus.innerText = "Статус: Працює (10 Гц)";
+            }
+
+            // LBW
+            // Шлейф покриття — відправляємо в наш автономний менеджер
+            // if (data.new_points && data.new_points.length > 0) {
+            //     updateFieldMapPixi(data.new_points);
+            //     totalLineRendered += new_points.length;
+            // }
+
+            // ЗАМІНІТЬ ЙОГО НА ЦЕЙ НАДІЙНИЙ ВАРІАНТ:
+            if (data.new_points && data.new_points.length > 0) {
+                // Збільшуємо індекс на кількість точок, які ми РЕАЛЬНО щойно отримали від сервера
+                lastReceivedIndex += data.new_points.length;
+                totalLineRendered += data.new_points.length;
+                updateFieldMapPixi(data.new_points);
+            }
+
+            if (data.ab_line) {
+                drawABLines(data);
+
+            }
+            updateUI(data);
+            setTimeout(requestDataFromServer, 250); // Опитування кожні 100мс для 10 Гц
+        })
+        .catch(err => {
+            failedAttempts++;
+            errorConnect();
+            const uiStatus = document.getElementById('ui-status');
+            if (uiStatus) uiStatus.innerText = `Статус: Помилка зв'язку (${failedAttempts})`;
+
+            console.error("Flask connection lost:", err);
+            setTimeout(requestDataFromServer, 1000); // При помилці чекаємо 1 секунду
+        });
+}
+// =================================================================
+// 2. АПАРАТНЕ КЕРУВАННЯ КАРТОЮ (Zoom & Pan через GPU)
+// =================================================================
+let isDragging = false;
+let dragStart = { x: 0, y: 0 };
+let mapStart = { x: 0, y: 0 };
+let currentZoom = 1.0;
+
+// Робимо сцену PixiJS інтерактивною
+app.stage.eventMode = 'static';
+app.stage.hitArea = app.screen;
+
+// Початок перетягування карти (Захоплення миші/тачу)
+app.stage.on('pointerdown', (e) => {
+    isDragging = true;
+    dragStart.x = e.global.x;
+    dragStart.y = e.global.y;
+    mapStart.x = agroMap.container.x;
+    mapStart.y = agroMap.container.y;
+});
+
+// Процес перетягування
+app.stage.on('pointermove', (e) => {
+    if (!isDragging) return;
+    const dx = e.global.x - dragStart.x;
+    const dy = e.global.y - dragStart.y;
+
+    // Рухаємо весь контейнер з чанками миттєво через GPU
+    agroMap.container.x = mapStart.x + dx;
+    agroMap.container.y = mapStart.y + dy;
+});
+
+// Кінець перетягування
+app.stage.on('pointerup', () => isDragging = false);
+app.stage.on('pointerupoutside', () => isDragging = false);
+
+// Обновленный и точный Zoom, сохраняющий пропорции штанги и шлейфа
+
+function changeWorldScale(factor) {
+    if (factor < 0) {
+        currentZoom *= 1.1; // Увеличение
+    } else {
+        currentZoom /= 1.1; // Уменьшение
+    }
+    // Ограничение зума (от х0.2 до х30)
+    currentZoom = Math.max(0.1, Math.min(currentZoom, 2));
+    // 1. Масштабируем контейнер бесконечной карты шлейфа через GPU
+    agroMap.container.scale.set(currentZoom);
+    // 2. Находим контейнер трактора в центре экрана и задаем ему ТОЧНО ТАКОЙ ЖЕ масштаб
+    const vehicle = app.stage.getChildByName("vehicle-ui-layer");
+    if (vehicle) {
+        vehicle.scale.set(currentZoom);
+    }
+}
+
+window.addEventListener('wheel', (e) => {
+    changeWorldScale(e.deltaY);
+}, { passive: true });
+
+
+// Коригуємо положення трактора та камери при зміні розміру екрана планшета
+window.addEventListener('resize', () => {
+    const vehicle = app.stage.getChildByName("vehicle-ui-layer");
+    if (vehicle) {
+        vehicle.x = app.screen.width / 2;
+        vehicle.y = app.screen.height / 2;
+    }
+
+});
+console.log("PiXi is Load");
+// // Запуск опитування сервера при завантаженні сторінки
+// window.onload = () => {
+//     initVehicleGraphics(); // Створюємо трактор один раз при старті
+//     requestDataFromServer();
+// };

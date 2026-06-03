@@ -396,6 +396,11 @@ class SectionControl:
         # На столі тестуємо через % 30, на полі міняємо на % 300 (раз на 30 сек при 10 Гц)
         if len(self.path_history) % 30 == 0:
             try:
+        #         # Оптимізуємо моноліт в пам'яті, щоб інтерфейс вебу не гальмував
+        #         self.covered_area = self.covered_area.simplify(
+        #             0.05, preserve_topology=True
+        #         )
+               
                 # А) Скидаємо бінарні полігони покриття новим методом фіксованої довжини
                 if self.buffer_to_disk:
                     self.save_to_disk()

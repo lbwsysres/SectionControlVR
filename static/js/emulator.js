@@ -3,7 +3,7 @@ let emuEnabled = false;
 let currentHdg = 0;
 let currentSpd = 0;
 let joyZone, joyStick;
-let isDragging = false;
+let isDraggingEmu = false;
 const halfSize = 75;
 const defaultX = 0;
 const defaultY = halfSize; // Стартовая позиция внизу (выключен)
@@ -52,7 +52,7 @@ function updateStickPosition(x, y) {
 }
 
 function handleMove(clientX, clientY) {
-    if (!isDragging) return;
+    if (!isDraggingEmu) return;
 
     const rect = joyZone.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
@@ -92,7 +92,7 @@ function handleMove(clientX, clientY) {
 }
 
 function smoothResetX() {
-    if (isDragging) return;
+    if (isDraggingEmu) return;
 
     // Возвращаем по горизонтали к центру (0)
     currentX = currentX * 0.82;
@@ -125,7 +125,7 @@ function startResetAnimation() {
 function setupEmulatorEvents() {
     // Мышь
     joyStick.addEventListener('mousedown', (e) => {
-        isDragging = true;
+        isDraggingEmu = true;
         cancelAnimationFrame(animationFrameId);
         joyStick.style.transition = "none";
         joyStick.style.cursor = 'grabbing';
@@ -133,8 +133,8 @@ function setupEmulatorEvents() {
 
     window.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
     window.addEventListener('mouseup', () => {
-        if (isDragging) {
-            isDragging = false;
+        if (isDraggingEmu) {
+            isDraggingEmu = false;
             joyStick.style.cursor = 'grab';
             startResetAnimation();
         }
@@ -142,7 +142,7 @@ function setupEmulatorEvents() {
 
     // Тач устройства
     joyStick.addEventListener('touchstart', (e) => {
-        isDragging = true;
+        isDraggingEmu = true;
         cancelAnimationFrame(animationFrameId);
         joyStick.style.transition = "none";
     });
@@ -152,8 +152,8 @@ function setupEmulatorEvents() {
     });
 
     window.addEventListener('touchend', () => {
-        if (isDragging) {
-            isDragging = false;
+        if (isDraggingEmu) {
+            isDraggingEmu = false;
             startResetAnimation();
         }
     });
